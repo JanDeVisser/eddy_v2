@@ -1,0 +1,40 @@
+/*
+ * Copyright (c) 2023, Jan de Visser <jan@finiandarcy.com>
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+#ifndef __CONFIG_H__
+#define __CONFIG_H__
+
+#define EDDY_NAME                          "@eddy_NAME@"
+#define EDDY_VERSION_MAJOR                 "@eddy_VERSION_MAJOR@"
+#define EDDY_VERSION_MINOR                 "@eddy_VERSION_MINOR@"
+#define EDDY_VERSION                       "@eddy_VERSION_MAJOR@.@eddy_VERSION_MINOR@"
+#define EDDY_DIR                           "@eddy_DIR@"
+#define EDDY_DATADIR                       "@eddy_DATADIR@"
+
+#cmakedefine HAVE_DIRENT_D_NAMLEN              1
+#cmakedefine HAVE_C23_ATTRIBUTE_NORETURN       1
+#cmakedefine HAVE_LEGACY_ATTRIBUTE_NORETURN    1
+#cmakedefine HAVE_ATTRIBUTE_FORMAT             1
+
+#cmakedefine IS_APPLE                          1
+#cmakedefine IS_LINUX                          1
+#cmakedefine IS_WINDOWS                        1
+
+#ifdef HAVE_LEGACY_ATTRIBUTE_NORETURN
+#define noreturn __attribute__((noreturn))
+#elif defined(HAVE_C23_ATTRIBUTE_NORETURN)
+#define noreturn [[noreturn]]
+#else
+#define noreturn
+#endif
+
+#ifdef HAVE_ATTRIBUTE_FORMAT
+#define format_args(fmt,args) __attribute__((format(printf,fmt,args)))
+#else
+#define format_args(...)
+#endif /* HAVE_ATTRIBUTE_FORMAT */
+
+#endif /* __CONFIG_H__ */
