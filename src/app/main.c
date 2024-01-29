@@ -133,21 +133,36 @@ typedef struct _widget {
         if (_w->handlers.on_resize)     \
             _w->handlers.on_resize(_w); \
     })
-#define widget_resize(w) ((((Widget *) (w))->handlers.resize)((w)))
+#define widget_resize(w)             \
+    ({                               \
+        Widget *_w = (Widget *) (w); \
+        if (_w->handlers.resize)     \
+            _w->handlers.resize(_w); \
+    })
 #define widget_after_resize(w)             \
     ({                                     \
         Widget *_w = (Widget *) (w);       \
         if (_w->handlers.after_resize)     \
             _w->handlers.after_resize(_w); \
     })
-#define widget_draw(w) ((((Widget *) (w))->handlers.draw)((w)))
+#define widget_draw(w)               \
+    ({                               \
+        Widget *_w = (Widget *) (w); \
+        if (_w->handlers.draw)       \
+            _w->handlers.draw(_w);   \
+    })
 #define widget_on_process_input(w)             \
     ({                                         \
         Widget *_w = (Widget *) (w);           \
         if (_w->handlers.on_process_input)     \
             _w->handlers.on_process_input(_w); \
     })
-#define widget_process_input(w) ((((Widget *) (w))->handlers.process_input)((w)))
+#define widget_process_input(w)             \
+    ({                                      \
+        Widget *_w = (Widget *) (w);        \
+        if (_w->handlers.process_input)     \
+            _w->handlers.process_input(_w); \
+    })
 #define widget_after_process_input(w)             \
     ({                                            \
         Widget *_w = (Widget *) (w);              \
@@ -165,6 +180,12 @@ typedef struct _widget {
         .resize = (WidgetResize) prefix##_resize,             \
         .process_input = (WidgetDraw) prefix##_process_input, \
         .draw = (WidgetDraw) prefix##_draw,                   \
+    };
+
+#define SIMPLE_WIDGET_CLASS(c, prefix)      \
+    extern void    prefix##_init(c *);      \
+    WidgetHandlers $##c##_handlers = {      \
+        .init = (WidgetInit) prefix##_init, \
     };
 
 #define widget_new(c)                            \
@@ -203,6 +224,27 @@ WIDGET_CLASS(Layout, layout);
         .draw = (WidgetDraw) layout_draw,                   \
     };
 extern Widget *layout_find_by_draw_function(Layout *layout, WidgetDraw draw_fnc);
+
+#define layout_new(o)                               \
+    ({                                              \
+        Layout *_l = (Layout *) widget_new(Layout); \
+        _l->orientation = (o);                      \
+        _l;                                         \
+    })
+
+typedef struct {
+    _W;
+} Spacer;
+
+SIMPLE_WIDGET_CLASS(Spacer, spacer);
+
+typedef struct {
+    _W;
+    Color      color;
+    StringView text;
+} Label;
+
+WIDGET_CLASS(Label, label);
 
 typedef struct {
     size_t     index_of;
@@ -255,11 +297,16 @@ WIDGET_CLASS(DebugPane, debug);
 
 typedef struct {
     _L;
-    int lines;
-} MainArea;
+} StatusBar;
 
-LAYOUT_CLASS(MainArea, mainarea);
-extern void mainarea_resize(MainArea *main);
+LAYOUT_CLASS(StatusBar, status_bar);
+
+typedef struct {
+    _W;
+    StringView message;
+} MessageLine;
+
+WIDGET_CLASS(MessageLine, message_line);
 
 typedef struct {
     _L;
@@ -276,6 +323,8 @@ LAYOUT_CLASS(App, app);
 extern void app_initialize(App *app, int argc, char **argv);
 extern void app_on_resize(App *app);
 extern void app_on_process_input(App *app);
+extern void app_set_message(App *app, StringView message);
+extern void app_clear_message(App *app);
 
 App app = { 0 };
 
@@ -387,7 +436,7 @@ void layout_resize(Layout *layout)
             sz = (total * w->policy_size) / 100.0f;
         } break;
         case SP_CHARACTERS: {
-            sz = w->policy_size * ((layout->orientation == CO_VERTICAL) ? app.cell.y : app.cell.x) + 2*PADDING;
+            sz = w->policy_size * ((layout->orientation == CO_VERTICAL) ? app.cell.y : app.cell.x) + 2 * PADDING;
         } break;
         case SP_CALCULATED: {
             NYI("SP_CALCULATED not yet supported");
@@ -459,6 +508,32 @@ Widget *layout_find_by_draw_function(Layout *layout, WidgetDraw draw_fnc)
         }
     }
     return NULL;
+}
+
+void spacer_init(Spacer *spacer)
+{
+    spacer->policy = SP_STRETCH;
+}
+
+void label_init(Label *label)
+{
+    label->policy = SP_CHARACTERS;
+    label->color = RAYWHITE;
+}
+
+void label_resize(Label *label)
+{
+}
+
+void label_draw(Label *label)
+{
+    if (!sv_empty(label->text)) {
+        widget_render_text(label, 0, 0, label->text, label->color);
+    }
+}
+
+void label_process_input(Label *)
+{
 }
 
 void buffer_build_indices(Buffer *buffer)
@@ -543,7 +618,7 @@ void editor_resize(Editor *editor)
 {
     editor->cursor_flash = GetTime();
     editor->columns = (int) ((editor->viewport.width - 2 * PADDING) / app.cell.x);
-    editor->lines = ((MainArea *) editor->parent)->lines;
+    editor->lines = (int) ((editor->viewport.height - 2 * PADDING) / app.cell.y);
 }
 
 void editor_open_buffer(Editor *editor, StringView file)
@@ -742,18 +817,46 @@ void debug_process_input(DebugPane *)
 {
 }
 
-void mainarea_init(MainArea *main)
+void sb_cursor_draw(Label *label)
 {
-    main->handlers.on_resize = (WidgetAfterResize) mainarea_resize;
-    main->orientation = CO_HORIZONTAL;
-    main->policy = SP_STRETCH;
-    layout_add_widget((Layout *) main, widget_new(Gutter));
-    layout_add_widget((Layout *) main, widget_new(Editor));
+    Buffer *buffer = app.editor->buffers.elements + app.editor->current_buffer;
+    label->text = sv_from(TextFormat("%4d:%d", buffer->cursor_pos.line + 1, buffer->cursor_pos.column + 1));
+    label_draw(label);
 }
 
-void mainarea_resize(MainArea *main)
+void status_bar_init(StatusBar *status_bar)
 {
-    main->lines = (int) ((main->viewport.height - 2 * PADDING) / app.cell.y);
+    status_bar->orientation = CO_HORIZONTAL;
+    status_bar->policy = SP_CHARACTERS;
+    status_bar->policy_size = 1.0f;
+    layout_add_widget((Layout *) status_bar, widget_new(Spacer));
+    Label *cursor = (Label*) widget_new(Label);
+    cursor->policy_size = 8;
+    cursor->handlers.draw = (WidgetDraw) sb_cursor_draw;
+    layout_add_widget((Layout *) status_bar, (Widget *) cursor);
+}
+
+void message_line_init(MessageLine *message_line)
+{
+    message_line->policy = SP_CHARACTERS;
+    message_line->policy_size = 1.0f;
+    message_line->message = sv_null();
+}
+
+void message_line_resize(MessageLine *message_line)
+{
+}
+
+void message_line_draw(MessageLine *message_line)
+{
+    widget_draw_rectangle(message_line, 0, 0, message_line->viewport.width, message_line->viewport.height, BLACK);
+    if (!sv_empty(message_line->message)) {
+        widget_render_text(message_line, 0, 0, message_line->message, RAYWHITE);
+    }
+}
+
+void message_line_process_input(MessageLine *message_line)
+{
 }
 
 void app_on_resize(App *app)
@@ -782,7 +885,19 @@ void app_init(App *app)
     app->handlers.on_resize = (WidgetOnResize) app_on_resize;
     app->handlers.on_process_input = (WidgetOnProcessInput) app_on_process_input;
     app->orientation = CO_HORIZONTAL;
-    layout_add_widget((Layout *) app, widget_new(MainArea));
+
+    Layout *editor_pane = layout_new(CO_HORIZONTAL);
+    editor_pane->policy = SP_STRETCH;
+    layout_add_widget(editor_pane, widget_new(Gutter));
+    layout_add_widget(editor_pane, widget_new(Editor));
+
+    Layout *main_area = layout_new(CO_VERTICAL);
+    main_area->policy = SP_STRETCH;
+    layout_add_widget(main_area, (Widget *) editor_pane);
+    layout_add_widget(main_area, widget_new(StatusBar));
+    layout_add_widget(main_area, widget_new(MessageLine));
+
+    layout_add_widget((Layout *) app, (Widget *) main_area);
     layout_add_widget((Layout *) app, widget_new(DebugPane));
     app->editor = (Editor *) layout_find_by_draw_function((Layout *) app, (WidgetDraw) editor_draw);
     app->debug_pane = (DebugPane *) layout_find_by_draw_function((Layout *) app, (WidgetDraw) debug_draw);
@@ -800,6 +915,25 @@ void app_on_process_input(App *app)
         app->viewport.width = GetScreenWidth();
         app->viewport.height = GetScreenHeight();
         layout_resize((Layout *) app);
+    }
+}
+
+void app_set_message(App *app, StringView message)
+{
+    MessageLine *message_line = (MessageLine *) layout_find_by_draw_function((Layout *) app, (WidgetDraw) message_line_draw);
+    assert(message_line);
+    if (!sv_empty(message_line->message)) {
+        sv_free(message_line->message);
+    }
+    message_line->message = message;
+}
+
+void app_clear_message(App *app)
+{
+    MessageLine *message_line = (MessageLine *) layout_find_by_draw_function((Layout *) app, (WidgetDraw) message_line_draw);
+    assert(message_line);
+    if (!sv_empty(message_line->message)) {
+        sv_free(message_line->message);
     }
 }
 
