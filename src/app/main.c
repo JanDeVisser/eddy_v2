@@ -780,6 +780,7 @@ void app_init(App *app)
 {
     app->font = LoadFontEx("fonts/VictorMono-Medium.ttf", 30, 0, 250);
     app->handlers.on_resize = (WidgetOnResize) app_on_resize;
+    app->handlers.on_process_input = (WidgetOnProcessInput) app_on_process_input;
     app->orientation = CO_HORIZONTAL;
     layout_add_widget((Layout *) app, widget_new(MainArea));
     layout_add_widget((Layout *) app, widget_new(DebugPane));
