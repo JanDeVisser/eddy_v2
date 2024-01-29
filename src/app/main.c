@@ -27,6 +27,37 @@ typedef enum {
     KMOD_SUPER,
 } KeyboardModifier;
 
+typedef enum {
+    CO_VERTICAL = 0,
+    CO_HORIZONTAL,
+} ContainerOrientation;
+
+typedef enum {
+    SP_ABSOLUTE = 0,
+    SP_RELATIVE,
+    SP_CHARACTERS,
+    SP_CALCULATED,
+    SP_STRETCH,
+} SizePolicy;
+
+typedef union {
+    struct {
+        float x;
+        float y;
+        float width;
+        float height;
+    };
+    Rectangle r;
+    float     coords[4];
+    struct {
+        float position[2];
+        float size[2];
+    };
+} Rect;
+
+DA_WITH_NAME(Rect, Rects);
+DA_IMPL(Rect);
+
 typedef struct {
     union {
         int column;
@@ -51,9 +82,127 @@ typedef struct {
     int h;
 } IntRectangle;
 
+typedef struct _widget Widget;
+
+DA_STRUCT_WITH_NAME(Widget, Widget *, Widgets);
+
+typedef void (*WidgetInit)(Widget *);
+typedef void (*WidgetDraw)(Widget *);
+typedef void (*WidgetOnResize)(Widget *);
+typedef void (*WidgetResize)(Widget *);
+typedef void (*WidgetAfterResize)(Widget *);
+typedef void (*WidgetOnProcessInput)(Widget *);
+typedef void (*WidgetProcessInput)(Widget *);
+typedef void (*WidgetAfterProcessInput)(Widget *);
+
+typedef struct {
+    WidgetInit              init;
+    WidgetOnResize          on_resize;
+    WidgetResize            resize;
+    WidgetAfterResize       after_resize;
+    WidgetOnProcessInput    on_process_input;
+    WidgetProcessInput      process_input;
+    WidgetAfterProcessInput after_process_input;
+    WidgetDraw              draw;
+} WidgetHandlers;
+
+#define _WIDGET_FIELDS        \
+    char const    *classname; \
+    WidgetHandlers handlers;  \
+    Rect           viewport;  \
+    Widget        *parent;    \
+    SizePolicy     policy;    \
+    float          policy_size;
+
 typedef struct _widget {
-    Rectangle viewport;
+    _WIDGET_FIELDS
 } Widget;
+
+#define _W                 \
+    union {                \
+        Widget _widget;    \
+        struct {           \
+            _WIDGET_FIELDS \
+        };                 \
+    };
+
+#define widget_init(w) ((((Widget *) (w))->handlers.init)((w)))
+#define widget_on_resize(w)             \
+    ({                                  \
+        Widget *_w = (Widget *) (w);    \
+        if (_w->handlers.on_resize)     \
+            _w->handlers.on_resize(_w); \
+    })
+#define widget_resize(w) ((((Widget *) (w))->handlers.resize)((w)))
+#define widget_after_resize(w)             \
+    ({                                     \
+        Widget *_w = (Widget *) (w);       \
+        if (_w->handlers.after_resize)     \
+            _w->handlers.after_resize(_w); \
+    })
+#define widget_draw(w) ((((Widget *) (w))->handlers.draw)((w)))
+#define widget_on_process_input(w)             \
+    ({                                         \
+        Widget *_w = (Widget *) (w);           \
+        if (_w->handlers.on_process_input)     \
+            _w->handlers.on_process_input(_w); \
+    })
+#define widget_process_input(w) ((((Widget *) (w))->handlers.process_input)((w)))
+#define widget_after_process_input(w)             \
+    ({                                            \
+        Widget *_w = (Widget *) (w);              \
+        if (_w->handlers.after_process_input)     \
+            _w->handlers.after_process_input(_w); \
+    })
+
+#define WIDGET_CLASS(c, prefix)                               \
+    extern void    prefix##_init(c *);                        \
+    extern void    prefix##_resize(c *);                      \
+    extern void    prefix##_process_input(c *);               \
+    extern void    prefix##_draw(c *);                        \
+    WidgetHandlers $##c##_handlers = {                        \
+        .init = (WidgetInit) prefix##_init,                   \
+        .resize = (WidgetResize) prefix##_resize,             \
+        .process_input = (WidgetDraw) prefix##_process_input, \
+        .draw = (WidgetDraw) prefix##_draw,                   \
+    };
+
+#define widget_new(c)                            \
+    ({                                           \
+        Widget *_w = (Widget *) allocate_new(c); \
+        _w->classname = #c;                      \
+        _w->handlers = $##c##_handlers;          \
+        _w->handlers.init(_w);                   \
+        _w;                                      \
+    })
+
+#define _LAYOUT_FIELDS                \
+    _WIDGET_FIELDS;                   \
+    ContainerOrientation orientation; \
+    Widgets              widgets;
+
+typedef struct _layout {
+    _LAYOUT_FIELDS;
+} Layout;
+
+#define _L                 \
+    union {                \
+        Layout _layout;    \
+        struct {           \
+            _LAYOUT_FIELDS \
+        };                 \
+    };
+
+WIDGET_CLASS(Layout, layout);
+#define LAYOUT_CLASS(c, prefix)                             \
+    extern void    prefix##_init(c *);                      \
+    WidgetHandlers $##c##_handlers = {                      \
+        .init = (WidgetInit) prefix##_init,                 \
+        .resize = (WidgetResize) layout_resize,             \
+        .process_input = (WidgetDraw) layout_process_input, \
+        .draw = (WidgetDraw) layout_draw,                   \
+    };
+extern Widget *layout_find_by_draw_function(Layout *layout, WidgetDraw draw_fnc);
 
 typedef struct {
     size_t     index_of;
@@ -78,11 +227,13 @@ DA_WITH_NAME(Buffer, Buffers);
 DA_IMPL(Buffer);
 
 typedef struct {
-    Rectangle viewport;
+    _W;
 } Gutter;
 
+WIDGET_CLASS(Gutter, gutter);
+
 typedef struct {
-    Rectangle  viewport;
+    _W;
     Buffers    buffers;
     IntVector2 outline;
     int        current_buffer;
@@ -91,34 +242,53 @@ typedef struct {
     int        lines;
 } Editor;
 
+WIDGET_CLASS(Editor, editor);
+extern void editor_open_buffer(Editor *editor, StringView file);
+extern void editor_new(Editor *editor);
+
 typedef struct {
-    Rectangle viewport;
-    char      last_key[64];
+    _W;
+    char last_key[64];
 } DebugPane;
 
+WIDGET_CLASS(DebugPane, debug);
+
 typedef struct {
-    Rectangle viewport;
-    Gutter    gutter;
-    Editor    editor;
-    int       lines;
+    _L;
+    int lines;
 } MainArea;
 
+LAYOUT_CLASS(MainArea, mainarea);
+extern void mainarea_resize(MainArea *main);
+
 typedef struct {
-    Rectangle viewport;
-    int       argc;
-    char    **argv;
-    MainArea  main;
-    DebugPane debug_pane;
-    Font      font;
-    Vector2   cell;
-    double    time;
+    _L;
+    int        argc;
+    char     **argv;
+    Font       font;
+    Vector2    cell;
+    double     time;
+    Editor    *editor;
+    DebugPane *debug_pane;
 } App;
 
+LAYOUT_CLASS(App, app);
+extern void app_initialize(App *app, int argc, char **argv);
+extern void app_on_resize(App *app);
+extern void app_on_process_input(App *app);
+
 App app = { 0 };
+
+DA_IMPL_TYPE(Widget, Widget *);
 
 int imin(int i1, int i2)
 {
     return (i2 < i1) ? i2 : i1;
+}
+
+char const *rect_tostring(Rect r)
+{
+    return TextFormat("%fx%f@+%f,+%f", r.width, r.height, r.x, r.y);
 }
 
 bool is_key_pressed(int key, KeyboardModifier modifier, char const *keystr, char const *modstr)
@@ -136,15 +306,18 @@ bool is_key_pressed(int key, KeyboardModifier modifier, char const *keystr, char
     if (IsKeyDown(KEY_LEFT_ALT) || IsKeyDown(KEY_RIGHT_ALT)) {
         current_modifier |= KMOD_ALT;
     }
-    if ((IsKeyPressed(key) || IsKeyPressedRepeat(key)) && modifier == current_modifier) {
+    if (current_modifier != modifier) {
+        return false;
+    }
+    if (IsKeyPressed(key) || IsKeyPressedRepeat(key)) {
         char const *s = modifier != KMOD_NONE ? TextFormat("%s | %s", keystr, modstr) : keystr;
-        strcpy(app.debug_pane.last_key, s);
+        strcpy(app.debug_pane->last_key, s);
         return true;
     }
     return false;
 }
 
-#define IS_PRESSED(key,mod) (is_key_pressed((key), (mod), #key, #mod))
+#define IS_PRESSED(key, mod) (is_key_pressed((key), (mod), #key, #mod))
 
 void widget_render_text(void *w, float x, float y, StringView text, Color color)
 {
@@ -169,6 +342,123 @@ void widget_draw_rectangle(void *w, float x, float y, float width, float height,
 {
     Widget *widget = (Widget *) w;
     DrawRectangle(widget->viewport.x + x, widget->viewport.y + y, width, height, color);
+}
+
+void layout_init(Layout *)
+{
+}
+
+void layout_add_widget(Layout *layout, Widget *widget)
+{
+    da_append_Widget(&layout->widgets, widget);
+    widget->parent = (Widget *) layout;
+}
+
+void layout_resize(Layout *layout)
+{
+    printf("Resizing layout %s %s\n", layout->classname, rect_tostring(layout->viewport));
+    widget_on_resize(layout);
+    float allocated = 0.0f;
+    int   stretch_count = 0;
+    int   fixed_coord = (layout->orientation == CO_VERTICAL) ? 0 : 1;
+    int   var_coord = 1 - fixed_coord;
+    float total = layout->viewport.size[var_coord];
+    float fixed_size = layout->viewport.size[fixed_coord];
+    float fixed_pos = layout->viewport.position[fixed_coord];
+    float var_offset = layout->viewport.position[var_coord];
+
+    printf("Total available %f, laying out %s\n", total, (layout->orientation == CO_VERTICAL) ? "vertically" : "horizontally");
+    printf("Fixed %s: %f, fixed %s position: %f\n",
+        (layout->orientation == CO_VERTICAL) ? "width" : "height",
+        fixed_size,
+        (layout->orientation == CO_VERTICAL) ? "x" : "y",
+        fixed_pos);
+    for (size_t ix = 0; ix < layout->widgets.size; ++ix) {
+        Widget *w = layout->widgets.elements[ix];
+        w->viewport.size[fixed_coord] = fixed_size;
+        w->viewport.position[fixed_coord] = fixed_pos;
+        float sz = 0;
+        printf("Component widget %s has policy %d\n", w->classname, w->policy);
+        switch (w->policy) {
+        case SP_ABSOLUTE:
+            sz = w->policy_size;
+            break;
+        case SP_RELATIVE: {
+            sz = (total * w->policy_size) / 100.0f;
+        } break;
+        case SP_CHARACTERS: {
+            sz = w->policy_size * ((layout->orientation == CO_VERTICAL) ? app.cell.y : app.cell.x) + 2*PADDING;
+        } break;
+        case SP_CALCULATED: {
+            NYI("SP_CALCULATED not yet supported");
+        } break;
+        case SP_STRETCH: {
+            sz = -1.0f;
+            stretch_count++;
+        } break;
+        }
+        assert_msg(sz != 0, "Size Policy %d resulted in zero size", (int) w->policy);
+        w->viewport.size[var_coord] = sz;
+        if (sz > 0) {
+            allocated += sz;
+            printf("Allocating %f, now allocated %f\n", sz, allocated);
+        }
+    }
+
+    if (stretch_count) {
+        printf("Stretch count %d\n", stretch_count);
+        assert_msg(total > allocated, "No room left in container for %d stretched components. Available: %f Allocated: %f", stretch_count, total, allocated);
+        float stretch = (total - allocated) / (float) stretch_count;
+        for (size_t ix = 0; ix < layout->widgets.size; ++ix) {
+            Widget *w = layout->widgets.elements[ix];
+            if (w->policy == SP_STRETCH) {
+                printf("Allocating %f to stretchable %s\n", stretch, w->classname);
+                w->viewport.size[var_coord] = stretch;
+            }
+        }
+    }
+
+    for (size_t ix = 0; ix < layout->widgets.size; ++ix) {
+        Widget *w = layout->widgets.elements[ix];
+        w->viewport.position[var_coord] = var_offset;
+        var_offset += w->viewport.size[var_coord];
+        printf("Resizing %s to %s\n", w->classname, rect_tostring(w->viewport));
+        widget_resize(w);
+    }
+    widget_after_resize(layout);
+}
+
+void layout_draw(Layout *layout)
+{
+    for (size_t ix = 0; ix < layout->widgets.size; ++ix) {
+        widget_draw(layout->widgets.elements[ix]);
+    }
+}
+
+void layout_process_input(Layout *layout)
+{
+    widget_on_process_input(layout);
+    for (size_t ix = 0; ix < layout->widgets.size; ++ix) {
+        widget_process_input(layout->widgets.elements[ix]);
+    }
+    widget_after_process_input(layout);
+}
+
+Widget *layout_find_by_draw_function(Layout *layout, WidgetDraw draw_fnc)
+{
+    for (size_t ix = 0; ix < layout->widgets.size; ++ix) {
+        Widget *w = (Widget *) layout->widgets.elements[ix];
+        if (w->handlers.draw == draw_fnc) {
+            return w;
+        }
+        if (w->handlers.resize == (WidgetResize) layout_resize) {
+            Widget *ret = layout_find_by_draw_function((Layout *) w, draw_fnc);
+            if (ret) {
+                return ret;
+            }
+        }
+    }
+    return NULL;
 }
 
 void buffer_build_indices(Buffer *buffer)
@@ -215,37 +505,32 @@ size_t buffer_line_for_index(Buffer *buffer, int index)
     }
 }
 
-void gutter_init(Gutter *)
+void gutter_init(Gutter *gutter)
 {
+    gutter->policy = SP_CHARACTERS;
+    gutter->policy_size = 4;
 }
 
-void gutter_resize(Gutter *gutter)
+void gutter_resize(Gutter *)
 {
-    gutter->viewport.x = 0;
-    gutter->viewport.y = 0;
-    gutter->viewport.width = 4 * app.cell.x + 2 * PADDING;
-    gutter->viewport.height = app.viewport.height;
 }
 
 void gutter_draw(Gutter *gutter)
 {
-    Buffer *buffer = app.main.editor.buffers.elements + app.main.editor.current_buffer;
-    for (int row = 0; row < app.main.lines && buffer->top_line + row < buffer->lines.size; ++row) {
+    Buffer *buffer = app.editor->buffers.elements + app.editor->current_buffer;
+    for (int row = 0; row < app.editor->lines && buffer->top_line + row < buffer->lines.size; ++row) {
         size_t lineno = buffer->top_line + row;
         widget_render_text(gutter, 0, app.cell.y * row, sv_from(TextFormat("%4d", lineno + 1)), BEIGE);
     }
 }
 
-void gutter_handle(Gutter *)
+void gutter_process_input(Gutter *)
 {
 }
 
-extern void editor_init(Editor *editor);
-extern void editor_open_buffer(Editor *editor, StringView file);
-extern void editor_new(Editor *editor);
-
 void editor_init(Editor *editor)
 {
+    editor->policy = SP_STRETCH;
     for (int ix = 1; ix < app.argc; ++ix) {
         editor_open_buffer(editor, sv_from(app.argv[ix]));
     }
@@ -256,13 +541,9 @@ void editor_init(Editor *editor)
 
 void editor_resize(Editor *editor)
 {
-    editor->viewport.x = app.main.gutter.viewport.width;
-    editor->viewport.y = 0;
-    editor->viewport.width = app.main.viewport.width - app.main.gutter.viewport.width;
-    editor->viewport.height = app.viewport.height;
     editor->cursor_flash = GetTime();
     editor->columns = (int) ((editor->viewport.width - 2 * PADDING) / app.cell.x);
-    editor->lines = app.main.lines;
+    editor->lines = ((MainArea *) editor->parent)->lines;
 }
 
 void editor_open_buffer(Editor *editor, StringView file)
@@ -318,9 +599,9 @@ void editor_draw(Editor *editor)
     }
 }
 
-void editor_handle(Editor *editor)
+void editor_process_input(Editor *editor)
 {
-    Buffer *buffer = app.main.editor.buffers.elements + app.main.editor.current_buffer;
+    Buffer *buffer = editor->buffers.elements + editor->current_buffer;
     int     new_cursor = buffer->cursor;
 
     Index line = buffer->lines.elements[buffer->cursor_pos.y];
@@ -420,27 +701,25 @@ void editor_handle(Editor *editor)
         if (buffer->cursor_pos.column >= buffer->left_column + editor->columns) {
             buffer->left_column = buffer->cursor_pos.column - editor->columns + 1;
         }
-        app.main.editor.cursor_flash = app.time;
+        editor->cursor_flash = app.time;
     }
 }
 
 void debug_init(DebugPane *debug)
 {
+    debug->policy = SP_ABSOLUTE;
+    debug->policy_size = DEBUG_PANE_WIDTH;
 }
 
-void debug_resize(DebugPane *debug)
+void debug_resize(DebugPane *)
 {
-    debug->viewport.x = app.viewport.width - DEBUG_PANE_WIDTH;
-    debug->viewport.y = 0;
-    debug->viewport.width = DEBUG_PANE_WIDTH;
-    debug->viewport.height = app.viewport.height;
 }
 
 void debug_draw(DebugPane *debug)
 {
-    Buffer *buffer = app.main.editor.buffers.elements + app.main.editor.current_buffer;
+    Buffer *buffer = app.editor->buffers.elements + app.editor->current_buffer;
     size_t  y = 0;
-    widget_render_text_bitmap(debug, 0, y, sv_from(TextFormat("Window: %d Columns %d Rows", app.main.editor.columns, app.main.editor.lines)), WHITE);
+    widget_render_text_bitmap(debug, 0, y, sv_from(TextFormat("Window: %d Columns %d Rows", app.editor->columns, app.editor->lines)), WHITE);
     y += 22;
     widget_render_text_bitmap(debug, 0, y, sv_from(TextFormat("Lines: %zu", buffer->lines.size)), WHITE);
     y += 22;
@@ -453,84 +732,74 @@ void debug_draw(DebugPane *debug)
     y += 22;
     widget_render_text_bitmap(debug, 0, y, sv_from(TextFormat("Text viewport: Col %zu Row %zu", buffer->left_column, buffer->top_line)), WHITE);
     y += 22;
-    widget_render_text_bitmap(debug, 0, y, sv_from(TextFormat("Last Key: %s", app.debug_pane.last_key)), WHITE);
+    widget_render_text_bitmap(debug, 0, y, sv_from(TextFormat("Last Key: %s", debug->last_key)), WHITE);
     y += 22;
-    DrawFPS(app.debug_pane.viewport.x + PADDING, y + PADDING);
-    y += 22;
+    DrawFPS(debug->viewport.x + PADDING, y + PADDING);
+    // y += 22;
 }
 
-void debug_handle(DebugPane *)
+void debug_process_input(DebugPane *)
 {
 }
 
 void mainarea_init(MainArea *main)
 {
-    gutter_init(&main->gutter);
-    editor_init(&main->editor);
+    main->handlers.on_resize = (WidgetAfterResize) mainarea_resize;
+    main->orientation = CO_HORIZONTAL;
+    main->policy = SP_STRETCH;
+    layout_add_widget((Layout *) main, widget_new(Gutter));
+    layout_add_widget((Layout *) main, widget_new(Editor));
 }
 
 void mainarea_resize(MainArea *main)
 {
-    main->viewport.x = 0;
-    main->viewport.y = 0;
-    main->viewport.width = app.viewport.width - app.debug_pane.viewport.width;
-    main->viewport.height = app.viewport.height;
     main->lines = (int) ((main->viewport.height - 2 * PADDING) / app.cell.y);
-    gutter_resize(&main->gutter);
-    editor_resize(&main->editor);
 }
 
-void mainarea_draw(MainArea *main)
+void app_on_resize(App *app)
 {
-    gutter_draw(&main->gutter);
-    editor_draw(&main->editor);
-}
-
-void mainarea_handle(MainArea *main)
-{
-    gutter_handle(&main->gutter);
-    editor_handle(&main->editor);
-}
-
-void app_resize(App *app)
-{
-    app->viewport.x = 0;
-    app->viewport.y = 0;
-    app->viewport.width = GetScreenWidth();
-    app->viewport.height = GetScreenHeight();
     Vector2 measurements = MeasureTextEx(app->font, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", (float) app->font.baseSize, 2);
     app->cell.x = measurements.x / 52.0f;
     int rows = (app->viewport.height - 10) / measurements.y;
     app->cell.y = (float) (app->viewport.height - 10) / (float) rows;
-    debug_resize(&app->debug_pane);
-    mainarea_resize(&app->main);
+    app->viewport = (Rect) { 0 };
+    app->viewport.width = GetScreenWidth();
+    app->viewport.height = GetScreenHeight();
 }
 
-void app_init(App *app, int argc, char **argv)
+void app_initialize(App *app, int argc, char **argv)
 {
     app->argc = argc;
     app->argv = argv;
-    app->font = LoadFontEx("fonts/VictorMono-Medium.ttf", 30, 0, 250);
-    debug_init(&app->debug_pane);
-    mainarea_init(&app->main);
-
-    app_resize(app);
+    app->handlers = $App_handlers;
+    app->classname = "App";
+    app_init(app);
 }
 
-void app_draw(App *app)
+void app_init(App *app)
 {
-    mainarea_draw(&app->main);
-    debug_draw(&app->debug_pane);
+    app->font = LoadFontEx("fonts/VictorMono-Medium.ttf", 30, 0, 250);
+    app->handlers.on_resize = (WidgetOnResize) app_on_resize;
+    app->orientation = CO_HORIZONTAL;
+    layout_add_widget((Layout *) app, widget_new(MainArea));
+    layout_add_widget((Layout *) app, widget_new(DebugPane));
+    app->editor = (Editor *) layout_find_by_draw_function((Layout *) app, (WidgetDraw) editor_draw);
+    app->debug_pane = (DebugPane *) layout_find_by_draw_function((Layout *) app, (WidgetDraw) debug_draw);
+    app->viewport = (Rect) { 0 };
+    app->viewport.width = GetScreenWidth();
+    app->viewport.height = GetScreenHeight();
+    layout_resize((Layout *) app);
 }
 
-void app_handle(App *app)
+void app_on_process_input(App *app)
 {
     app->time = GetTime();
     if (IsWindowResized()) {
-        app_resize(app);
+        Rect r = { 0 };
+        app->viewport.width = GetScreenWidth();
+        app->viewport.height = GetScreenHeight();
+        layout_resize((Layout *) app);
     }
-    mainarea_handle(&app->main);
-    debug_handle(&app->debug_pane);
 }
 
 int main(int argc, char **argv)
@@ -544,7 +813,7 @@ int main(int argc, char **argv)
     SetTargetFPS(60);
     MaximizeWindow();
 
-    app_init(&app, argc, argv);
+    app_initialize(&app, argc, argv);
 
     while (!WindowShouldClose()) {
 
@@ -552,11 +821,11 @@ int main(int argc, char **argv)
             break;
         }
 
-        app_handle(&app);
+        layout_process_input((Layout *) &app);
 
         BeginDrawing();
         ClearBackground(DARKGRAY);
-        app_draw(&app);
+        layout_draw((Layout *) &app);
         EndDrawing();
     }
     UnloadFont(app.font);
