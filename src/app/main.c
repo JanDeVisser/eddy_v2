@@ -45,12 +45,10 @@ WIDGET_CLASS(Gutter, gutter);
 
 typedef struct {
     _W;
-    Buffers    buffers;
-    IntVector2 outline;
-    int        current_buffer;
-    double     cursor_flash;
-    int        columns;
-    int        lines;
+    int    current_buffer;
+    double cursor_flash;
+    int    columns;
+    int    lines;
 } Editor;
 
 WIDGET_CLASS(Editor, editor);
@@ -72,6 +70,7 @@ WIDGET_CLASS(MessageLine, message_line);
 
 typedef struct {
     _A;
+    Buffers buffers;
     Editor *editor;
 } Eddy;
 
@@ -143,7 +142,7 @@ void gutter_resize(Gutter *)
 
 void gutter_draw(Gutter *gutter)
 {
-    Buffer *buffer = eddy.editor->buffers.elements + eddy.editor->current_buffer;
+    Buffer *buffer = eddy.buffers.elements + eddy.editor->current_buffer;
     for (int row = 0; row < eddy.editor->lines && buffer->top_line + row < buffer->lines.size; ++row) {
         size_t lineno = buffer->top_line + row;
         widget_render_text(gutter, 0, eddy.cell.y * row, sv_from(TextFormat("%4d", lineno + 1)), BEIGE);
@@ -159,10 +158,7 @@ WIDGET_CLASS_DEF(Editor, editor);
 void editor_init(Editor *editor)
 {
     editor->policy = SP_STRETCH;
-    for (int ix = 1; ix < eddy.argc; ++ix) {
-        editor_open_buffer(editor, sv_from(app->argv[ix]));
-    }
-    if (editor->buffers.size == 0) {
+    if (eddy.buffers.size == 0) {
         editor_new(editor);
     }
 }
@@ -174,14 +170,14 @@ void editor_resize(Editor *editor)
     editor->lines = (int) ((editor->viewport.height - 2 * PADDING) / eddy.cell.y);
 }
 
-void editor_open_buffer(Editor *editor, StringView file)
+void eddy_open_buffer(Editor *editor, StringView file)
 {
     Buffer buffer = { 0 };
     buffer.name = file;
     buffer.text.view = MUST(StringView, read_file_by_name(file));
     buffer_build_indices(&buffer);
-    da_append_Buffer(&editor->buffers, buffer);
-    editor->current_buffer = editor->buffers.size - 1;
+    da_append_Buffer(&eddy.buffers, buffer);
+    editor->current_buffer = eddy.buffers.size - 1;
 }
 
 void editor_new(Editor *editor)
@@ -191,8 +187,8 @@ void editor_new(Editor *editor)
     for (size_t num = 1; true; ++num) {
         sb_append_cstr(&name, TextFormat("untitled-%d", num));
         bool found = false;
-        for (size_t ix = 0; ix < editor->buffers.size; ++ix) {
-            if (sv_eq(name.view, editor->buffers.elements[ix].name)) {
+        for (size_t ix = 0; ix < eddy.buffers.size; ++ix) {
+            if (sv_eq(name.view, eddy.buffers.elements[ix].name)) {
                 found = true;
                 break;
             }
@@ -204,13 +200,13 @@ void editor_new(Editor *editor)
     }
     buffer.text = sb_create();
     buffer_build_indices(&buffer);
-    da_append_Buffer(&editor->buffers, buffer);
-    editor->current_buffer = editor->buffers.size - 1;
+    da_append_Buffer(&eddy.buffers, buffer);
+    editor->current_buffer = eddy.buffers.size - 1;
 }
 
 void editor_draw(Editor *editor)
 {
-    Buffer *buffer = editor->buffers.elements + editor->current_buffer;
+    Buffer *buffer = eddy.buffers.elements + editor->current_buffer;
     widget_draw_rectangle(editor, 0, 0, editor->viewport.width, editor->viewport.height, BLACK);
     for (int row = 0; row < editor->lines && buffer->top_line + row < buffer->lines.size; ++row) {
         size_t lineno = buffer->top_line + row;
@@ -229,7 +225,7 @@ void editor_draw(Editor *editor)
 
 void editor_process_input(Editor *editor)
 {
-    Buffer *buffer = editor->buffers.elements + editor->current_buffer;
+    Buffer *buffer = eddy.buffers.elements + editor->current_buffer;
     int     new_cursor = buffer->cursor;
 
     Index line = buffer->lines.elements[buffer->cursor_pos.y];
@@ -278,7 +274,7 @@ void editor_process_input(Editor *editor)
     }
 
     if (IS_PRESSED(KEY_J, KMOD_SHIFT | KMOD_CONTROL)) {
-        ((char *) buffer->text.view.ptr)[line.index_of + line.line.length - 1]  = ' ';
+        ((char *) buffer->text.view.ptr)[line.index_of + line.line.length - 1] = ' ';
         new_cursor = line.index_of + line.line.length - 1;
         buffer->cursor_col = -1;
         ++rebuild_needed;
@@ -337,14 +333,14 @@ LAYOUT_CLASS_DEF(StatusBar, sb);
 
 void sb_file_name_draw(Label *label)
 {
-    Buffer *buffer = eddy.editor->buffers.elements + eddy.editor->current_buffer;
+    Buffer *buffer = eddy.buffers.elements + eddy.editor->current_buffer;
     label->text = buffer->name;
     label_draw(label);
 }
 
 void sb_cursor_draw(Label *label)
 {
-    Buffer *buffer = eddy.editor->buffers.elements + eddy.editor->current_buffer;
+    Buffer *buffer = eddy.buffers.elements + eddy.editor->current_buffer;
     label->text = sv_from(TextFormat("%4d:%d", buffer->cursor_pos.line + 1, buffer->cursor_pos.column + 1));
     label_draw(label);
 }
@@ -437,6 +433,9 @@ void eddy_init(Eddy *eddy)
 
     layout_add_widget((Layout *) eddy, (Widget *) main_area);
     eddy->editor = (Editor *) layout_find_by_draw_function((Layout *) eddy, (WidgetDraw) editor_draw);
+    for (int ix = 1; ix < eddy->argc; ++ix) {
+        eddy_open_buffer(eddy->editor, sv_from(app->argv[ix]));
+    }
     app_init((App *) eddy);
 }
 
@@ -470,7 +469,7 @@ int main(int argc, char **argv)
     SetTargetFPS(60);
     MaximizeWindow();
 
-    app_initialize((App *) &eddy, (WidgetInit) eddy_init, argc, argv);
+    app_initialize((App *) &eddy, eddy_init, argc, argv);
 
     while (!WindowShouldClose()) {
 
