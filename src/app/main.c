@@ -197,6 +197,17 @@ typedef struct _widget {
         _w;                                      \
     })
 
+#define widget_new_with_policy(c, p, s)          \
+    ({                                           \
+        Widget *_w = (Widget *) allocate_new(c); \
+        _w->classname = #c;                      \
+        _w->handlers = $##c##_handlers;          \
+        _w->handlers.init(_w);                   \
+        _w->policy = (p);                        \
+        _w->policy_size = (s);                   \
+        _w;                                      \
+    })
+
 #define _LAYOUT_FIELDS                \
     _WIDGET_FIELDS;                   \
     ContainerOrientation orientation; \
@@ -289,13 +300,6 @@ extern void editor_open_buffer(Editor *editor, StringView file);
 extern void editor_new(Editor *editor);
 
 typedef struct {
-    _W;
-    char last_key[64];
-} DebugPane;
-
-WIDGET_CLASS(DebugPane, debug);
-
-typedef struct {
     _L;
 } StatusBar;
 
@@ -310,13 +314,13 @@ WIDGET_CLASS(MessageLine, message_line);
 
 typedef struct {
     _L;
-    int        argc;
-    char     **argv;
-    Font       font;
-    Vector2    cell;
-    double     time;
-    Editor    *editor;
-    DebugPane *debug_pane;
+    int     argc;
+    char  **argv;
+    Font    font;
+    Vector2 cell;
+    double  time;
+    Editor *editor;
+    char    last_key[64];
 } App;
 
 LAYOUT_CLASS(App, app);
@@ -360,7 +364,7 @@ bool is_key_pressed(int key, KeyboardModifier modifier, char const *keystr, char
     }
     if (IsKeyPressed(key) || IsKeyPressedRepeat(key)) {
         char const *s = modifier != KMOD_NONE ? TextFormat("%s | %s", keystr, modstr) : keystr;
-        strcpy(app.debug_pane->last_key, s);
+        strcpy(app.last_key, s);
         return true;
     }
     return false;
@@ -480,7 +484,10 @@ void layout_resize(Layout *layout)
 void layout_draw(Layout *layout)
 {
     for (size_t ix = 0; ix < layout->widgets.size; ++ix) {
-        widget_draw(layout->widgets.elements[ix]);
+        Widget *w = layout->widgets.elements[ix];
+        if (w->viewport.width > 0.0f && w->viewport.height > 0.0f) {
+            widget_draw(layout->widgets.elements[ix]);
+        }
     }
 }
 
@@ -488,7 +495,10 @@ void layout_process_input(Layout *layout)
 {
     widget_on_process_input(layout);
     for (size_t ix = 0; ix < layout->widgets.size; ++ix) {
-        widget_process_input(layout->widgets.elements[ix]);
+        Widget *w = layout->widgets.elements[ix];
+        if (w->viewport.width > 0.0f && w->viewport.height > 0.0f) {
+            widget_process_input(layout->widgets.elements[ix]);
+        }
     }
     widget_after_process_input(layout);
 }
@@ -780,41 +790,11 @@ void editor_process_input(Editor *editor)
     }
 }
 
-void debug_init(DebugPane *debug)
-{
-    debug->policy = SP_ABSOLUTE;
-    debug->policy_size = DEBUG_PANE_WIDTH;
-}
-
-void debug_resize(DebugPane *)
-{
-}
-
-void debug_draw(DebugPane *debug)
+void sb_file_name_draw(Label *label)
 {
     Buffer *buffer = app.editor->buffers.elements + app.editor->current_buffer;
-    size_t  y = 0;
-    widget_render_text_bitmap(debug, 0, y, sv_from(TextFormat("Window: %d Columns %d Rows", app.editor->columns, app.editor->lines)), WHITE);
-    y += 22;
-    widget_render_text_bitmap(debug, 0, y, sv_from(TextFormat("Lines: %zu", buffer->lines.size)), WHITE);
-    y += 22;
-    widget_render_text_bitmap(debug, 0, y, sv_from(TextFormat("Bytes: %zu", buffer->text.view.length)), WHITE);
-    y += 22;
-    widget_render_text_bitmap(debug, 0, y, sv_from(TextFormat("Cursor: Index %zu Col %d (%d) Row %d ", buffer->cursor, buffer->cursor_pos.x, buffer->cursor_col, buffer->cursor_pos.y)), WHITE);
-    y += 22;
-    Index *index = buffer->lines.elements + buffer->cursor_pos.line;
-    widget_render_text_bitmap(debug, 0, y, sv_from(TextFormat("Current Line: Index %zu Length %zu", index->index_of, index->line.length)), WHITE);
-    y += 22;
-    widget_render_text_bitmap(debug, 0, y, sv_from(TextFormat("Text viewport: Col %zu Row %zu", buffer->left_column, buffer->top_line)), WHITE);
-    y += 22;
-    widget_render_text_bitmap(debug, 0, y, sv_from(TextFormat("Last Key: %s", debug->last_key)), WHITE);
-    y += 22;
-    DrawFPS(debug->viewport.x + PADDING, y + PADDING);
-    // y += 22;
-}
-
-void debug_process_input(DebugPane *)
-{
+    label->text = buffer->name;
+    label_draw(label);
 }
 
 void sb_cursor_draw(Label *label)
@@ -824,16 +804,49 @@ void sb_cursor_draw(Label *label)
     label_draw(label);
 }
 
+void sb_last_key_draw(Label *label)
+{
+    label->text = sv_from(app.last_key);
+    label_draw(label);
+}
+
+void sb_fps_draw(Label *label)
+{
+    int fps = GetFPS();
+    label->text = sv_from(TextFormat("%d", fps));
+    if (fps > 55) {
+        label->color = GREEN;
+    } else if (fps > 35) {
+        label->color = ORANGE;
+    } else {
+        label->color = RED;
+    }
+    label_draw(label);
+}
+
 void status_bar_init(StatusBar *status_bar)
 {
     status_bar->orientation = CO_HORIZONTAL;
     status_bar->policy = SP_CHARACTERS;
     status_bar->policy_size = 1.0f;
+    layout_add_widget((Layout *) status_bar, widget_new_with_policy(Spacer, SP_CHARACTERS, 1));
+    Label *file_name = (Label *) widget_new(Label);
+    file_name->policy_size = 64;
+    file_name->handlers.draw = (WidgetDraw) sb_file_name_draw;
+    layout_add_widget((Layout *) status_bar, (Widget *) file_name);
     layout_add_widget((Layout *) status_bar, widget_new(Spacer));
-    Label *cursor = (Label*) widget_new(Label);
+    Label *cursor = (Label *) widget_new(Label);
     cursor->policy_size = 8;
     cursor->handlers.draw = (WidgetDraw) sb_cursor_draw;
     layout_add_widget((Layout *) status_bar, (Widget *) cursor);
+    Label *last_key = (Label *) widget_new(Label);
+    last_key->policy_size = 16;
+    last_key->handlers.draw = (WidgetDraw) sb_last_key_draw;
+    layout_add_widget((Layout *) status_bar, (Widget *) last_key);
+    Label *fps = (Label *) widget_new(Label);
+    fps->policy_size = 4;
+    fps->handlers.draw = (WidgetDraw) sb_fps_draw;
+    layout_add_widget((Layout *) status_bar, (Widget *) fps);
 }
 
 void message_line_init(MessageLine *message_line)
@@ -898,9 +911,7 @@ void app_init(App *app)
     layout_add_widget(main_area, widget_new(MessageLine));
 
     layout_add_widget((Layout *) app, (Widget *) main_area);
-    layout_add_widget((Layout *) app, widget_new(DebugPane));
     app->editor = (Editor *) layout_find_by_draw_function((Layout *) app, (WidgetDraw) editor_draw);
-    app->debug_pane = (DebugPane *) layout_find_by_draw_function((Layout *) app, (WidgetDraw) debug_draw);
     app->viewport = (Rect) { 0 };
     app->viewport.width = GetScreenWidth();
     app->viewport.height = GetScreenHeight();
