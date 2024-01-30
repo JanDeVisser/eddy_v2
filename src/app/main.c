@@ -735,7 +735,7 @@ void editor_process_input(Editor *editor)
     }
 
     if (IS_PRESSED(KEY_J, KMOD_SHIFT | KMOD_CONTROL)) {
-        sb_remove(&buffer->text, line.index_of + line.line.length - 1, 1);
+        ((char *) buffer->text.view.ptr)[line.index_of + line.line.length - 1]  = ' ';
         new_cursor = line.index_of + line.line.length - 1;
         buffer->cursor_col = -1;
         ++rebuild_needed;
