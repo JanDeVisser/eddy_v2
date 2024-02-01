@@ -13,12 +13,19 @@
 
 #define PADDING 5.0f
 
+#define KEYBOARDMODIFIERS(S) \
+    S(NONE, 0, "")           \
+    S(SHIFT, 1, "S-")        \
+    S(CONTROL, 2, "C-")      \
+    S(ALT, 4, "M-")          \
+    S(SUPER, 8, "U-")
+
 typedef enum {
-    KMOD_NONE = 0,
-    KMOD_SHIFT,
-    KMOD_CONTROL,
-    KMOD_ALT,
-    KMOD_SUPER,
+#undef KEYBOARDMODIFIER
+#define KEYBOARDMODIFIER(mod, ord, str) KMOD_##mod = ord,
+    KEYBOARDMODIFIERS(KEYBOARDMODIFIER)
+#undef KEYBOARDMODIFIER
+        KMOD_COUNT,
 } KeyboardModifier;
 
 typedef enum {
@@ -80,7 +87,9 @@ typedef struct _widget Widget;
 DA_STRUCT_WITH_NAME(Widget, Widget *, Widgets);
 
 typedef void (*WidgetInit)(Widget *);
+typedef void (*WidgetOnDraw)(Widget *);
 typedef void (*WidgetDraw)(Widget *);
+typedef void (*WidgetAfterDraw)(Widget *);
 typedef void (*WidgetOnResize)(Widget *);
 typedef void (*WidgetResize)(Widget *);
 typedef void (*WidgetAfterResize)(Widget *);
@@ -96,16 +105,19 @@ typedef struct {
     WidgetOnProcessInput    on_process_input;
     WidgetProcessInput      process_input;
     WidgetAfterProcessInput after_process_input;
+    WidgetOnDraw            on_draw;
     WidgetDraw              draw;
+    WidgetAfterDraw         after_draw;
 } WidgetHandlers;
 
-#define _WIDGET_FIELDS        \
-    char const    *classname; \
-    WidgetHandlers handlers;  \
-    Rect           viewport;  \
-    Widget        *parent;    \
-    SizePolicy     policy;    \
-    float          policy_size;
+#define _WIDGET_FIELDS          \
+    char const    *classname;   \
+    WidgetHandlers handlers;    \
+    Rect           viewport;    \
+    Widget        *parent;      \
+    SizePolicy     policy;      \
+    float          policy_size; \
+    Widget        *memo;
 
 typedef struct _widget {
     _WIDGET_FIELDS
@@ -118,50 +130,6 @@ typedef struct _widget {
             _WIDGET_FIELDS \
         };                 \
     };
-
-#define widget_init(w) ((((Widget *) (w))->handlers.init)((w)))
-#define widget_on_resize(w)             \
-    ({                                  \
-        Widget *_w = (Widget *) (w);    \
-        if (_w->handlers.on_resize)     \
-            _w->handlers.on_resize(_w); \
-    })
-#define widget_resize(w)             \
-    ({                               \
-        Widget *_w = (Widget *) (w); \
-        if (_w->handlers.resize)     \
-            _w->handlers.resize(_w); \
-    })
-#define widget_after_resize(w)             \
-    ({                                     \
-        Widget *_w = (Widget *) (w);       \
-        if (_w->handlers.after_resize)     \
-            _w->handlers.after_resize(_w); \
-    })
-#define widget_draw(w)               \
-    ({                               \
-        Widget *_w = (Widget *) (w); \
-        if (_w->handlers.draw)       \
-            _w->handlers.draw(_w);   \
-    })
-#define widget_on_process_input(w)             \
-    ({                                         \
-        Widget *_w = (Widget *) (w);           \
-        if (_w->handlers.on_process_input)     \
-            _w->handlers.on_process_input(_w); \
-    })
-#define widget_process_input(w)             \
-    ({                                      \
-        Widget *_w = (Widget *) (w);        \
-        if (_w->handlers.process_input)     \
-            _w->handlers.process_input(_w); \
-    })
-#define widget_after_process_input(w)             \
-    ({                                            \
-        Widget *_w = (Widget *) (w);              \
-        if (_w->handlers.after_process_input)     \
-            _w->handlers.after_process_input(_w); \
-    })
 
 #define WIDGET_CLASS(c, prefix)                        \
     extern void           prefix##_init(c *);          \
@@ -260,13 +228,15 @@ typedef struct {
 
 WIDGET_CLASS(Label, label);
 
-#define _APP_FIELDS \
-    _LAYOUT_FIELDS; \
-    int     argc;   \
-    char  **argv;   \
-    Font    font;   \
-    Vector2 cell;   \
-    double  time;   \
+#define _APP_FIELDS      \
+    _LAYOUT_FIELDS;      \
+    int     argc;        \
+    char  **argv;        \
+    Font    font;        \
+    int     monitor;     \
+    Vector2 cell;        \
+    double  time;        \
+    size_t  frame_count; \
     char    last_key[64]
 
 typedef struct {
@@ -294,19 +264,26 @@ LAYOUT_CLASS(App, app);
         .draw = (WidgetDraw) layout_draw,                   \
     }
 
+extern int         iclamp(int v, int min, int max);
 extern int         imin(int i1, int i2);
+extern int         imax(int i1, int i2);
+extern bool        icontains(int f, int min, int max);
 extern char const *rect_tostring(Rect r);
-extern bool        is_key_pressed(int key, KeyboardModifier modifier, char const *keystr, char const *modstr);
+extern bool        is_modifier_down(KeyboardModifier modifier);
+extern char const *modifier_string(KeyboardModifier modifier);
+extern bool        _is_key_pressed(int key, char const *keystr, ...);
 extern void        widget_render_text(void *w, float x, float y, StringView text, Color color);
 extern void        widget_render_text_bitmap(void *w, float x, float y, StringView text, Color color);
 extern void        widget_draw_rectangle(void *w, float x, float y, float width, float height, Color color);
 extern Widget     *layout_find_by_draw_function(Layout *layout, WidgetDraw draw_fnc);
 extern void        layout_add_widget(Layout *layout, Widget *widget);
+extern void        layout_traverse(Layout *layout, void (*fnc)(Widget *));
+extern void        layout_dump(Layout *layout);
 extern void        app_initialize(App *app, WidgetInit init, int argc, char **argv);
 extern void        app_on_resize(App *app);
 extern void        app_on_process_input(App *app);
 
-#define IS_PRESSED(key, mod) (is_key_pressed((key), (mod), #key, #mod))
+#define is_key_pressed(key, ...) (_is_key_pressed((key), #key __VA_OPT__(, ) __VA_ARGS__, KMOD_COUNT))
 
 extern App *app;
 

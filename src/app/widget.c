@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <math.h>
+
 #include <allocate.h>
 #include <widget.h>
 
@@ -18,17 +20,32 @@ LAYOUT_CLASS_DEF(App, app);
 
 App *app;
 
+int iclamp(int v, int min, int max)
+{
+    return imin(imax(v, min), max);
+}
+
 int imin(int i1, int i2)
 {
     return (i2 < i1) ? i2 : i1;
 }
 
-char const *rect_tostring(Rect r)
+int imax(int i1, int i2)
 {
-    return TextFormat("%fx%f@+%f,+%f", r.width, r.height, r.x, r.y);
+    return (i2 > i1) ? i2 : i1;
 }
 
-bool is_key_pressed(int key, KeyboardModifier modifier, char const *keystr, char const *modstr)
+bool icontains(int v, int min, int max)
+{
+    return v >= min && v <= max;
+}
+
+char const *rect_tostring(Rect r)
+{
+    return TextFormat("%.1fx%f.1@+%.1f,+%.1f", r.width, r.height, r.x, r.y);
+}
+
+KeyboardModifier modifier_current()
 {
     KeyboardModifier current_modifier = KMOD_NONE;
     if (IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT)) {
@@ -43,14 +60,48 @@ bool is_key_pressed(int key, KeyboardModifier modifier, char const *keystr, char
     if (IsKeyDown(KEY_LEFT_ALT) || IsKeyDown(KEY_RIGHT_ALT)) {
         current_modifier |= KMOD_ALT;
     }
-    if (current_modifier != modifier) {
+    return current_modifier;
+}
+
+bool is_modifier_down(KeyboardModifier modifier)
+{
+    KeyboardModifier current_modifier = modifier_current();
+    if (modifier == KMOD_NONE) {
+        return current_modifier == KMOD_NONE;
+    }
+    return (current_modifier & modifier) == modifier;
+}
+
+char const *modifier_string(KeyboardModifier modifier)
+{
+    static char buffer[64];
+    buffer[0] = 0;
+#undef KEYBOARDMODIFIER
+#define KEYBOARDMODIFIER(mod, ord, str) \
+    if (KMOD_##mod & modifier)          \
+        strcat(buffer, str);
+    KEYBOARDMODIFIERS(KEYBOARDMODIFIER)
+#undef KEYBOARDMODIFIER
+    return buffer;
+}
+
+bool _is_key_pressed(int key, char const *keystr, ...)
+{
+    if (!IsKeyPressed(key) && !IsKeyPressedRepeat(key)) {
         return false;
     }
-    if (IsKeyPressed(key) || IsKeyPressedRepeat(key)) {
-        char const *s = modifier != KMOD_NONE ? TextFormat("%s | %s", keystr, modstr) : keystr;
-        strcpy(app->last_key, s);
-        return true;
+    va_list mods;
+    va_start(mods, keystr);
+    KeyboardModifier current = modifier_current();
+
+    for (KeyboardModifier mod = va_arg(mods, KeyboardModifier); mod != KMOD_COUNT; mod = va_arg(mods, KeyboardModifier)) {
+        if (mod == current) {
+            strcpy(app->last_key, TextFormat("%s%s", modifier_string(mod), keystr));
+            va_end(mods);
+            return true;
+        }
     }
+    va_end(mods);
     return false;
 }
 
@@ -91,8 +142,11 @@ void layout_add_widget(Layout *layout, Widget *widget)
 
 void layout_resize(Layout *layout)
 {
-    printf("Resizing layout %s %s\n", layout->classname, rect_tostring(layout->viewport));
-    widget_on_resize(layout);
+    // printf("Resizing layout %s %s\n", layout->classname, rect_tostring(layout->viewport));
+    Widget *w = (Widget *) layout;
+    if (w->handlers.on_resize) {
+        w->handlers.on_resize(w);
+    }
     float allocated = 0.0f;
     int   stretch_count = 0;
     int   fixed_coord = (layout->orientation == CO_VERTICAL) ? 0 : 1;
@@ -102,18 +156,18 @@ void layout_resize(Layout *layout)
     float fixed_pos = layout->viewport.position[fixed_coord];
     float var_offset = layout->viewport.position[var_coord];
 
-    printf("Total available %f, laying out %s\n", total, (layout->orientation == CO_VERTICAL) ? "vertically" : "horizontally");
-    printf("Fixed %s: %f, fixed %s position: %f\n",
-        (layout->orientation == CO_VERTICAL) ? "width" : "height",
-        fixed_size,
-        (layout->orientation == CO_VERTICAL) ? "x" : "y",
-        fixed_pos);
+    // printf("Total available %f, laying out %s\n", total, (layout->orientation == CO_VERTICAL) ? "vertically" : "horizontally");
+    // printf("Fixed %s: %f, fixed %s position: %f\n",
+    //     (layout->orientation == CO_VERTICAL) ? "width" : "height",
+    //     fixed_size,
+    //     (layout->orientation == CO_VERTICAL) ? "x" : "y",
+    //     fixed_pos);
     for (size_t ix = 0; ix < layout->widgets.size; ++ix) {
-        Widget *w = layout->widgets.elements[ix];
+        w = layout->widgets.elements[ix];
         w->viewport.size[fixed_coord] = fixed_size;
         w->viewport.position[fixed_coord] = fixed_pos;
         float sz = 0;
-        printf("Component widget %s has policy %d\n", w->classname, w->policy);
+        // printf("Component widget %s has policy %d\n", w->classname, w->policy);
         switch (w->policy) {
         case SP_ABSOLUTE:
             sz = w->policy_size;
@@ -122,7 +176,7 @@ void layout_resize(Layout *layout)
             sz = (total * w->policy_size) / 100.0f;
         } break;
         case SP_CHARACTERS: {
-            sz = w->policy_size * ((layout->orientation == CO_VERTICAL) ? app->cell.y : app->cell.x) + 2 * PADDING;
+            sz = floorf(w->policy_size * ((layout->orientation == CO_VERTICAL) ? app->cell.y : app->cell.x) + 2 * PADDING);
         } break;
         case SP_CALCULATED: {
             NYI("SP_CALCULATED not yet supported");
@@ -136,53 +190,76 @@ void layout_resize(Layout *layout)
         w->viewport.size[var_coord] = sz;
         if (sz > 0) {
             allocated += sz;
-            printf("Allocating %f, now allocated %f\n", sz, allocated);
+            // printf("Allocating %f, now allocated %f\n", sz, allocated);
         }
     }
 
     if (stretch_count) {
-        printf("Stretch count %d\n", stretch_count);
+        // printf("Stretch count %d\n", stretch_count);
         assert_msg(total > allocated, "No room left in container for %d stretched components. Available: %f Allocated: %f", stretch_count, total, allocated);
-        float stretch = (total - allocated) / (float) stretch_count;
+        float stretch = floorf((total - allocated) / (float) stretch_count);
         for (size_t ix = 0; ix < layout->widgets.size; ++ix) {
-            Widget *w = layout->widgets.elements[ix];
+            w = layout->widgets.elements[ix];
             if (w->policy == SP_STRETCH) {
-                printf("Allocating %f to stretchable %s\n", stretch, w->classname);
+                // printf("Allocating %f to stretchable %s\n", stretch, w->classname);
                 w->viewport.size[var_coord] = stretch;
             }
         }
     }
 
     for (size_t ix = 0; ix < layout->widgets.size; ++ix) {
-        Widget *w = layout->widgets.elements[ix];
+        w = layout->widgets.elements[ix];
         w->viewport.position[var_coord] = var_offset;
         var_offset += w->viewport.size[var_coord];
-        printf("Resizing %s to %s\n", w->classname, rect_tostring(w->viewport));
-        widget_resize(w);
+        // printf("Resizing %s to %s\n", w->classname, rect_tostring(w->viewport));
+        if (w->handlers.resize) {
+            w->handlers.resize(w);
+        }
     }
-    widget_after_resize(layout);
+    if (layout->handlers.after_resize) {
+        layout->handlers.after_resize((Widget *) layout);
+    }
 }
+
+#define LOG(fmt, ...)          \
+    if (app->frame_count <= 1) \
+        printf(fmt "\n" __VA_OPT__(, ) __VA_ARGS__);
 
 void layout_draw(Layout *layout)
 {
+    if (app->frame_count <= 1) {
+        layout_dump(layout);
+    }
+    Widget *w = (Widget *) layout;
+    if (w->handlers.on_draw) {
+        w->handlers.on_draw(w);
+    }
     for (size_t ix = 0; ix < layout->widgets.size; ++ix) {
-        Widget *w = layout->widgets.elements[ix];
-        if (w->viewport.width > 0.0f && w->viewport.height > 0.0f) {
-            widget_draw(layout->widgets.elements[ix]);
+        w = layout->widgets.elements[ix];
+        if (w->viewport.width > 0.0f && w->viewport.height > 0.0f && w->handlers.draw) {
+            w->handlers.draw(w);
         }
+    }
+    if (layout->handlers.after_draw) {
+        layout->handlers.after_draw((Widget *) layout);
     }
 }
 
 void layout_process_input(Layout *layout)
 {
-    widget_on_process_input(layout);
+    Widget *w = (Widget *) layout;
+    if (w->handlers.on_process_input) {
+        w->handlers.on_process_input(w);
+    }
     for (size_t ix = 0; ix < layout->widgets.size; ++ix) {
-        Widget *w = layout->widgets.elements[ix];
-        if (w->viewport.width > 0.0f && w->viewport.height > 0.0f) {
-            widget_process_input(layout->widgets.elements[ix]);
+        w = layout->widgets.elements[ix];
+        if (w->viewport.width > 0.0f && w->viewport.height > 0.0f && w->handlers.process_input) {
+            w->handlers.process_input(w);
         }
     }
-    widget_after_process_input(layout);
+    if (layout->handlers.after_process_input) {
+        layout->handlers.after_process_input((Widget *) layout);
+    }
 }
 
 Widget *layout_find_by_draw_function(Layout *layout, WidgetDraw draw_fnc)
@@ -200,6 +277,43 @@ Widget *layout_find_by_draw_function(Layout *layout, WidgetDraw draw_fnc)
         }
     }
     return NULL;
+}
+
+void layout_traverse(Layout *layout, void (*fnc)(Widget *))
+{
+    fnc((Widget *) layout);
+    for (size_t ix = 0; ix < layout->widgets.size; ++ix) {
+        Widget *w = layout->widgets.elements[ix];
+        if (w->handlers.resize == (WidgetResize) layout_resize) {
+            layout_traverse((Layout *) w, fnc);
+        } else {
+            fnc(w);
+        }
+    }
+    fnc(NULL);
+}
+
+static int layout_dump_indent = 0;
+
+void _layout_dump_fnc(Widget *w)
+{
+    if (w == NULL) {
+        layout_dump_indent -= 2;
+        return;
+    }
+    if (w->handlers.resize == (WidgetResize) layout_resize) {
+        Layout *l = (Layout *) w;
+        printf("%*s+ | %zu %s\n", layout_dump_indent, "", l->widgets.size, rect_tostring(w->viewport));
+        layout_dump_indent += 2;
+        return;
+    }
+    printf("%*s+-> %s %s\n", layout_dump_indent, "", w->classname, rect_tostring(w->viewport));
+}
+
+void layout_dump(Layout *layout)
+{
+    layout_dump_indent = 0;
+    layout_traverse(layout, _layout_dump_fnc);
 }
 
 void spacer_init(Spacer *spacer)
@@ -230,6 +344,8 @@ void label_process_input(Label *)
 
 void app_init(App *app)
 {
+    app->monitor = GetCurrentMonitor();
+    printf("Monitor %d\n", app->monitor);
     app->font = LoadFontEx("fonts/VictorMono-Medium.ttf", 30, 0, 250);
     app->handlers.on_resize = (WidgetOnResize) app_on_resize;
     app->handlers.on_process_input = (WidgetOnProcessInput) app_on_process_input;
@@ -259,16 +375,21 @@ void app_initialize(App *the_app, WidgetInit init, int argc, char **argv)
     app->handlers = $App_handlers;
     app->handlers.init = init;
     app->classname = "App";
-    init((Widget*) app);
+    init((Widget *) app);
 }
 
 void app_on_process_input(App *app)
 {
     app->time = GetTime();
+    ++app->frame_count;
     if (IsWindowResized()) {
         Rect r = { 0 };
         app->viewport.width = GetScreenWidth();
         app->viewport.height = GetScreenHeight();
         layout_resize((Layout *) app);
+    }
+    if (GetCurrentMonitor() != app->monitor) {
+        app->monitor = GetCurrentMonitor();
+        printf("Monitor changed to %d\n", app->monitor);
     }
 }
