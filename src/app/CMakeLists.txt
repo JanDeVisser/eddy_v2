@@ -3,7 +3,7 @@ add_executable(
         main.c
         widget.c
         buffer.c
-        buffer.h
+        palette.c
 )
 
 target_include_directories(eddy PRIVATE ${raylib_INCLUDE_DIRS})

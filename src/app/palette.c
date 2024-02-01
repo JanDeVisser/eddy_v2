@@ -9,88 +9,90 @@
 PaletteDefinition palettes[PALETTE_MAX] = {
     {
         // Dark palette
-        [PI_DEFAULT] = 0xffffffff,                    // None.
-        [PI_KEYWORD] = 0xffd69c56,                    // Keyword.
-        [PI_NUMBER] = 0xffa8ceb5,                     // Number.
-        [PI_STRING] = 0xff859dd6,                     // String.
-        [PI_CHAR_LITERAL] = 0xff70a0e0,               // Char literal.
-        [PI_PUNCTUATION] = 0xffb4b4b4,                // Punctuation.
-        [PI_PREPROCESSOR] = 0xff409090,               // Preprocessor.
-        [PI_IDENTIFIER] = 0xffdadada,                 // Identifier.
-        [PI_KNOWN_IDENTIFIER] = 0xffb0c94e,           // Known identifier.
-        [PI_PREPROC_IDENTIFIER] = 0xffc040a0,         // Preproc identifier.
-        [PI_COMMENT] = 0xff4aa657,                    // Comment (single line).
-        [PI_MULTI_LINE_COMMENT] = 0xff4aa657,         // Comment (multi line).
-        [PI_BACKGROUND] = 0xff2C2C2C,                 // Background.
-        [PI_CURSOR] = 0xffe0e0e0,                     // Cursor.
-        [PI_SELECTION] = 0xffa06020,                  // Selection.
-        [PI_ERROR_MARKER] = 0x804d00ff,               // ErrorMarker.
-        [PI_BREAKPOINT] = 0x40f08000,                 // Breakpoint.
-        [PI_LINE_NUMBER] = 0xffaf912b,                // Line number.
-        [PI_CURRENT_LINE_FILL] = 0x40000000,          // Current line fill.
-        [PI_CURRENT_LINE_FILL_INACTIVE] = 0x40808080, // Current line fill (inactive).
-        [PI_CURRENT_LINE_EDGE] = 0x40a0a0a0,          // Current line edge.
-        [PI_LINE_EDITED] = 0xff84f2ef,                // Line edited.
-        [PI_LINE_EDITED_SAVED] = 0xff307457,          // Line edited saved.
-        [PI_LINE_EDITED_REVERTED] = 0xfffa955f,       // Line edited reverted.
+        [PI_DEFAULT] = (Color) { .a = 0xff, .b = 0xff, .g = 0xff, .r = 0xff },                    // None.
+        [PI_KEYWORD] = (Color) { .a = 0xff, .b = 0xd6, .g = 0x9c, .r = 0x56 },                    // Keyword.
+        [PI_NUMBER] = (Color) { .a = 0xff, .b = 0xa8, .g = 0xce, .r = 0xb5 },                     // Number.
+        [PI_STRING] = (Color) { .a = 0xff, .b = 0x85, .g = 0x9d, .r = 0xd6 },                     // String.
+        [PI_CHAR_LITERAL] = (Color) { .a = 0xff, .b = 0x70, .g = 0xa0, .r = 0xe0 },               // Char literal.
+        [PI_PUNCTUATION] = (Color) { .a = 0xff, .b = 0xb4, .g = 0xb4, .r = 0xb4 },                // Punctuation.
+        [PI_PREPROCESSOR] = (Color) { .a = 0xff, .b = 0x40, .g = 0x90, .r = 0x90 },               // Preprocessor.
+        [PI_IDENTIFIER] = (Color) { .a = 0xff, .b = 0xda, .g = 0xda, .r = 0xda },                 // Identifier.
+        [PI_KNOWN_IDENTIFIER] = (Color) { .a = 0xff, .b = 0xb0, .g = 0xc9, .r = 0x4e },           // Known identifier.
+        [PI_PREPROC_IDENTIFIER] = (Color) { .a = 0xff, .b = 0xc0, .g = 0x40, .r = 0xa0 },         // Preproc identifier.
+        [PI_COMMENT] = (Color) { .a = 0xff, .b = 0x4a, .g = 0xa6, .r = 0x57 },                    // Comment (single line).
+        [PI_MULTI_LINE_COMMENT] = (Color) { .a = 0xff, .b = 0x4a, .g = 0xa6, .r = 0x57 },         // Comment (multi line).
+        [PI_BACKGROUND] = (Color) { .a = 0xff, .b = 0x2c, .g = 0x2c, .r = 0x2c },                 // Background.
+        [PI_CURSOR] = (Color) { .a = 0xff, .b = 0xe0, .g = 0xe0, .r = 0xe0 },                     // Cursor.
+        [PI_SELECTION] = (Color) { .a = 0xff, .b = 0xa0, .g = 0x60, .r = 0x20 },                  // Selection.
+        [PI_ERROR_MARKER] = (Color) { .a = 0x80, .b = 0x4d, .g = 0x00, .r = 0xff },               // ErrorMarker.
+        [PI_BREAKPOINT] = (Color) { .a = 0x40, .b = 0xf0, .g = 0x80, .r = 0x00 },                 // Breakpoint.
+        [PI_LINE_NUMBER] = (Color) { .a = 0xff, .b = 0xaf, .g = 0x91, .r = 0x2b },                // Line number.
+        [PI_CURRENT_LINE_FILL] = (Color) { .a = 0x40, .b = 0x00, .g = 0x00, .r = 0x00 },          // Current line fill.
+        [PI_CURRENT_LINE_FILL_INACTIVE] = (Color) { .a = 0x40, .b = 0x80, .g = 0x80, .r = 0x80 }, // Current line fill (inactive).
+        [PI_CURRENT_LINE_EDGE] = (Color) { .a = 0x40, .b = 0xa0, .g = 0xa0, .r = 0xa0 },          // Current line edge.
+        [PI_LINE_EDITED] = (Color) { .a = 0xff, .b = 0x84, .g = 0xf2, .r = 0xef },                // Line edited.
+        [PI_LINE_EDITED_SAVED] = (Color) { .a = 0xff, .b = 0x30, .g = 0x74, .r = 0x57 },          // Line edited saved.
+        [PI_LINE_EDITED_REVERTED] = (Color) { .a = 0xff, .b = 0xfa, .g = 0x95, .r = 0x5f },       // Line edited reverted.
     },
-    { // Light Palette
-        [PI_DEFAULT] = 0xff000000,                    // None.
-        [PI_KEYWORD] = 0xffff0c06,                    // Keyword.
-        [PI_NUMBER] = 0xff008000,                     // Number.
-        [PI_STRING] = 0xff2020a0,                     // String.
-        [PI_CHAR_LITERAL] = 0xff304070,               // Char literal.
-        [PI_PUNCTUATION] = 0xff000000,                // Punctuation.
-        [PI_PREPROCESSOR] = 0xff409090,               // Preprocessor.
-        [PI_IDENTIFIER] = 0xff404040,                 // Identifier.
-        [PI_KNOWN_IDENTIFIER] = 0xff606010,           // Known identifier.
-        [PI_PREPROC_IDENTIFIER] = 0xffc040a0,         // Preproc identifier.
-        [PI_COMMENT] = 0xff205020,                    // Comment (single line).
-        [PI_MULTI_LINE_COMMENT] = 0xff405020,         // Comment (multi line).
-        [PI_BACKGROUND] = 0xffffffff,                 // Background.
-        [PI_CURSOR] = 0xff000000,                     // Cursor.
-        [PI_SELECTION] = 0xff600000,                  // Selection.
-        [PI_ERROR_MARKER] = 0xa00010ff,               // ErrorMarker.
-        [PI_BREAKPOINT] = 0x80f08000,                 // Breakpoint.
-        [PI_LINE_NUMBER] = 0xff505000,                // Line number.
-        [PI_CURRENT_LINE_FILL] = 0x40000000,          // Current line fill.
-        [PI_CURRENT_LINE_FILL_INACTIVE] = 0x40808080, // Current line fill (inactive).
-        [PI_CURRENT_LINE_EDGE] = 0x40000000,          // Current line edge.
-        [PI_LINE_EDITED] = 0xff84f2ef,                // Line edited.
-        [PI_LINE_EDITED_SAVED] = 0xff307457,          // Line edited saved.
-        [PI_LINE_EDITED_REVERTED] = 0xfffa955f,       // Line edited reverted.
+    {
+        // Light Palette
+        [PI_DEFAULT] = (Color) { .a = 0xff, .b = 0x00, .g = 0x00, .r = 0x00 },                    // None.
+        [PI_KEYWORD] = (Color) { .a = 0xff, .b = 0xff, .g = 0x0c, .r = 0x06 },                    // Keyword.
+        [PI_NUMBER] = (Color) { .a = 0xff, .b = 0x00, .g = 0x80, .r = 0x00 },                     // Number.
+        [PI_STRING] = (Color) { .a = 0xff, .b = 0x20, .g = 0x20, .r = 0xa0 },                     // String.
+        [PI_CHAR_LITERAL] = (Color) { .a = 0xff, .b = 0x30, .g = 0x40, .r = 0x70 },               // Char literal.
+        [PI_PUNCTUATION] = (Color) { .a = 0xff, .b = 0x00, .g = 0x00, .r = 0x00 },                // Punctuation.
+        [PI_PREPROCESSOR] = (Color) { .a = 0xff, .b = 0x40, .g = 0x90, .r = 0x90 },               // Preprocessor.
+        [PI_IDENTIFIER] = (Color) { .a = 0xff, .b = 0x40, .g = 0x40, .r = 0x40 },                 // Identifier.
+        [PI_KNOWN_IDENTIFIER] = (Color) { .a = 0xff, .b = 0x60, .g = 0x60, .r = 0x10 },           // Known identifier.
+        [PI_PREPROC_IDENTIFIER] = (Color) { .a = 0xff, .b = 0xc0, .g = 0x40, .r = 0xa0 },         // Preproc identifier.
+        [PI_COMMENT] = (Color) { .a = 0xff, .b = 0x20, .g = 0x50, .r = 0x20 },                    // Comment (single line).
+        [PI_MULTI_LINE_COMMENT] = (Color) { .a = 0xff, .b = 0x40, .g = 0x50, .r = 0x20 },         // Comment (multi line).
+        [PI_BACKGROUND] = (Color) { .a = 0xff, .b = 0xff, .g = 0xff, .r = 0xff },                 // Background.
+        [PI_CURSOR] = (Color) { .a = 0xff, .b = 0x00, .g = 0x00, .r = 0x00 },                     // Cursor.
+        [PI_SELECTION] = (Color) { .a = 0xff, .b = 0x60, .g = 0x00, .r = 0x00 },                  // Selection.
+        [PI_ERROR_MARKER] = (Color) { .a = 0xa0, .b = 0x00, .g = 0x10, .r = 0xff },               // ErrorMarker.
+        [PI_BREAKPOINT] = (Color) { .a = 0x80, .b = 0xf0, .g = 0x80, .r = 0x00 },                 // Breakpoint.
+        [PI_LINE_NUMBER] = (Color) { .a = 0xff, .b = 0x50, .g = 0x50, .r = 0x00 },                // Line number.
+        [PI_CURRENT_LINE_FILL] = (Color) { .a = 0x40, .b = 0x00, .g = 0x00, .r = 0x00 },          // Current line fill.
+        [PI_CURRENT_LINE_FILL_INACTIVE] = (Color) { .a = 0x40, .b = 0x80, .g = 0x80, .r = 0x80 }, // Current line fill (inactive).
+        [PI_CURRENT_LINE_EDGE] = (Color) { .a = 0x40, .b = 0x00, .g = 0x00, .r = 0x00 },          // Current line edge.
+        [PI_LINE_EDITED] = (Color) { .a = 0xff, .b = 0x84, .g = 0xf2, .r = 0xef },                // Line edited.
+        [PI_LINE_EDITED_SAVED] = (Color) { .a = 0xff, .b = 0x30, .g = 0x74, .r = 0x57 },          // Line edited saved.
+        [PI_LINE_EDITED_REVERTED] = (Color) { .a = 0xff, .b = 0xfa, .g = 0x95, .r = 0x5f },       // Line edited reverted.
     },
-    { // Retro blue palette
-        [PI_DEFAULT] = 0xff00ffff,                    // None.
-        [PI_KEYWORD] = 0xffffff00,                    // Keyword.
-        [PI_NUMBER] = 0xff00ff00,                     // Number.
-        [PI_STRING] = 0xff808000,                     // String.
-        [PI_CHAR_LITERAL] = 0xff808000,               // Char literal.
-        [PI_PUNCTUATION] = 0xffffffff,                // Punctuation.
-        [PI_PREPROCESSOR] = 0xff008000,               // Preprocessor.
-        [PI_IDENTIFIER] = 0xff00ffff,                 // Identifier.
-        [PI_KNOWN_IDENTIFIER] = 0xffffffff,           // Known identifier.
-        [PI_PREPROC_IDENTIFIER] = 0xffff00ff,         // Preproc identifier.
-        [PI_COMMENT] = 0xff808080,                    // Comment (single line).
-        [PI_MULTI_LINE_COMMENT] = 0xff404040,         // Comment (multi line).
-        [PI_BACKGROUND] = 0xff800000,                 // Background.
-        [PI_CURSOR] = 0xff0080ff,                     // Cursor.
-        [PI_SELECTION] = 0xffffff00,                  // Selection.
-        [PI_ERROR_MARKER] = 0xa00000ff,               // ErrorMarker.
-        [PI_BREAKPOINT] = 0x80ff8000,                 // Breakpoint.
-        [PI_LINE_NUMBER] = 0xff808000,                // Line number.
-        [PI_CURRENT_LINE_FILL] = 0x40000000,          // Current line fill.
-        [PI_CURRENT_LINE_FILL_INACTIVE] = 0x40808080, // Current line fill (inactive).
-        [PI_CURRENT_LINE_EDGE] = 0x40000000,          // Current line edge.
-        [PI_LINE_EDITED] = 0xff84f2ef,                // Line edited.
-        [PI_LINE_EDITED_SAVED] = 0xff307457,          // Line edited saved.
-        [PI_LINE_EDITED_REVERTED] = 0xfffa955f,       // Line edited reverted.
+    {
+        // Retro blue palette
+        [PI_DEFAULT] = (Color) { .a = 0xff, .b = 0x00, .g = 0xff, .r = 0xff },                    // None.
+        [PI_KEYWORD] = (Color) { .a = 0xff, .b = 0xff, .g = 0xff, .r = 0x00 },                    // Keyword.
+        [PI_NUMBER] = (Color) { .a = 0xff, .b = 0x00, .g = 0xff, .r = 0x00 },                     // Number.
+        [PI_STRING] = (Color) { .a = 0xff, .b = 0x80, .g = 0x80, .r = 0x00 },                     // String.
+        [PI_CHAR_LITERAL] = (Color) { .a = 0xff, .b = 0x80, .g = 0x80, .r = 0x00 },               // Char literal.
+        [PI_PUNCTUATION] = (Color) { .a = 0xff, .b = 0xff, .g = 0xff, .r = 0xff },                // Punctuation.
+        [PI_PREPROCESSOR] = (Color) { .a = 0xff, .b = 0x00, .g = 0x80, .r = 0x00 },               // Preprocessor.
+        [PI_IDENTIFIER] = (Color) { .a = 0xff, .b = 0x00, .g = 0xff, .r = 0xff },                 // Identifier.
+        [PI_KNOWN_IDENTIFIER] = (Color) { .a = 0xff, .b = 0xff, .g = 0xff, .r = 0xff },           // Known identifier.
+        [PI_PREPROC_IDENTIFIER] = (Color) { .a = 0xff, .b = 0xff, .g = 0x00, .r = 0xff },         // Preproc identifier.
+        [PI_COMMENT] = (Color) { .a = 0xff, .b = 0x80, .g = 0x80, .r = 0x80 },                    // Comment (single line).
+        [PI_MULTI_LINE_COMMENT] = (Color) { .a = 0xff, .b = 0x40, .g = 0x40, .r = 0x40 },         // Comment (multi line).
+        [PI_BACKGROUND] = (Color) { .a = 0xff, .b = 0x80, .g = 0x00, .r = 0x00 },                 // Background.
+        [PI_CURSOR] = (Color) { .a = 0xff, .b = 0x00, .g = 0x80, .r = 0xff },                     // Cursor.
+        [PI_SELECTION] = (Color) { .a = 0xff, .b = 0xff, .g = 0xff, .r = 0x00 },                  // Selection.
+        [PI_ERROR_MARKER] = (Color) { .a = 0xa0, .b = 0x00, .g = 0x00, .r = 0xff },               // ErrorMarker.
+        [PI_BREAKPOINT] = (Color) { .a = 0x80, .b = 0xff, .g = 0x80, .r = 0x00 },                 // Breakpoint.
+        [PI_LINE_NUMBER] = (Color) { .a = 0xff, .b = 0x80, .g = 0x80, .r = 0x00 },                // Line number.
+        [PI_CURRENT_LINE_FILL] = (Color) { .a = 0x40, .b = 0x00, .g = 0x00, .r = 0x00 },          // Current line fill.
+        [PI_CURRENT_LINE_FILL_INACTIVE] = (Color) { .a = 0x40, .b = 0x80, .g = 0x80, .r = 0x80 }, // Current line fill (inactive).
+        [PI_CURRENT_LINE_EDGE] = (Color) { .a = 0x40, .b = 0x00, .g = 0x00, .r = 0x00 },          // Current line edge.
+        [PI_LINE_EDITED] = (Color) { .a = 0xff, .b = 0x84, .g = 0xf2, .r = 0xef },                // Line edited.
+        [PI_LINE_EDITED_SAVED] = (Color) { .a = 0xff, .b = 0x30, .g = 0x74, .r = 0x57 },          // Line edited saved.
+        [PI_LINE_EDITED_REVERTED] = (Color) { .a = 0xff, .b = 0xfa, .g = 0x95, .r = 0x5f },       // Line edited reverted.
     },
 };
 
 uint32_t ansi_palette[ANSI_MAX] = {
 #undef ANSICOLOR
-#define ANSICOLOR(C,RGB) [ANSI_##C] = RGB,
+#define ANSICOLOR(C, RGB) [ANSI_##C] = RGB,
     ANSICOLORS(ANSICOLOR)
 #undef ANSICOLOR
 };

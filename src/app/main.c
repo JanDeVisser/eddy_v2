@@ -11,6 +11,7 @@
 #include <io.h>
 
 #include <buffer.h>
+#include <palette.h>
 #include <widget.h>
 
 #define WINDOW_WIDTH 1600
@@ -104,7 +105,8 @@ void gutter_draw(Gutter *gutter)
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
     for (int row = 0; row < eddy.editor->lines && view->top_line + row < buffer->lines.size; ++row) {
         size_t lineno = view->top_line + row;
-        widget_render_text(gutter, 0, eddy.cell.y * row, sv_from(TextFormat("%4d", lineno + 1)), BEIGE);
+        widget_render_text(gutter, 0, eddy.cell.y * row, sv_from(TextFormat("%4d", lineno + 1)),
+            palettes[PALETTE_DARK][PI_LINE_NUMBER]);
     }
 }
 
@@ -241,7 +243,8 @@ void editor_draw(Editor *editor)
     editor_update_cursor(editor);
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
-    widget_draw_rectangle(editor, 0, 0, editor->viewport.width, editor->viewport.height, BLACK);
+    widget_draw_rectangle(editor, 0, 0, editor->viewport.width, editor->viewport.height,
+        palettes[PALETTE_DARK][PI_BACKGROUND]);
 
     int selection_start = -1, selection_end = -1;
     if (view->selection != -1) {
@@ -265,15 +268,16 @@ void editor_draw(Editor *editor)
             }
             widget_draw_rectangle(editor,
                 PADDING + eddy.cell.x * selection_offset, eddy.cell.y * row,
-                width, eddy.cell.y + 1, (Color) { 0x1A, 0x30, 0x70, 0xFF });
+                width, eddy.cell.y + 1,
+                palettes[PALETTE_DARK][PI_SELECTION]);
         }
-        widget_render_text(editor, 0, eddy.cell.y * row, (StringView) { line.line.ptr, line_len }, RAYWHITE);
+        widget_render_text(editor, 0, eddy.cell.y * row, (StringView) { line.line.ptr, line_len }, palettes[PALETTE_DARK][PI_DEFAULT]);
     }
     double time = app->time - view->cursor_flash;
     if (time - floor(time) < 0.5) {
         int x = view->cursor_pos.x - view->left_column;
         int y = view->cursor_pos.y - view->top_line;
-        widget_draw_rectangle(editor, 5.0f + x * eddy.cell.x, 5.0f + y * eddy.cell.y, 2, eddy.cell.y, RAYWHITE);
+        widget_draw_rectangle(editor, 5.0f + x * eddy.cell.x, 5.0f + y * eddy.cell.y, 2, eddy.cell.y, palettes[PALETTE_DARK][PI_CURSOR]);
     }
 }
 
@@ -611,9 +615,9 @@ void message_line_resize(MessageLine *message_line)
 
 void message_line_draw(MessageLine *message_line)
 {
-    widget_draw_rectangle(message_line, 0, 0, message_line->viewport.width, message_line->viewport.height, BLACK);
+    widget_draw_rectangle(message_line, 0, 0, message_line->viewport.width, message_line->viewport.height, palettes[PALETTE_DARK][PI_BACKGROUND]);
     if (!sv_empty(message_line->message)) {
-        widget_render_text(message_line, 0, 0, message_line->message, RAYWHITE);
+        widget_render_text(message_line, 0, 0, message_line->message, palettes[PALETTE_DARK][PI_DEFAULT]);
     }
 }
 
@@ -712,7 +716,7 @@ int main(int argc, char **argv)
         layout_process_input((Layout *) &eddy);
 
         BeginDrawing();
-        ClearBackground(DARKGRAY);
+        ClearBackground(palettes[PALETTE_DARK][PI_BACKGROUND]);
         layout_draw((Layout *) &eddy);
         EndDrawing();
     }

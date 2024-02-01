@@ -8,6 +8,7 @@
 #define __PALETTE_H__
 
 #include <stdint.h>
+#include <raylib.h>
 
 #define PALETTEINDICES(S)         \
     S(DEFAULT)                    \
@@ -82,8 +83,7 @@ typedef enum {
     ANSI_MAX,
 } AnsiColor;
 
-typedef uint32_t PaletteDefinition[PI_MAX];
-typedef uint32_t PaletteDefinition[PI_MAX];
+typedef Color PaletteDefinition[PI_MAX];
 
 extern PaletteDefinition palettes[PALETTE_MAX];
 extern uint32_t ansi_palette[ANSI_MAX];
