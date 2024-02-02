@@ -1,9 +1,11 @@
 add_executable(
         eddy
-        main.c
-        widget.c
         buffer.c
+        eddy.c
+        editor.c
+        main.c
         palette.c
+        widget.c
 )
 
 target_include_directories(eddy PRIVATE ${raylib_INCLUDE_DIRS})

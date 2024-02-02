@@ -13,6 +13,27 @@
 
 #define PADDING 5.0f
 
+#define VALUETYPES(S) \
+    S(STRING)         \
+    S(INT)
+
+typedef enum {
+#undef VALUETYPE
+#define VALUETYPE(T) VT_##T,
+    VALUETYPES(VALUETYPE)
+#undef VALUETYPE
+} ValueType;
+
+typedef struct {
+    ValueType type;
+    union {
+        StringView string;
+        int        intval;
+    };
+} Value;
+
+DA_WITH_NAME(Value, Values);
+
 #define KEYBOARDMODIFIERS(S) \
     S(NONE, 0, "")           \
     S(SHIFT, 1, "S-")        \
@@ -110,14 +131,44 @@ typedef struct {
     WidgetAfterDraw         after_draw;
 } WidgetHandlers;
 
-#define _WIDGET_FIELDS          \
-    char const    *classname;   \
-    WidgetHandlers handlers;    \
-    Rect           viewport;    \
-    Widget        *parent;      \
-    SizePolicy     policy;      \
-    float          policy_size; \
-    Widget        *memo;
+typedef struct {
+    int              key;
+    KeyboardModifier modifier;
+} KeyCombo;
+
+typedef struct {
+    KeyCombo   trigger;
+    StringView called_as;
+    Widget    *target;
+    Values     arguments;
+} CommandContext;
+
+typedef void (*CommandHandler)(CommandContext *);
+
+typedef struct {
+    StringView     name;
+    CommandHandler handler;
+} Command;
+
+DA_WITH_NAME(Command, Commands);
+
+typedef struct {
+    KeyCombo key_combo;
+    size_t   command;
+} CommandBinding;
+
+DA_WITH_NAME(CommandBinding, CommandBindings);
+
+#define _WIDGET_FIELDS           \
+    char const     *classname;   \
+    WidgetHandlers  handlers;    \
+    Rect            viewport;    \
+    Widget         *parent;      \
+    SizePolicy      policy;      \
+    float           policy_size; \
+    Commands        commands;    \
+    CommandBindings bindings;    \
+    Widget         *memo;
 
 typedef struct _widget {
     _WIDGET_FIELDS
@@ -232,6 +283,7 @@ WIDGET_CLASS(Label, label);
     _LAYOUT_FIELDS;      \
     int     argc;        \
     char  **argv;        \
+    Widget *focus;       \
     Font    font;        \
     int     monitor;     \
     Vector2 cell;        \
@@ -256,12 +308,12 @@ LAYOUT_CLASS(App, app);
     extern void    prefix##_init(c *); \
     WidgetHandlers $##c##_handlers
 
-#define APP_CLASS_DEF(c, prefix)                            \
-    WidgetHandlers $##c##_handlers = {                      \
-        .init = (WidgetInit) prefix##_init,                 \
-        .resize = (WidgetResize) layout_resize,             \
-        .process_input = (WidgetDraw) layout_process_input, \
-        .draw = (WidgetDraw) layout_draw,                   \
+#define APP_CLASS_DEF(c, prefix)                                 \
+    WidgetHandlers $##c##_handlers = {                           \
+        .init = (WidgetInit) prefix##_init,                      \
+        .resize = (WidgetResize) layout_resize,                  \
+        .process_input = (WidgetProcessInput) app_process_input, \
+        .draw = (WidgetDraw) layout_draw,                        \
     }
 
 extern int         iclamp(int v, int min, int max);
@@ -275,15 +327,18 @@ extern bool        _is_key_pressed(int key, char const *keystr, ...);
 extern void        widget_render_text(void *w, float x, float y, StringView text, Color color);
 extern void        widget_render_text_bitmap(void *w, float x, float y, StringView text, Color color);
 extern void        widget_draw_rectangle(void *w, float x, float y, float width, float height, Color color);
+extern void        _widget_add_command(void *w, StringView cmd, CommandHandler handler, ...);
 extern Widget     *layout_find_by_draw_function(Layout *layout, WidgetDraw draw_fnc);
 extern void        layout_add_widget(Layout *layout, Widget *widget);
 extern void        layout_traverse(Layout *layout, void (*fnc)(Widget *));
 extern void        layout_dump(Layout *layout);
 extern void        app_initialize(App *app, WidgetInit init, int argc, char **argv);
+extern void        app_process_input(App *app);
 extern void        app_on_resize(App *app);
 extern void        app_on_process_input(App *app);
 
 #define is_key_pressed(key, ...) (_is_key_pressed((key), #key __VA_OPT__(, ) __VA_ARGS__, KMOD_COUNT))
+#define widget_add_command(w, cmd, handler, ...) _widget_add_command((w), (cmd), (handler) __VA_OPT__(, ) __VA_ARGS__, (KeyCombo) { KEY_NULL, KMOD_NONE })
 
 extern App *app;
 

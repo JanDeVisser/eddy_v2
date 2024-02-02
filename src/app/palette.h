@@ -51,10 +51,10 @@ typedef enum {
     S(MAX)
 
 typedef enum {
-#undef PALETTE(P)
+#undef PALETTE
 #define PALETTE(P) PALETTE_##P,
     PALETTES(PALETTE)
-#undef PALETTE(P)
+#undef PALETTE
 } Palette;
 
 #define ANSICOLORS(S) \

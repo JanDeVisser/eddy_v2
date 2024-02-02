@@ -11,6 +11,8 @@
 
 DECLARE_SHARED_ALLOCATOR(eddy)
 DA_IMPL(Rect);
+DA_IMPL(Command);
+DA_IMPL(CommandBinding);
 DA_IMPL_TYPE(Widget, Widget *);
 
 WIDGET_CLASS_DEF(Layout, layout);
@@ -128,6 +130,19 @@ void widget_draw_rectangle(void *w, float x, float y, float width, float height,
 {
     Widget *widget = (Widget *) w;
     DrawRectangle(widget->viewport.x + x, widget->viewport.y + y, width, height, color);
+}
+
+void _widget_add_command(void *w, StringView cmd, CommandHandler handler, ...)
+{
+    Widget *widget = (Widget *) w;
+    da_append_Command(&widget->commands, (Command) { cmd, handler });
+    size_t  ix = widget->commands.size - 1;
+    va_list bindings;
+    va_start(bindings, handler);
+    for (KeyCombo key_combo = va_arg(bindings, KeyCombo); key_combo.key != KEY_NULL; key_combo = va_arg(bindings, KeyCombo)) {
+        da_append_CommandBinding(&widget->bindings, (CommandBinding) { key_combo, ix });
+    }
+    va_end(bindings);
 }
 
 void layout_init(Layout *)
@@ -392,4 +407,32 @@ void app_on_process_input(App *app)
         app->monitor = GetCurrentMonitor();
         printf("Monitor changed to %d\n", app->monitor);
     }
+}
+
+void app_process_input(App *app)
+{
+    if (app->focus) {
+        KeyboardModifier modifier = modifier_current();
+        for (int keycode = GetKeyPressed(); keycode != 0; keycode = GetKeyPressed()) {
+            if (keycode > KEY_F12) {
+                continue;
+            }
+            for (Widget *f = app->focus; f; f = f->parent) {
+                for (size_t bix = 0; bix < f->bindings.size; ++bix) {
+                    if (f->bindings.elements[bix].key_combo.key == keycode && f->bindings.elements[bix].key_combo.modifier == modifier) {
+                        assert(f->bindings.elements[bix].command < f->commands.size);
+                        Command *command = f->commands.elements + f->bindings.elements[bix].command;
+                        CommandContext ctx = { 0 };
+                        ctx.trigger = (KeyCombo) { keycode, modifier };
+                        ctx.called_as = command->name;
+                        ctx.target = f;
+                        command->handler(&ctx);
+                        goto next_key;
+                    }
+                }
+            }
+            next_key:
+        }
+    }
+    layout_process_input((Layout *) app);
 }
