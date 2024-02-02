@@ -108,6 +108,7 @@ typedef struct _widget Widget;
 DA_STRUCT_WITH_NAME(Widget, Widget *, Widgets);
 
 typedef void (*WidgetInit)(Widget *);
+typedef void (*WidgetOnStart)(Widget *);
 typedef void (*WidgetOnDraw)(Widget *);
 typedef void (*WidgetDraw)(Widget *);
 typedef void (*WidgetAfterDraw)(Widget *);
@@ -117,9 +118,11 @@ typedef void (*WidgetAfterResize)(Widget *);
 typedef void (*WidgetOnProcessInput)(Widget *);
 typedef void (*WidgetProcessInput)(Widget *);
 typedef void (*WidgetAfterProcessInput)(Widget *);
+typedef void (*WidgetOnTerminate)(Widget *);
 
 typedef struct {
     WidgetInit              init;
+    WidgetOnStart           on_start;
     WidgetOnResize          on_resize;
     WidgetResize            resize;
     WidgetAfterResize       after_resize;
@@ -129,6 +132,7 @@ typedef struct {
     WidgetOnDraw            on_draw;
     WidgetDraw              draw;
     WidgetAfterDraw         after_draw;
+    WidgetOnTerminate       on_terminate;
 } WidgetHandlers;
 
 typedef struct {
@@ -279,17 +283,18 @@ typedef struct {
 
 WIDGET_CLASS(Label, label);
 
-#define _APP_FIELDS      \
-    _LAYOUT_FIELDS;      \
-    int     argc;        \
-    char  **argv;        \
-    Widget *focus;       \
-    Font    font;        \
-    int     monitor;     \
-    Vector2 cell;        \
-    double  time;        \
-    size_t  frame_count; \
-    char    last_key[64]
+#define _APP_FIELDS       \
+    _LAYOUT_FIELDS;       \
+    int     argc;         \
+    char  **argv;         \
+    int     monitor;      \
+    Font    font;         \
+    Widget *focus;        \
+    Vector2 cell;         \
+    char    last_key[64]; \
+    bool    quit;         \
+    double  time;         \
+    size_t  frame_count
 
 typedef struct {
     _APP_FIELDS;
@@ -324,7 +329,7 @@ extern char const *rect_tostring(Rect r);
 extern bool        is_modifier_down(KeyboardModifier modifier);
 extern char const *modifier_string(KeyboardModifier modifier);
 extern bool        _is_key_pressed(int key, char const *keystr, ...);
-extern void        widget_render_text(void *w, float x, float y, StringView text, Color color);
+extern void        widget_render_text(void *w, float x, float y, StringView text, Font font, Color color);
 extern void        widget_render_text_bitmap(void *w, float x, float y, StringView text, Color color);
 extern void        widget_draw_rectangle(void *w, float x, float y, float width, float height, Color color);
 extern void        _widget_add_command(void *w, StringView cmd, CommandHandler handler, ...);
@@ -333,6 +338,7 @@ extern void        layout_add_widget(Layout *layout, Widget *widget);
 extern void        layout_traverse(Layout *layout, void (*fnc)(Widget *));
 extern void        layout_dump(Layout *layout);
 extern void        app_initialize(App *app, WidgetInit init, int argc, char **argv);
+extern void        app_start();
 extern void        app_process_input(App *app);
 extern void        app_on_resize(App *app);
 extern void        app_on_process_input(App *app);

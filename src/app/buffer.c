@@ -73,12 +73,14 @@ void buffer_insert(Buffer *buffer, StringView text, int pos)
     } else {
         sb_append_sv(&buffer->text, text);
     }
+    buffer->dirty = true;
     buffer->rebuild_needed = true;
 }
 
 void buffer_delete(Buffer *buffer, size_t at, size_t count)
 {
     sb_remove(&buffer->text, at, count);
+    buffer->dirty = true;
     buffer->rebuild_needed = true;
 }
 
@@ -92,5 +94,6 @@ void buffer_merge_lines(Buffer *buffer, int top_line)
     }
     Index line = buffer->lines.elements[top_line];
     ((char *) buffer->text.view.ptr)[line.index_of + line.line.length - 1] = ' ';
+    buffer->dirty = true;
     buffer->rebuild_needed = true;
 }

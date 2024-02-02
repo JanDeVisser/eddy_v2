@@ -107,13 +107,13 @@ bool _is_key_pressed(int key, char const *keystr, ...)
     return false;
 }
 
-void widget_render_text(void *w, float x, float y, StringView text, Color color)
+void widget_render_text(void *w, float x, float y, StringView text, Font font, Color color)
 {
     Widget *widget = (Widget *) w;
     char    ch = text.ptr[text.length];
     ((char *) text.ptr)[text.length] = 0;
     Vector2 pos = { widget->viewport.x + PADDING + x, widget->viewport.y + PADDING + y };
-    DrawTextEx(app->font, text.ptr, pos, app->font.baseSize, 2, color);
+    DrawTextEx(font, text.ptr, pos, font.baseSize, 2, color);
     ((char *) text.ptr)[text.length] = ch;
 }
 
@@ -349,7 +349,7 @@ void label_resize(Label *label)
 void label_draw(Label *label)
 {
     if (!sv_empty(label->text)) {
-        widget_render_text(label, 0, 0, label->text, label->color);
+        widget_render_text(label, 0, 0, label->text, app->font, label->color);
     }
 }
 
@@ -359,16 +359,12 @@ void label_process_input(Label *)
 
 void app_init(App *app)
 {
-    app->monitor = GetCurrentMonitor();
-    printf("Monitor %d\n", app->monitor);
-    app->font = LoadFontEx("fonts/VictorMono-Medium.ttf", 30, 0, 250);
     app->handlers.on_resize = (WidgetOnResize) app_on_resize;
     app->handlers.on_process_input = (WidgetOnProcessInput) app_on_process_input;
     app->orientation = CO_HORIZONTAL;
     app->viewport = (Rect) { 0 };
     app->viewport.width = GetScreenWidth();
     app->viewport.height = GetScreenHeight();
-    layout_resize((Layout *) app);
 }
 
 void app_on_resize(App *app)
@@ -390,7 +386,35 @@ void app_initialize(App *the_app, WidgetInit init, int argc, char **argv)
     app->handlers = $App_handlers;
     app->handlers.init = init;
     app->classname = "App";
+
     init((Widget *) app);
+
+    InitWindow(app->viewport.width, app->viewport.height, app->classname);
+    SetWindowMonitor(app->monitor);
+    SetWindowState(FLAG_WINDOW_RESIZABLE | FLAG_WINDOW_MAXIMIZED | FLAG_VSYNC_HINT);
+    Image icon = LoadImage("eddy.png");
+    SetWindowIcon(icon);
+    SetExitKey(KEY_NULL);
+    SetTargetFPS(60);
+    MaximizeWindow();
+}
+
+void app_start()
+{
+    if (app->handlers.on_start) {
+        app->handlers.on_start((Widget *) app);
+    }
+    layout_resize((Layout *) app);
+    while (!WindowShouldClose() && !app->quit) {
+        app->handlers.process_input((Widget *) app);
+        BeginDrawing();
+        app->handlers.draw((Widget *) app);
+        EndDrawing();
+    }
+    if (app->handlers.on_terminate) {
+        app->handlers.on_terminate((Widget *) app);
+    }
+    CloseWindow();
 }
 
 void app_on_process_input(App *app)
@@ -421,7 +445,7 @@ void app_process_input(App *app)
                 for (size_t bix = 0; bix < f->bindings.size; ++bix) {
                     if (f->bindings.elements[bix].key_combo.key == keycode && f->bindings.elements[bix].key_combo.modifier == modifier) {
                         assert(f->bindings.elements[bix].command < f->commands.size);
-                        Command *command = f->commands.elements + f->bindings.elements[bix].command;
+                        Command       *command = f->commands.elements + f->bindings.elements[bix].command;
                         CommandContext ctx = { 0 };
                         ctx.trigger = (KeyCombo) { keycode, modifier };
                         ctx.called_as = command->name;
@@ -431,7 +455,7 @@ void app_process_input(App *app)
                     }
                 }
             }
-            next_key:
+        next_key:
         }
     }
     layout_process_input((Layout *) app);

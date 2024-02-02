@@ -13,6 +13,15 @@
 #include <editor.h>
 #include <widget.h>
 
+typedef enum {
+    AS_MONITOR = 0,
+    AS_COUNT,
+} AppStateItem;
+
+typedef struct {
+    int state[AS_COUNT];
+} AppState;
+
 typedef struct {
     _L;
 } StatusBar;
@@ -34,12 +43,19 @@ typedef struct {
 
 APP_CLASS(Eddy, eddy);
 
+extern void app_state_read(AppState *state);
+extern void app_state_write(AppState *state);
+
+extern void eddy_process_input(Eddy *eddy);
 extern void eddy_on_draw(Eddy *eddy);
+extern void eddy_on_start(Eddy *eddy);
+extern void eddy_on_terminate(Eddy *eddy);
 extern void eddy_open_buffer(Eddy *eddy, StringView file);
 extern void eddy_set_message(Eddy *eddy, StringView message);
 extern void eddy_clear_message(Eddy *eddy);
 
-extern Eddy eddy;
+extern AppState state;
+extern Eddy     eddy;
 
 #include <widget.h>
 

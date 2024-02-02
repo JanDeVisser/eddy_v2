@@ -4,15 +4,53 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <pwd.h>
+#include <stdlib.h>
+#include <sys/fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
 #include <eddy.h>
 #include <io.h>
 #include <palette.h>
 
-Eddy eddy = { 0 };
+#define WINDOW_WIDTH 1600
+#define WINDOW_HEIGHT 768
+
+AppState state = { 0 };
+Eddy     eddy = { 0 };
 
 DECLARE_SHARED_ALLOCATOR(eddy);
 
 LAYOUT_CLASS_DEF(StatusBar, sb);
+
+void app_state_read(AppState *app_state)
+{
+    struct passwd *pw = getpwuid(getuid());
+    struct stat    sb;
+    char const    *eddy_fname = TextFormat("%s/.eddy", pw->pw_dir);
+    if (stat(eddy_fname, &sb) != 0) {
+        mkdir(eddy_fname, 0700);
+    }
+
+    char const *state_fname = TextFormat("%s/.eddy/state", pw->pw_dir);
+    if (stat(state_fname, &sb) == 0) {
+        int state_fd = open(state_fname, O_RDONLY);
+        read(state_fd, app_state, sizeof(app_state));
+        close(state_fd);
+    } else {
+        app_state_write(app_state);
+    }
+}
+
+void app_state_write(AppState *app_state)
+{
+    struct passwd *pw = getpwuid(getuid());
+    char const    *state_fname = TextFormat("%s/.eddy/state", pw->pw_dir);
+    int            state_fd = open(state_fname, O_RDWR | O_CREAT | O_TRUNC, 0600);
+    write(state_fd, app_state, sizeof(app_state));
+    close(state_fd);
+}
 
 void sb_file_name_draw(Label *label)
 {
@@ -105,7 +143,7 @@ void message_line_draw(MessageLine *message_line)
 {
     widget_draw_rectangle(message_line, 0, 0, message_line->viewport.width, message_line->viewport.height, palettes[PALETTE_DARK][PI_BACKGROUND]);
     if (!sv_empty(message_line->message)) {
-        widget_render_text(message_line, 0, 0, message_line->message, palettes[PALETTE_DARK][PI_DEFAULT]);
+        widget_render_text(message_line, 0, 0, message_line->message, eddy.font, palettes[PALETTE_DARK][PI_DEFAULT]);
     }
 }
 
@@ -115,8 +153,15 @@ void message_line_process_input(MessageLine *message_line)
 
 APP_CLASS_DEF(Eddy, eddy);
 
+void eddy_cmd_quit(CommandContext *ctx)
+{
+    eddy.quit = true;
+}
+
 void eddy_init(Eddy *eddy)
 {
+    app_state_read(&state);
+    eddy->monitor = state.state[AS_MONITOR];
     Layout *editor_pane = layout_new(CO_HORIZONTAL);
     editor_pane->policy = SP_STRETCH;
     layout_add_widget(editor_pane, widget_new(Gutter));
@@ -139,9 +184,39 @@ void eddy_init(Eddy *eddy)
         editor_new(eddy->editor);
     }
     editor_select_buffer(eddy->editor, 0);
+
+    widget_add_command(eddy, sv_from("eddy_quit"), eddy_cmd_quit,
+        (KeyCombo) { KEY_Q, KMOD_CONTROL });
+
+    eddy->viewport.width = WINDOW_WIDTH;
+    eddy->viewport.height = WINDOW_HEIGHT;
+    eddy->classname = "Eddy";
+    eddy->handlers.on_start = (WidgetOnStart) eddy_on_start;
+    eddy->handlers.on_terminate = (WidgetOnTerminate) eddy_on_terminate;
     eddy->handlers.on_draw = (WidgetDraw) eddy_on_draw;
+    eddy->handlers.process_input = (WidgetProcessInput) eddy_process_input;
     eddy->focus = (Widget *) eddy->editor;
     app_init((App *) eddy);
+}
+
+void eddy_on_start(Eddy *eddy)
+{
+    eddy->monitor = GetCurrentMonitor();
+    eddy->font = LoadFontEx("fonts/VictorMono-Medium.ttf", 30, 0, 250);
+}
+
+void eddy_on_terminate(Eddy *eddy)
+{
+    UnloadFont(eddy->font);
+}
+
+void eddy_process_input(Eddy *eddy)
+{
+    if (eddy->monitor != state.state[AS_MONITOR]) {
+        state.state[AS_MONITOR] = eddy->monitor;
+        app_state_write(&state);
+    }
+    app_process_input((App *) eddy);
 }
 
 void eddy_on_draw(Eddy *eddy)
@@ -152,6 +227,7 @@ void eddy_on_draw(Eddy *eddy)
             buffer_build_indices(buffer);
         }
     }
+    ClearBackground(palettes[PALETTE_DARK][PI_BACKGROUND]);
 }
 
 void eddy_open_buffer(Eddy *eddy, StringView file)

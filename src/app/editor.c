@@ -41,7 +41,9 @@ void gutter_draw(Gutter *gutter)
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
     for (int row = 0; row < eddy.editor->lines && view->top_line + row < buffer->lines.size; ++row) {
         size_t lineno = view->top_line + row;
-        widget_render_text(gutter, 0, eddy.cell.y * row, sv_from(TextFormat("%4d", lineno + 1)),
+        widget_render_text(gutter, 0, eddy.cell.y * row,
+            sv_from(TextFormat("%4d", lineno + 1)),
+            eddy.font,
             palettes[PALETTE_DARK][PI_LINE_NUMBER]);
     }
 }
@@ -475,7 +477,7 @@ void editor_draw(Editor *editor)
                 width, eddy.cell.y + 5,
                 palettes[PALETTE_DARK][PI_SELECTION]);
         }
-        widget_render_text(editor, 0, eddy.cell.y * row, (StringView) { line.line.ptr, line_len }, palettes[PALETTE_DARK][PI_DEFAULT]);
+        widget_render_text(editor, 0, eddy.cell.y * row, (StringView) { line.line.ptr, line_len }, eddy.font, palettes[PALETTE_DARK][PI_DEFAULT]);
     }
     double time = app->time - view->cursor_flash;
     if (time - floor(time) < 0.5) {
