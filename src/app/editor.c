@@ -462,22 +462,25 @@ void editor_draw(Editor *editor)
         size_t lineno = view->top_line + row;
         Index  line = buffer->lines.elements[lineno];
         int    line_len = imin(line.line.length - 1, view->left_column + editor->columns);
-        int    line_start = line.index_of + view->left_column;
-        int    line_end = imin(line.index_of + line.line.length, line_start + editor->columns);
-        int    selection_offset = iclamp(selection_start - line_start, 0, line_end);
-        int    end_selection_offset = iclamp(selection_end - line_start, 0, line_end);
+        if (view->selection != -1) {
+            int    line_start = line.index_of + view->left_column;
+            int    line_end = imin(line.index_of + line.line.length - 1, line_start + editor->columns);
+            int    selection_offset = iclamp(selection_start - line_start, 0, line_end);
 
-        if (selection_offset < line_end && end_selection_offset > 0) {
-            int width = iclamp(selection_end - selection_start, 0, line_len) * eddy.cell.x;
-            if (width == line_len) {
-                width = editor->columns * eddy.cell.x;
+            if (selection_start < line_end && selection_end > line.index_of) {
+                int width = selection_end - imax(selection_start, line_start);
+                if (width > line_len - selection_offset) {
+                    width = editor->columns - selection_offset;
+                }
+                widget_draw_rectangle(editor,
+                    PADDING + eddy.cell.x * selection_offset, eddy.cell.y * row,
+                    width * eddy.cell.x, eddy.cell.y + 5,
+                    palettes[PALETTE_DARK][PI_SELECTION]);
             }
-            widget_draw_rectangle(editor,
-                PADDING + eddy.cell.x * selection_offset, eddy.cell.y * row,
-                width, eddy.cell.y + 5,
-                palettes[PALETTE_DARK][PI_SELECTION]);
         }
-        widget_render_text(editor, 0, eddy.cell.y * row, (StringView) { line.line.ptr, line_len }, eddy.font, palettes[PALETTE_DARK][PI_DEFAULT]);
+        widget_render_text(editor, 0, eddy.cell.y * row,
+            (StringView) { line.line.ptr + view->left_column, line_len },
+            eddy.font, palettes[PALETTE_DARK][PI_DEFAULT]);
     }
     double time = app->time - view->cursor_flash;
     if (time - floor(time) < 0.5) {

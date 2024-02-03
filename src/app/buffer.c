@@ -18,23 +18,16 @@ void buffer_build_indices(Buffer *buffer)
         return;
     }
     buffer->lines.size = 0;
-    if (buffer->text.view.length == 0) {
-        return;
-    }
-    bool  new_line = false;
-    Index index = { 0 };
-    index.line = buffer->text.view;
+    da_append_Index(&buffer->lines, (Index) { 0, buffer->text.view});
+    size_t lineno = 0;
     for (size_t ix = 0; ix < buffer->text.view.length; ++ix) {
-        if (new_line) {
-            index.line.length = ix - index.index_of;
-            da_append_Index(&buffer->lines, index);
-            index.index_of = ix;
-            index.line.ptr = buffer->text.view.ptr + ix;
-            index.line.length = buffer->text.view.length - ix;
+        if (buffer->text.view.ptr[ix] == '\n') {
+            buffer->lines.elements[lineno].line.length = ix - buffer->lines.elements[lineno].index_of + 1;
+            da_append_Index(&buffer->lines, (Index) { ix + 1,
+                { buffer->text.view.ptr + ix + 1, 0} });
+            ++lineno;
         }
-        new_line = buffer->text.view.ptr[ix] == '\n';
     }
-    da_append_Index(&buffer->lines, index);
     buffer->rebuild_needed = false;
 }
 

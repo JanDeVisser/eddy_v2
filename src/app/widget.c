@@ -236,15 +236,8 @@ void layout_resize(Layout *layout)
     }
 }
 
-#define LOG(fmt, ...)          \
-    if (app->frame_count <= 1) \
-        printf(fmt "\n" __VA_OPT__(, ) __VA_ARGS__);
-
 void layout_draw(Layout *layout)
 {
-    if (app->frame_count <= 1) {
-        layout_dump(layout);
-    }
     Widget *w = (Widget *) layout;
     if (w->handlers.on_draw) {
         w->handlers.on_draw(w);
