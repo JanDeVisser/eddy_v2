@@ -50,8 +50,8 @@ typedef enum {
 } KeyboardModifier;
 
 typedef enum {
-    CO_VERTICAL = 0,
-    CO_HORIZONTAL,
+    CO_HORIZONTAL =0,
+    CO_VERTICAL,
 } ContainerOrientation;
 
 typedef enum {
@@ -308,7 +308,6 @@ typedef struct {
         };               \
     };
 
-LAYOUT_CLASS(App, app);
 #define APP_CLASS(c, prefix)           \
     extern void    prefix##_init(c *); \
     WidgetHandlers $##c##_handlers
@@ -320,6 +319,8 @@ LAYOUT_CLASS(App, app);
         .process_input = (WidgetProcessInput) app_process_input, \
         .draw = (WidgetDraw) layout_draw,                        \
     }
+
+typedef App *(*AppCreate)(void);
 
 extern int         iclamp(int v, int min, int max);
 extern int         imin(int i1, int i2);
@@ -337,8 +338,9 @@ extern Widget     *layout_find_by_draw_function(Layout *layout, WidgetDraw draw_
 extern void        layout_add_widget(Layout *layout, Widget *widget);
 extern void        layout_traverse(Layout *layout, void (*fnc)(Widget *));
 extern void        layout_dump(Layout *layout);
-extern void        app_initialize(App *app, WidgetInit init, int argc, char **argv);
+extern void        app_initialize(App *app, AppCreate create, int argc, char **argv);
 extern void        app_start();
+extern void        app_init(App *app);
 extern void        app_process_input(App *app);
 extern void        app_on_resize(App *app);
 extern void        app_on_process_input(App *app);

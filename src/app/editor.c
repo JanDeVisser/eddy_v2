@@ -455,6 +455,7 @@ void editor_cmd_save(CommandContext *ctx)
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
     buffer_save(buffer);
+    eddy_set_message(&eddy, sv_from("Buffer saved"));
 }
 
 /*

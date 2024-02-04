@@ -16,7 +16,7 @@ SHARED_ALLOCATOR_IMPL(eddy);
 
 int main(int argc, char **argv)
 {
-    app_initialize((App *) &eddy, (WidgetInit) eddy_init, argc, argv);
+    app_initialize((App *) &eddy, (AppCreate) eddy_create, argc, argv);
     app_start();
     return 0;
 }

@@ -64,7 +64,7 @@ void sb_file_name_draw(Label *label)
     if (sv_empty(buffer->name)) {
         label->text = sv_from(TextFormat("untitled-%d%c", view->buffer_num, (buffer->dirty) ? '*' : ' '));
     } else {
-        label->text = sv_from(TextFormat("%s%c", buffer->name, (buffer->dirty) ? '*' : ' '));
+        label->text = sv_from(TextFormat("%.*s%c", SV_ARG(buffer->name), (buffer->dirty) ? '*' : ' '));
     }
     label_draw(label);
 }
@@ -105,23 +105,32 @@ void sb_fps_draw(Label *label)
     label_draw(label);
 }
 
+void sb_on_draw(StatusBar *sb)
+{
+    widget_draw_rectangle(sb, 0, 0, sb->viewport.width, sb->viewport.height, RAYWHITE);
+}
+
 void sb_init(StatusBar *status_bar)
 {
     status_bar->orientation = CO_HORIZONTAL;
     status_bar->policy = SP_CHARACTERS;
     status_bar->policy_size = 1.0f;
+    status_bar->handlers.on_draw = sb_on_draw;
     layout_add_widget((Layout *) status_bar, widget_new_with_policy(Spacer, SP_CHARACTERS, 1));
     Label *file_name = (Label *) widget_new(Label);
     file_name->policy_size = 64;
+    file_name->color = DARKGRAY;
     file_name->handlers.draw = (WidgetDraw) sb_file_name_draw;
     layout_add_widget((Layout *) status_bar, (Widget *) file_name);
     layout_add_widget((Layout *) status_bar, widget_new(Spacer));
     Label *cursor = (Label *) widget_new(Label);
     cursor->policy_size = 16;
+    cursor->color = DARKGRAY;
     cursor->handlers.draw = (WidgetDraw) sb_cursor_draw;
     layout_add_widget((Layout *) status_bar, (Widget *) cursor);
     Label *last_key = (Label *) widget_new(Label);
     last_key->policy_size = 16;
+    last_key->color = DARKGRAY;
     last_key->handlers.draw = (WidgetDraw) sb_last_key_draw;
     layout_add_widget((Layout *) status_bar, (Widget *) last_key);
     Label *fps = (Label *) widget_new(Label);
@@ -153,6 +162,10 @@ void message_line_draw(MessageLine *message_line)
 
 void message_line_process_input(MessageLine *message_line)
 {
+    if (sv_not_empty(message_line->message) && eddy.time - message_line->time > 1.0) {
+        sv_free(message_line->message);
+        message_line->message = sv_null();
+    }
 }
 
 APP_CLASS_DEF(Eddy, eddy);
@@ -162,10 +175,16 @@ void eddy_cmd_quit(CommandContext *ctx)
     eddy.quit = true;
 }
 
-void eddy_init(Eddy *eddy)
+Eddy *eddy_create()
 {
     app_state_read(&state);
-    eddy->monitor = state.state[AS_MONITOR];
+    eddy.monitor = state.state[AS_MONITOR];
+    eddy.handlers.init = eddy_init;
+    return &eddy;
+}
+
+void eddy_init(Eddy *eddy)
+{
     Layout *editor_pane = layout_new(CO_HORIZONTAL);
     editor_pane->policy = SP_STRETCH;
     layout_add_widget(editor_pane, widget_new(Gutter));
@@ -251,13 +270,15 @@ void eddy_set_message(Eddy *eddy, StringView message)
         sv_free(message_line->message);
     }
     message_line->message = message;
+    message_line->time = eddy->time;
 }
 
 void eddy_clear_message(Eddy *eddy)
 {
     MessageLine *message_line = (MessageLine *) layout_find_by_draw_function((Layout *) eddy, (WidgetDraw) message_line_draw);
     assert(message_line);
-    if (!sv_empty(message_line->message)) {
+    if (sv_not_empty(message_line->message)) {
         sv_free(message_line->message);
+        message_line->message = sv_null();
     }
 }

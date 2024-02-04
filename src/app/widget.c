@@ -111,10 +111,14 @@ void widget_render_text(void *w, float x, float y, StringView text, Font font, C
 {
     Widget *widget = (Widget *) w;
     char    ch = text.ptr[text.length];
-    ((char *) text.ptr)[text.length] = 0;
+    if (ch) {
+        ((char *) text.ptr)[text.length] = 0;
+    }
     Vector2 pos = { widget->viewport.x + PADDING + x, widget->viewport.y + PADDING + y };
     DrawTextEx(font, text.ptr, pos, font.baseSize, 2, color);
-    ((char *) text.ptr)[text.length] = ch;
+    if (ch) {
+        ((char *) text.ptr)[text.length] = ch;
+    }
 }
 
 void widget_render_text_bitmap(void *w, float x, float y, StringView text, Color color)
@@ -352,9 +356,21 @@ void label_process_input(Label *)
 
 void app_init(App *app)
 {
-    app->handlers.on_resize = (WidgetOnResize) app_on_resize;
-    app->handlers.on_process_input = (WidgetOnProcessInput) app_on_process_input;
-    app->orientation = CO_HORIZONTAL;
+    if (!app->handlers.resize) {
+        app->handlers.resize = (WidgetResize) layout_resize;
+    }
+    if (!app->handlers.process_input) {
+        app->handlers.process_input = (WidgetProcessInput) app_process_input;
+    }
+    if (!app->handlers.draw) {
+        app->handlers.draw = (WidgetDraw) layout_draw;
+    }
+    if (!app->handlers.on_resize) {
+        app->handlers.on_resize = (WidgetOnResize) app_on_resize;
+    }
+    if (!app->handlers.on_process_input) {
+        app->handlers.on_process_input = (WidgetOnProcessInput) app_on_process_input;
+    }
     app->viewport = (Rect) { 0 };
     app->viewport.width = GetScreenWidth();
     app->viewport.height = GetScreenHeight();
@@ -371,16 +387,19 @@ void app_on_resize(App *app)
     app->viewport.height = GetScreenHeight();
 }
 
-void app_initialize(App *the_app, WidgetInit init, int argc, char **argv)
+void app_initialize(App *the_app, AppCreate create, int argc, char **argv)
 {
-    app = the_app;
+    app = create();
     app->argc = argc;
     app->argv = argv;
-    app->handlers = $App_handlers;
-    app->handlers.init = init;
-    app->classname = "App";
+    if (!app->classname) {
+        app->classname = "App";
+    }
+    if (!app->handlers.init) {
+        app->handlers.init = (WidgetInit) app_init;
+    }
 
-    init((Widget *) app);
+    app->handlers.init((Widget *) app);
 
     InitWindow(app->viewport.width, app->viewport.height, app->classname);
     SetWindowMonitor(app->monitor);
