@@ -321,3 +321,38 @@ ErrorOrStringView read_file(int fd)
     size_t sz = sb.st_size;
     return sv_read(fd, sz);
 }
+
+ErrorOrSize write_file_by_name(StringView file_name, StringView contents)
+{
+    int fd = open(sv_cstr(file_name), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd < 0) {
+        ERROR(Size, IOError, errno, "Could not open file");
+    }
+    ErrorOrSize ret = write_file(fd, contents);
+    close(fd);
+    return ret;
+}
+
+ErrorOrSize write_file_at(int dir_fd, StringView file_name, StringView contents)
+{
+    int fd = openat(dir_fd, sv_cstr(file_name), O_RDONLY);
+    if (fd < 0) {
+        ERROR(Size, IOError, errno, "Could not open file");
+    }
+    ErrorOrSize ret = write_file(fd, contents);
+    close(fd);
+    return ret;
+}
+
+ErrorOrSize write_file(int fd, StringView contents)
+{
+    size_t total = 0;
+    while (total < contents.length) {
+        int ret = write(fd, contents.ptr + total, contents.length - total);
+        if (ret < 0) {
+            ERROR(Size, IOError, errno, "Could not write to file");
+        }
+        total += ret;
+    }
+    RETURN(Size, total);
+}

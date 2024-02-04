@@ -61,7 +61,11 @@ void sb_file_name_draw(Label *label)
     assert(editor);
     BufferView *view = editor->buffers.elements + eddy.editor->current_buffer;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
-    label->text = buffer->name;
+    if (sv_empty(buffer->name)) {
+        label->text = sv_from(TextFormat("untitled-%d%c", view->buffer_num, (buffer->dirty) ? '*' : ' '));
+    } else {
+        label->text = sv_from(TextFormat("%s%c", buffer->name, (buffer->dirty) ? '*' : ' '));
+    }
     label_draw(label);
 }
 

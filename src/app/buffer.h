@@ -31,5 +31,6 @@ extern void   buffer_build_indices(Buffer *buffer);
 void          buffer_insert(Buffer *buffer, StringView text, int pos);
 void          buffer_delete(Buffer *buffer, size_t at, size_t count);
 void          buffer_merge_lines(Buffer *buffer, int top_line);
+void          buffer_save(Buffer *buffer);
 
 #endif /* __APP_BUFFER_H__ */

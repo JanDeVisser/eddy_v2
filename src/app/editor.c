@@ -64,20 +64,6 @@ void editor_new(Editor *editor)
 {
     Buffer        buffer = { 0 };
     StringBuilder name = { 0 };
-    for (size_t num = 1; true; ++num) {
-        sb_append_cstr(&name, TextFormat("untitled-%d", num));
-        bool found = false;
-        for (size_t ix = 0; ix < eddy.buffers.size; ++ix) {
-            if (sv_eq(name.view, eddy.buffers.elements[ix].name)) {
-                found = true;
-                break;
-            }
-        }
-        if (!found) {
-            buffer.name = name.view;
-            break;
-        }
-    }
     buffer.text = sb_create();
     buffer_build_indices(&buffer);
     da_append_Buffer(&eddy.buffers, buffer);
@@ -185,6 +171,16 @@ void editor_lines_down(Editor *editor, int count)
     view->cursor_pos.y = iclamp(view->cursor_pos.y + count, 0, buffer->lines.size - 1);
 }
 
+void editor_select_line(Editor *editor)
+{
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
+    size_t      lineno = buffer_line_for_index(buffer, view->cursor);
+    Index      *line = buffer->lines.elements + lineno;
+    view->selection = line->index_of;
+    view->new_cursor = view->cursor = line->index_of + line->line.length;
+}
+
 /*
  * ---------------------------------------------------------------------------
  * Text manipulation
@@ -264,6 +260,32 @@ void editor_character(Editor *editor, int ch)
     view->cursor_col = -1;
 }
 
+void editor_insert_string(Editor *editor, StringView sv)
+{
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    int         at = view->cursor;
+    if (view->selection != -1) {
+        at = view->new_cursor = editor_delete_selection(editor);
+    }
+    editor_insert(editor, sv, at);
+    view->new_cursor = at + sv.length;
+    view->cursor_col = -1;
+}
+
+void editor_selection_to_clipboard(Editor *editor)
+{
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    if (view->selection != -1) {
+        Buffer *buffer = eddy.buffers.elements + view->buffer_num;
+        int     selection_start = imin(view->selection, view->cursor);
+        int     selection_end = imax(view->selection, view->cursor);
+        char    ch = buffer->text.view.ptr[selection_end];
+        ((char *) buffer->text.view.ptr)[selection_end] = 0;
+        SetClipboardText(buffer->text.view.ptr + selection_start);
+        ((char *) buffer->text.view.ptr)[selection_end] = ch;
+    }
+}
+
 /*
  * ---------------------------------------------------------------------------
  * Commands
@@ -334,13 +356,13 @@ void editor_cmd_end_of_line(CommandContext *ctx)
 
 void editor_cmd_page_up(CommandContext *ctx)
 {
-    Editor     *editor = (Editor *) ctx->target;
+    Editor *editor = (Editor *) ctx->target;
     editor_lines_up(editor, editor->lines);
 }
 
 void editor_cmd_page_down(CommandContext *ctx)
 {
-    Editor     *editor = (Editor *) ctx->target;
+    Editor *editor = (Editor *) ctx->target;
     editor_lines_down(editor, editor->lines);
 }
 
@@ -363,7 +385,7 @@ void editor_cmd_bottom(CommandContext *ctx)
 
 void editor_cmd_split_line(CommandContext *ctx)
 {
-    Editor     *editor = (Editor *) ctx->target;
+    Editor *editor = (Editor *) ctx->target;
     editor_character(editor, '\n');
 }
 
@@ -380,13 +402,13 @@ void editor_cmd_merge_lines(CommandContext *ctx)
 
 void editor_cmd_backspace(CommandContext *ctx)
 {
-    Editor     *editor = (Editor *) ctx->target;
+    Editor *editor = (Editor *) ctx->target;
     editor_backspace(editor);
 }
 
 void editor_cmd_delete_current_char(CommandContext *ctx)
 {
-    Editor     *editor = (Editor *) ctx->target;
+    Editor *editor = (Editor *) ctx->target;
     editor_delete_current_char(editor);
 }
 
@@ -395,6 +417,44 @@ void editor_cmd_clear_selection(CommandContext *ctx)
     Editor     *editor = (Editor *) ctx->target;
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     view->selection = -1;
+}
+
+void editor_cmd_copy(CommandContext *ctx)
+{
+    Editor     *editor = (Editor *) ctx->target;
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    if (view->selection == -1) {
+        editor_select_line(editor);
+    }
+    editor_selection_to_clipboard(editor);
+}
+
+void editor_cmd_cut(CommandContext *ctx)
+{
+    Editor     *editor = (Editor *) ctx->target;
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    if (view->selection == -1) {
+        editor_select_line(editor);
+    }
+    editor_selection_to_clipboard(editor);
+    view->new_cursor = editor_delete_selection(editor);
+    view->cursor_col = -1;
+    view->selection = -1;
+}
+
+void editor_cmd_paste(CommandContext *ctx)
+{
+    Editor     *editor = (Editor *) ctx->target;
+    char const *text = GetClipboardText();
+    editor_insert_string(editor, sv_from(text));
+}
+
+void editor_cmd_save(CommandContext *ctx)
+{
+    Editor     *editor = (Editor *) ctx->target;
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
+    buffer_save(buffer);
 }
 
 /*
@@ -436,6 +496,14 @@ void editor_init(Editor *editor)
         (KeyCombo) { KEY_DELETE, KMOD_NONE });
     widget_add_command(editor, sv_from("clear-selection"), editor_cmd_clear_selection,
         (KeyCombo) { KEY_ESCAPE, KMOD_NONE });
+    widget_add_command(editor, sv_from("copy-selection"), editor_cmd_copy,
+        (KeyCombo) { KEY_C, KMOD_CONTROL });
+    widget_add_command(editor, sv_from("cut-selection"), editor_cmd_cut,
+        (KeyCombo) { KEY_X, KMOD_CONTROL });
+    widget_add_command(editor, sv_from("paste-from-clipboard"), editor_cmd_paste,
+        (KeyCombo) { KEY_V, KMOD_CONTROL });
+    widget_add_command(editor, sv_from("editor-save"), editor_cmd_save,
+        (KeyCombo) { KEY_S, KMOD_CONTROL });
 }
 
 void editor_resize(Editor *editor)
@@ -463,9 +531,9 @@ void editor_draw(Editor *editor)
         Index  line = buffer->lines.elements[lineno];
         int    line_len = imin(line.line.length - 1, view->left_column + editor->columns);
         if (view->selection != -1) {
-            int    line_start = line.index_of + view->left_column;
-            int    line_end = imin(line.index_of + line.line.length - 1, line_start + editor->columns);
-            int    selection_offset = iclamp(selection_start - line_start, 0, line_end);
+            int line_start = line.index_of + view->left_column;
+            int line_end = imin(line.index_of + line.line.length - 1, line_start + editor->columns);
+            int selection_offset = iclamp(selection_start - line_start, 0, line_end);
 
             if (selection_start < line_end && selection_end > line.index_of) {
                 int width = selection_end - imax(selection_start, line_start);

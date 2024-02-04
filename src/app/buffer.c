@@ -6,6 +6,7 @@
 
 #include <allocate.h>
 #include <buffer.h>
+#include <io.h>
 
 DECLARE_SHARED_ALLOCATOR(eddy);
 
@@ -89,4 +90,16 @@ void buffer_merge_lines(Buffer *buffer, int top_line)
     ((char *) buffer->text.view.ptr)[line.index_of + line.line.length - 1] = ' ';
     buffer->dirty = true;
     buffer->rebuild_needed = true;
+}
+
+void buffer_save(Buffer *buffer)
+{
+    if (!buffer->dirty) {
+        return;
+    }
+    if (sv_empty(buffer->name)) {
+        return;
+    }
+    write_file_by_name(buffer->name, buffer->text.view);
+    buffer->dirty = false;
 }

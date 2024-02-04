@@ -422,7 +422,6 @@ void app_on_process_input(App *app)
     }
     if (GetCurrentMonitor() != app->monitor) {
         app->monitor = GetCurrentMonitor();
-        printf("Monitor changed to %d\n", app->monitor);
     }
 }
 
@@ -430,26 +429,22 @@ void app_process_input(App *app)
 {
     if (app->focus) {
         KeyboardModifier modifier = modifier_current();
-        for (int keycode = GetKeyPressed(); keycode != 0; keycode = GetKeyPressed()) {
-            if (keycode > KEY_F12) {
-                continue;
-            }
-            for (Widget *f = app->focus; f; f = f->parent) {
-                for (size_t bix = 0; bix < f->bindings.size; ++bix) {
-                    if (f->bindings.elements[bix].key_combo.key == keycode && f->bindings.elements[bix].key_combo.modifier == modifier) {
-                        assert(f->bindings.elements[bix].command < f->commands.size);
-                        Command       *command = f->commands.elements + f->bindings.elements[bix].command;
-                        CommandContext ctx = { 0 };
-                        ctx.trigger = (KeyCombo) { keycode, modifier };
-                        ctx.called_as = command->name;
-                        ctx.target = f;
-                        command->handler(&ctx);
-                        goto next_key;
-                    }
+        for (Widget *f = app->focus; f; f = f->parent) {
+            for (size_t bix = 0; bix < f->bindings.size; ++bix) {
+                int key = f->bindings.elements[bix].key_combo.key;
+                if ((IsKeyPressed(key) || IsKeyPressedRepeat(key)) && f->bindings.elements[bix].key_combo.modifier == modifier) {
+                    assert(f->bindings.elements[bix].command < f->commands.size);
+                    Command       *command = f->commands.elements + f->bindings.elements[bix].command;
+                    CommandContext ctx = { 0 };
+                    ctx.trigger = f->bindings.elements[bix].key_combo;
+                    ctx.called_as = command->name;
+                    ctx.target = f;
+                    command->handler(&ctx);
+                    goto key_handled;
                 }
             }
-        next_key:
         }
+    key_handled:
     }
     layout_process_input((Layout *) app);
 }

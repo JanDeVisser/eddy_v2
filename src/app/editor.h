@@ -46,5 +46,7 @@ extern void editor_delete(Editor *editor, size_t at, size_t count);
 extern void editor_lines_up(Editor *editor, int count);
 extern void editor_lines_down(Editor *editor, int count);
 extern void editor_manage_selection(Editor *editor, BufferView *view, bool selection);
+extern void editor_selection_to_clipboard(Editor *editor);
+extern void editor_select_line(Editor *editor);
 
 #endif /* __APP_EDITOR_H__ */

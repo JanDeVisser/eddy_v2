@@ -32,5 +32,8 @@ void              socket_close(socket_t socket);
 ErrorOrStringView read_file_by_name(StringView file_name);
 ErrorOrStringView read_file_at(int dir_fd, StringView file_name);
 ErrorOrStringView read_file(int fd);
+ErrorOrSize       write_file_by_name(StringView file_name, StringView contents);
+ErrorOrSize       write_file_at(int dir_fd, StringView file_name, StringView contents);
+ErrorOrSize       write_file(int fd, StringView contents);
 
 #endif /* __IO_H__ */
