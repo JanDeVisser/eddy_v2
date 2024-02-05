@@ -115,7 +115,7 @@ void sb_init(StatusBar *status_bar)
     status_bar->orientation = CO_HORIZONTAL;
     status_bar->policy = SP_CHARACTERS;
     status_bar->policy_size = 1.0f;
-    status_bar->handlers.on_draw = sb_on_draw;
+    status_bar->handlers.on_draw = (WidgetOnDraw) sb_on_draw;
     layout_add_widget((Layout *) status_bar, widget_new_with_policy(Spacer, SP_CHARACTERS, 1));
     Label *file_name = (Label *) widget_new(Label);
     file_name->policy_size = 64;
@@ -179,7 +179,7 @@ Eddy *eddy_create()
 {
     app_state_read(&state);
     eddy.monitor = state.state[AS_MONITOR];
-    eddy.handlers.init = eddy_init;
+    eddy.handlers.init = (WidgetInit) eddy_init;
     return &eddy;
 }
 

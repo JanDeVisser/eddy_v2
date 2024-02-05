@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <ctype.h>
 #include <math.h>
 
 #include <allocate.h>
@@ -181,6 +182,38 @@ void editor_select_line(Editor *editor)
     view->new_cursor = view->cursor = line->index_of + line->line.length;
 }
 
+void editor_word_left(Editor *editor)
+{
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
+    while (0 < view->cursor && !isalnum(buffer->text.view.ptr[view->cursor])) {
+        ++view->cursor;
+    }
+    while (0 < view->cursor && isalnum(buffer->text.view.ptr[view->cursor])) {
+        ++view->cursor;
+    }
+}
+
+void editor_word_right(Editor *editor)
+{
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
+    while (view->cursor < buffer->text.view.length - 1 && !isalnum(buffer->text.view.ptr[view->cursor])) {
+        ++view->cursor;
+    }
+    while (view->cursor < buffer->text.view.length - 1 && isalnum(buffer->text.view.ptr[view->cursor])) {
+        ++view->cursor;
+    }
+}
+
+void editor_select_word(Editor *editor)
+{
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
+    view->selection = buffer_word_boundary_left(buffer, view->cursor);
+    view->new_cursor = buffer_word_boundary_right(buffer, view->cursor);
+}
+
 /*
  * ---------------------------------------------------------------------------
  * Text manipulation
@@ -300,6 +333,11 @@ void editor_cmd_up(CommandContext *ctx)
     editor_lines_up(editor, 1);
 }
 
+void editor_cmd_select_word(CommandContext *ctx)
+{
+    editor_select_word((Editor *) ctx->target);
+}
+
 void editor_cmd_down(CommandContext *ctx)
 {
     Editor     *editor = (Editor *) ctx->target;
@@ -319,6 +357,23 @@ void editor_cmd_left(CommandContext *ctx)
     view->cursor_col = -1;
 }
 
+void editor_cmd_word_left(CommandContext *ctx)
+{
+    Editor     *editor = (Editor *) ctx->target;
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    editor_manage_selection(editor, view, ctx->trigger.modifier & KMOD_SHIFT);
+    if (view->new_cursor > 0) {
+        Buffer *buffer = eddy.buffers.elements + view->buffer_num;
+        while (0 < view->new_cursor && !isalnum(buffer->text.view.ptr[view->new_cursor])) {
+            --view->new_cursor;
+        }
+        while (0 < view->new_cursor && isalnum(buffer->text.view.ptr[view->new_cursor])) {
+            --view->new_cursor;
+        }
+    }
+    view->cursor_col = -1;
+}
+
 void editor_cmd_right(CommandContext *ctx)
 {
     Editor     *editor = (Editor *) ctx->target;
@@ -327,6 +382,24 @@ void editor_cmd_right(CommandContext *ctx)
     editor_manage_selection(editor, view, ctx->trigger.modifier & KMOD_SHIFT);
     if (view->new_cursor < buffer->text.view.length - 1) {
         ++view->new_cursor;
+    }
+    view->cursor_col = -1;
+}
+
+void editor_cmd_word_right(CommandContext *ctx)
+{
+    Editor     *editor = (Editor *) ctx->target;
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
+    editor_manage_selection(editor, view, ctx->trigger.modifier & KMOD_SHIFT);
+    size_t len = buffer->text.view.length;
+    if (view->new_cursor < len - 1) {
+        while (view->new_cursor < len - 1 && !isalnum(buffer->text.view.ptr[view->new_cursor])) {
+            ++view->new_cursor;
+        }
+        while (view->new_cursor < len - 1 && isalnum(buffer->text.view.ptr[view->new_cursor])) {
+            ++view->new_cursor;
+        }
     }
     view->cursor_col = -1;
 }
@@ -469,12 +542,18 @@ void editor_init(Editor *editor)
     editor->policy = SP_STRETCH;
     widget_add_command(editor, sv_from("cursor-up"), editor_cmd_up,
         (KeyCombo) { KEY_UP, KMOD_NONE }, (KeyCombo) { KEY_UP, KMOD_SHIFT });
+    widget_add_command(editor, sv_from("select-word"), editor_cmd_select_word,
+        (KeyCombo) { KEY_UP, KMOD_ALT });
     widget_add_command(editor, sv_from("cursor-down"), editor_cmd_down,
         (KeyCombo) { KEY_DOWN, KMOD_NONE }, (KeyCombo) { KEY_DOWN, KMOD_SHIFT });
     widget_add_command(editor, sv_from("cursor-left"), editor_cmd_left,
         (KeyCombo) { KEY_LEFT, KMOD_NONE }, (KeyCombo) { KEY_LEFT, KMOD_SHIFT });
+    widget_add_command(editor, sv_from("cursor-word-left"), editor_cmd_word_left,
+        (KeyCombo) { KEY_LEFT, KMOD_ALT }, (KeyCombo) { KEY_LEFT, KMOD_ALT | KMOD_SHIFT });
     widget_add_command(editor, sv_from("cursor-right"), editor_cmd_right,
         (KeyCombo) { KEY_RIGHT, KMOD_NONE }, (KeyCombo) { KEY_RIGHT, KMOD_SHIFT });
+    widget_add_command(editor, sv_from("cursor-word-right"), editor_cmd_word_right,
+        (KeyCombo) { KEY_RIGHT, KMOD_ALT }, (KeyCombo) { KEY_LEFT, KMOD_ALT | KMOD_SHIFT });
     widget_add_command(editor, sv_from("cursor-page-up"), editor_cmd_page_up,
         (KeyCombo) { KEY_PAGE_UP, KMOD_NONE }, (KeyCombo) { KEY_PAGE_UP, KMOD_SHIFT });
     widget_add_command(editor, sv_from("cursor-page-down"), editor_cmd_page_down,
@@ -561,6 +640,36 @@ void editor_draw(Editor *editor)
 
 void editor_process_input(Editor *editor)
 {
+    if ((IsMouseButtonPressed(MOUSE_BUTTON_LEFT) || IsMouseButtonDown(MOUSE_BUTTON_LEFT) || IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) && widget_contains(editor, GetMousePosition())) {
+        BufferView *view = editor->buffers.elements + editor->current_buffer;
+        Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
+        int         line = imin((GetMouseY() - editor->viewport.y) / eddy.cell.y + view->top_line,
+                    buffer->lines.size - 1);
+        int         col = imin((GetMouseX() - editor->viewport.x) / eddy.cell.x + view->left_column,
+                    buffer->lines.elements[line].line.length - 1);
+        view->new_cursor = view->cursor = buffer->lines.elements[line].index_of + col;
+        view->cursor_col = -1;
+        if (IsMouseButtonUp(MOUSE_BUTTON_LEFT)) {
+            if (eddy.time - editor->clicks[editor->num_clicks] > 0.5) {
+                editor->num_clicks = 0;
+            }
+            editor->clicks[editor->num_clicks] = eddy.time;
+            ++editor->num_clicks;
+            switch (++editor->num_clicks) {
+            case 1:
+                view->selection = view->cursor;
+                break;
+            case 2:
+                editor_select_word(editor);
+                break;
+            case 3:
+                editor_select_line(editor);
+                // Fall through
+            default:
+                editor->num_clicks = 0;
+            }
+        }
+    }
     for (int ch = GetCharPressed(); ch != 0; ch = GetCharPressed()) {
         editor_character(editor, ch);
     }

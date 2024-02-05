@@ -50,7 +50,7 @@ typedef enum {
 } KeyboardModifier;
 
 typedef enum {
-    CO_HORIZONTAL =0,
+    CO_HORIZONTAL = 0,
     CO_VERTICAL,
 } ContainerOrientation;
 
@@ -294,6 +294,7 @@ WIDGET_CLASS(Label, label);
     char    last_key[64]; \
     bool    quit;         \
     double  time;         \
+    Widgets modals;       \
     size_t  frame_count
 
 typedef struct {
@@ -334,6 +335,7 @@ extern void        widget_render_text(void *w, float x, float y, StringView text
 extern void        widget_render_text_bitmap(void *w, float x, float y, StringView text, Color color);
 extern void        widget_draw_rectangle(void *w, float x, float y, float width, float height, Color color);
 extern void        _widget_add_command(void *w, StringView cmd, CommandHandler handler, ...);
+extern bool        widget_contains(void *widget, Vector2 world_coordinates);
 extern Widget     *layout_find_by_draw_function(Layout *layout, WidgetDraw draw_fnc);
 extern void        layout_add_widget(Layout *layout, Widget *widget);
 extern void        layout_traverse(Layout *layout, void (*fnc)(Widget *));
@@ -341,6 +343,7 @@ extern void        layout_dump(Layout *layout);
 extern void        app_initialize(App *app, AppCreate create, int argc, char **argv);
 extern void        app_start();
 extern void        app_init(App *app);
+extern void        app_draw(App *app);
 extern void        app_process_input(App *app);
 extern void        app_on_resize(App *app);
 extern void        app_on_process_input(App *app);

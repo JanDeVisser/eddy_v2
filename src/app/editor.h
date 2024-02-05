@@ -29,6 +29,8 @@ typedef struct {
     int         current_buffer;
     int         columns;
     int         lines;
+    double      clicks[2];
+    int         num_clicks;
 } Editor;
 
 WIDGET_CLASS(Editor, editor);

@@ -28,9 +28,11 @@ DA_WITH_NAME(Buffer, Buffers);
 
 extern size_t buffer_line_for_index(Buffer *buffer, int index);
 extern void   buffer_build_indices(Buffer *buffer);
-void          buffer_insert(Buffer *buffer, StringView text, int pos);
-void          buffer_delete(Buffer *buffer, size_t at, size_t count);
-void          buffer_merge_lines(Buffer *buffer, int top_line);
-void          buffer_save(Buffer *buffer);
+extern void   buffer_insert(Buffer *buffer, StringView text, int pos);
+extern void   buffer_delete(Buffer *buffer, size_t at, size_t count);
+extern void   buffer_merge_lines(Buffer *buffer, int top_line);
+extern void   buffer_save(Buffer *buffer);
+extern size_t buffer_word_boundary_left(Buffer *buffer, size_t index);
+extern size_t buffer_word_boundary_right(Buffer *buffer, size_t index);
 
 #endif /* __APP_BUFFER_H__ */

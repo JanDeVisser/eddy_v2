@@ -6,6 +6,7 @@
 
 #include <allocate.h>
 #include <buffer.h>
+#include <ctype.h>
 #include <io.h>
 
 DECLARE_SHARED_ALLOCATOR(eddy);
@@ -19,13 +20,12 @@ void buffer_build_indices(Buffer *buffer)
         return;
     }
     buffer->lines.size = 0;
-    da_append_Index(&buffer->lines, (Index) { 0, buffer->text.view});
+    da_append_Index(&buffer->lines, (Index) { 0, buffer->text.view });
     size_t lineno = 0;
     for (size_t ix = 0; ix < buffer->text.view.length; ++ix) {
         if (buffer->text.view.ptr[ix] == '\n') {
             buffer->lines.elements[lineno].line.length = ix - buffer->lines.elements[lineno].index_of + 1;
-            da_append_Index(&buffer->lines, (Index) { ix + 1,
-                { buffer->text.view.ptr + ix + 1, 0} });
+            da_append_Index(&buffer->lines, (Index) { ix + 1, { buffer->text.view.ptr + ix + 1, 0 } });
             ++lineno;
         }
     }
@@ -102,4 +102,33 @@ void buffer_save(Buffer *buffer)
     }
     write_file_by_name(buffer->name, buffer->text.view);
     buffer->dirty = false;
+}
+
+size_t buffer_word_boundary_left(Buffer *buffer, size_t index)
+{
+    if (isalnum(buffer->text.view.ptr[index]) || buffer->text.view.ptr[index] == '_') {
+        while (index > 0 && (isalnum(buffer->text.view.ptr[index - 1]) || buffer->text.view.ptr[index - 1] == '_')) {
+            --index;
+        }
+    } else {
+        while (index > 0 && (!isalnum(buffer->text.view.ptr[index - 1]) && buffer->text.view.ptr[index - 1] != '_')) {
+            --index;
+        }
+    }
+    return index;
+}
+
+size_t buffer_word_boundary_right(Buffer *buffer, size_t index)
+{
+    size_t max_index = buffer->text.view.length;
+    if (isalnum(buffer->text.view.ptr[index]) || buffer->text.view.ptr[index] == '_') {
+        while (index < max_index && (isalnum(buffer->text.view.ptr[index + 1]) || buffer->text.view.ptr[index + 1] == '_')) {
+            ++index;
+        }
+    } else {
+        while (index < max_index && (!isalnum(buffer->text.view.ptr[index + 1]) && buffer->text.view.ptr[index + 1] != '_')) {
+            ++index;
+        }
+    }
+    return index;
 }

@@ -149,6 +149,13 @@ void _widget_add_command(void *w, StringView cmd, CommandHandler handler, ...)
     va_end(bindings);
 }
 
+bool widget_contains(void *widget, Vector2 world_coordinates)
+{
+    Widget *w = (Widget *) widget;
+    Rect    r = w->viewport;
+    return (r.x < world_coordinates.x) && (world_coordinates.x < r.x + r.width) && (r.y < world_coordinates.y) && (world_coordinates.y < r.y + r.height);
+}
+
 void layout_init(Layout *)
 {
 }
@@ -363,7 +370,7 @@ void app_init(App *app)
         app->handlers.process_input = (WidgetProcessInput) app_process_input;
     }
     if (!app->handlers.draw) {
-        app->handlers.draw = (WidgetDraw) layout_draw;
+        app->handlers.draw = (WidgetDraw) app_draw;
     }
     if (!app->handlers.on_resize) {
         app->handlers.on_resize = (WidgetOnResize) app_on_resize;
@@ -374,6 +381,15 @@ void app_init(App *app)
     app->viewport = (Rect) { 0 };
     app->viewport.width = GetScreenWidth();
     app->viewport.height = GetScreenHeight();
+}
+
+void app_draw(App *app)
+{
+    layout_draw((Layout *) app);
+    for (size_t ix = 0; ix < app->modals.size; ++ix) {
+        Widget *m = app->modals.elements[ix];
+        m->handlers.draw(m);
+    }
 }
 
 void app_on_resize(App *app)
@@ -444,26 +460,37 @@ void app_on_process_input(App *app)
     }
 }
 
-void app_process_input(App *app)
+bool find_and_run_shortcut(Widget *w, KeyboardModifier modifier)
 {
-    if (app->focus) {
-        KeyboardModifier modifier = modifier_current();
-        for (Widget *f = app->focus; f; f = f->parent) {
-            for (size_t bix = 0; bix < f->bindings.size; ++bix) {
-                int key = f->bindings.elements[bix].key_combo.key;
-                if ((IsKeyPressed(key) || IsKeyPressedRepeat(key)) && f->bindings.elements[bix].key_combo.modifier == modifier) {
-                    assert(f->bindings.elements[bix].command < f->commands.size);
-                    Command       *command = f->commands.elements + f->bindings.elements[bix].command;
-                    CommandContext ctx = { 0 };
-                    ctx.trigger = f->bindings.elements[bix].key_combo;
-                    ctx.called_as = command->name;
-                    ctx.target = f;
-                    command->handler(&ctx);
-                    goto key_handled;
-                }
+    for (; w; w = w->parent) {
+        for (size_t bix = 0; bix < w->bindings.size; ++bix) {
+            int key = w->bindings.elements[bix].key_combo.key;
+            if ((IsKeyPressed(key) || IsKeyPressedRepeat(key)) && w->bindings.elements[bix].key_combo.modifier == modifier) {
+                assert(w->bindings.elements[bix].command < w->commands.size);
+                Command       *command = w->commands.elements + w->bindings.elements[bix].command;
+                CommandContext ctx = { 0 };
+                ctx.trigger = w->bindings.elements[bix].key_combo;
+                ctx.called_as = command->name;
+                ctx.target = w;
+                command->handler(&ctx);
+                return true;
             }
         }
-    key_handled:
     }
-    layout_process_input((Layout *) app);
+    return false;
+}
+
+void app_process_input(App *app)
+{
+    Widget *f = app->focus;
+    if (app->modals.size) {
+        f = app->modals.elements[app->modals.size - 1];
+    }
+    if (!f) {
+        f = (Widget *) app;
+    }
+    KeyboardModifier modifier = modifier_current();
+    if (!find_and_run_shortcut(f, modifier)) {
+        layout_process_input((Layout *) app);
+    }
 }
