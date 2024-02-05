@@ -10,7 +10,7 @@
 #include <allocate.h>
 #include <da.h>
 
-void  da_resize(DA_void *array, size_t elem_size, size_t cap)
+void da_resize(DA_void *array, size_t elem_size, size_t cap)
 {
     if (array->cap >= cap) {
         return;
@@ -30,11 +30,11 @@ void  da_resize(DA_void *array, size_t elem_size, size_t cap)
     }
 }
 
-size_t da_append(DA_void *array, void *elem, size_t elem_size)
+void *da_append(DA_void *array, void *elem, size_t elem_size)
 {
     da_resize(array, elem_size, array->size + 1);
     memcpy(array->elements + elem_size * (array->size++), elem, elem_size);
-    return array->size - 1;
+    return array->elements + elem_size * (array->size - 1);
 }
 
 void *da_element(DA_void *array, size_t ix, size_t elem_size)

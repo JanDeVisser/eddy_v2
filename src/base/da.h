@@ -44,10 +44,10 @@ typedef struct {
     void  *elements;
 } DA_void;
 
-#define DA_FUNCTIONS_TYPE(T, S)                      \
-    void   da_resize_##T(DA_##T *array, size_t cap); \
-    size_t da_append_##T(DA_##T *array, S elem);     \
-    S     *da_element_##T(DA_##T *array, size_t ix);
+#define DA_FUNCTIONS_TYPE(T, S)                    \
+    void da_resize_##T(DA_##T *array, size_t cap); \
+    S   *da_append_##T(DA_##T *array, S elem);     \
+    S   *da_element_##T(DA_##T *array, size_t ix);
 
 #define DA_FUNCTIONS(T) DA_FUNCTIONS_TYPE(T, T)
 
@@ -59,9 +59,9 @@ typedef struct {
     } DA_##T;                       \
     DA_FUNCTIONS_TYPE(T, S)
 
-extern void   da_resize(DA_void *array, size_t elem_size, size_t cap);
-extern size_t da_append(DA_void *array, void *elem, size_t elem_size);
-extern void  *da_element(DA_void *array, size_t ix, size_t elem_size);
+extern void  da_resize(DA_void *array, size_t elem_size, size_t cap);
+extern void *da_append(DA_void *array, void *elem, size_t elem_size);
+extern void *da_element(DA_void *array, size_t ix, size_t elem_size);
 
 #define DA_VOID(T) \
     typedef DA_void DA_##T;
@@ -69,18 +69,18 @@ extern void  *da_element(DA_void *array, size_t ix, size_t elem_size);
     typedef DA_void DA_##T;        \
     typedef DA_##T  name;
 
-#define DA_IMPL_TYPE(T, S)                                         \
-    void da_resize_##T(DA_##T *array, size_t cap)                  \
-    {                                                              \
-        da_resize((DA_void *) array, sizeof(S), cap);              \
-    }                                                              \
-    size_t da_append_##T(DA_##T *array, S elem)                    \
-    {                                                              \
-        return da_append((DA_void *) array, &elem, sizeof(S));     \
-    }                                                              \
-    S *da_element_##T(DA_##T *array, size_t ix)                    \
-    {                                                              \
-        return (S *) da_element((DA_void *) array, ix, sizeof(S)); \
+#define DA_IMPL_TYPE(T, S)                                           \
+    void da_resize_##T(DA_##T *array, size_t cap)                    \
+    {                                                                \
+        da_resize((DA_void *) array, sizeof(S), cap);                \
+    }                                                                \
+    S *da_append_##T(DA_##T *array, S elem)                          \
+    {                                                                \
+        return (S *) da_append((DA_void *) array, &elem, sizeof(S)); \
+    }                                                                \
+    S *da_element_##T(DA_##T *array, size_t ix)                      \
+    {                                                                \
+        return (S *) da_element((DA_void *) array, ix, sizeof(S));   \
     }
 #define DA_IMPL(T) DA_IMPL_TYPE(T, T)
 
