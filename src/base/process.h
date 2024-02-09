@@ -4,29 +4,68 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include <error_or.h>
-#include <sv.h>
-
 #ifndef __PROCESS_H__
 #define __PROCESS_H__
 
+#include <error_or.h>
+#include <mutex.h>
+#include <sv.h>
+
+typedef struct {
+    int           pipe[2];
+    int           fd;
+    StringBuilder buffer;
+    StringView    current_line;
+    StringList    lines;
+    Condition     condition;
+} ReadPipe;
+
+ERROR_OR_ALIAS(ReadPipe, ReadPipe *);
+
+typedef struct {
+    int pipe[2];
+    int fd;
+} WritePipe;
+
+ERROR_OR_ALIAS(WritePipe, WritePipe *);
+
 typedef struct process {
-    pid_t         pid;
-    StringView    command;
-    StringList    arguments;
-    StringBuilder out;
-    StringBuilder err;
+    pid_t      pid;
+    StringView command;
+    StringList arguments;
+    WritePipe  in;
+    ReadPipe   out;
+    ReadPipe   err;
 } Process;
 
-extern Process   *process_create_sl(StringView cmd, StringList *args);
-extern Process   *process_vcreate(StringView cmd, va_list args);
-extern Process   *_process_create(StringView cmd, ...);
-extern ErrorOrInt process_start(Process *p);
-extern ErrorOrInt process_execute(Process *p);
-ErrorOrInt        execute_sl(StringView cmd, StringList *args);
-ErrorOrInt        _execute(StringView cmd, ...);
+extern ErrorOrReadPipe   read_pipe_init(ReadPipe *pipe);
+extern void              read_pipe_destroy(ReadPipe *pipe);
+extern void              read_pipe_connect_parent(ReadPipe *pipe);
+extern void              read_pipe_connect_child(ReadPipe *pipe, int fd);
+extern void              read_pipe_close(ReadPipe *pipe);
+extern void              read_pipe_read(ReadPipe *p);
+extern void              read_pipe_expect(ReadPipe *pipe);
+extern StringList        read_pipe_lines(ReadPipe *pipe);
+extern ErrorOrWritePipe  write_pipe_init(WritePipe *p);
+extern void              write_pipe_destroy(WritePipe *pipe);
+extern void              write_pipe_connect_parent(WritePipe *pipe);
+extern void              write_pipe_connect_child(WritePipe *pipe, int fd);
+extern void              write_pipe_close(WritePipe *pipe);
+extern ErrorOrSize       write_pipe_write(WritePipe *pipe, StringView sv);
+extern ErrorOrSize       write_pipe_write_chars(WritePipe *pipe, char const *buf, size_t num);
+extern Process          *process_create_sl(StringView cmd, StringList *args);
+extern Process          *process_vcreate(StringView cmd, va_list args);
+extern Process          *_process_create(StringView cmd, ...);
+extern ErrorOrInt        process_start(Process *p);
+extern ErrorOrInt        process_execute(Process *p);
+extern ErrorOrInt        process_wait(Process *p);
+extern ErrorOrInt        process_background(Process *p);
+extern ErrorOrInt        execute_sl(StringView cmd, StringList *args);
+extern ErrorOrInt        _execute(StringView cmd, ...);
+extern ErrorOrStringView _execute_pipe(StringView input, StringView cmd, ...);
 
 #define process_create(cmd, ...) _process_create(cmd __VA_OPT__(, ) __VA_ARGS__, NULL)
 #define execute(cmd, ...) _execute(cmd __VA_OPT__(, ) __VA_ARGS__, NULL)
+#define execute_pipe(input, cmd, ...) _execute_pipe(input, cmd __VA_OPT__(, ) __VA_ARGS__, NULL)
 
 #endif /* __PROCESS_H__ */
