@@ -60,15 +60,34 @@ StringView sl_pop(StringList *sl)
     return sl->strings[sl->size--];
 }
 
+StringView sl_pop_front(StringList *sl)
+{
+    if (sl_empty(sl)) {
+        return sv_null();
+    }
+    StringView ret = sl->strings[0];
+    memcpy(sl->strings, sl->strings + 1, (sl->size-1) * sizeof(StringView));
+    --sl->size;
+    return ret;
+}
+
+StringList sl_split(StringList *sl, size_t at)
+{
+    if (sl->size <= at) {
+        return (StringList) {0};
+    }
+    StringList ret = {0};
+    da_resize_StringView(&ret, sl->size - at);
+    memcpy(ret.strings, sl->strings + at, (sl->size-at) * sizeof(StringView));
+    ret.size = sl->size - at;
+    sl->size = at;
+    return ret;
+}
+
 StringView sl_join(StringList *sl, StringView sep)
 {
     StringBuilder sb = sb_create();
-    for (size_t ix = 0; ix < sl->size; ++ix) {
-        if (ix > 0) {
-            sb_append_sv(&sb, sep);
-        }
-        sb_append_sv(&sb, sl->strings[ix]);
-    }
+    sb_append_list(&sb, sl, sep);
     return sb.view;
 }
 

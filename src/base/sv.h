@@ -27,6 +27,8 @@ ERROR_OR(StringView);
 
 DA_ELEMENTS(StringView, strings)
 typedef DA_StringView StringList;
+typedef DA_StringView StringViewArray;
+ERROR_OR(StringList);
 
 typedef struct string_builder {
     StringView view;
@@ -120,6 +122,7 @@ extern void          sb_insert_sv(StringBuilder *sb, StringView sv, size_t at);
 extern void          sb_insert_chars(StringBuilder *sb, char const *ptr, size_t len, size_t at);
 extern void          sb_insert_cstr(StringBuilder *sb, char const *str, size_t at);
 extern void          sb_remove(StringBuilder *sb, size_t at, size_t num);
+extern void          sb_append_list(StringBuilder *sb, StringList *sl, StringView sep);
 extern StringView    sb_view(StringBuilder *sb);
 
 #define SB_SPEC SV_SPEC
@@ -131,7 +134,9 @@ extern StringList  sl_copy(StringList *sl);
 extern StringList *sl_push(StringList *sl, StringView sv);
 extern StringList *sl_extend(StringList *sl, StringList *with);
 extern StringView  sl_pop(StringList *sl);
+extern StringView  sl_pop_front(StringList *sl);
 extern StringView  sl_join(StringList *sl, StringView sep);
+extern StringList  sl_split(StringList *sl, size_t at);
 extern StringView  sl_front(StringList *sl);
 extern StringView  sl_back(StringList *sl);
 extern bool        sl_empty(StringList *sl);

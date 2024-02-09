@@ -258,10 +258,16 @@ char const *sv_cstr(StringView sv)
     if (sv_is_cstr(sv)) {
         return sv.ptr;
     }
-    char *cstr = allocate_for_length(sv.length + 1, NULL);
-    memcpy(cstr, sv.ptr, sv.length);
-    cstr[sv.length] = '\0';
-    return cstr;
+    if (buffer_capacity(sv.ptr) >= sv.length + 1) {
+        ((char*) sv.ptr)[sv.length] = '\0';
+        return sv.ptr;
+    }
+    char *old = (char *) sv.ptr;
+    sv.ptr = allocate_for_length(sv.length + 1, NULL);
+    memcpy(sv.ptr, old, sv.length);
+    ((char*) sv.ptr)[sv.length] = '\0';
+    free_buffer(old);
+    return sv.ptr;
 }
 
 int sv_cmp(StringView s1, StringView s2)

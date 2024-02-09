@@ -57,7 +57,7 @@ size_t buffer_capacity(char const *buffer)
     return (buffer && *((size_t *) buffer - 1) == SENTINEL) ? *((size_t *) buffer - 2) : 0;
 }
 
-void free_buffer(char * buffer)
+void free_buffer(char *buffer)
 {
     size_t capacity = buffer_capacity(buffer);
     if (!capacity) {
@@ -237,6 +237,16 @@ void sb_remove(StringBuilder *sb, size_t at, size_t num)
     memmove(p + at, p + at + num, sb->view.length - at);
     sb->view.length -= num;
     p[sb->view.length] = 0;
+}
+
+void sb_append_list(StringBuilder *sb, StringList *sl, StringView sep)
+{
+    for (size_t ix = 0; ix < sl->size; ++ix) {
+        if (ix > 0) {
+            sb_append_sv(sb, sep);
+        }
+        sb_append_sv(sb, sl->strings[ix]);
+    }
 }
 
 StringView sb_view(StringBuilder *sb)

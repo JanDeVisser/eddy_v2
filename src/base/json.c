@@ -95,6 +95,13 @@ JSONValue json_integer(Integer number)
     return (JSONValue) { .type = JSON_TYPE_INT, .int_number = number };
 }
 
+int json_int_value(JSONValue value)
+{
+    assert(value.type == JSON_TYPE_INT);
+    Integer as_i32 = MUST_OPTIONAL(Integer, integer_coerce_to(value.int_number, I32));
+    return as_i32.i32;
+}
+
 JSONValue json_bool(bool value)
 {
     return (JSONValue) { .type = JSON_TYPE_BOOLEAN, .boolean = value };
@@ -124,6 +131,13 @@ size_t json_len(JSONValue *array)
 void json_set(JSONValue *obj, char const *attr, JSONValue elem)
 {
     json_set_sv(obj, sv_copy_cstr(attr), elem);
+}
+
+void json_optional_set(JSONValue *obj, char const *attr, OptionalJSONValue elem)
+{
+    if (elem.has_value) {
+        json_set(obj, attr, elem.value);
+    }
 }
 
 void json_set_sv(JSONValue *value, StringView attr, JSONValue elem)
@@ -201,6 +215,14 @@ StringView json_get_string(JSONValue *obj, char const *attr, StringView default_
     JSONValue v = json_get_default(obj, attr, json_string(default_));
     assert(v.type == JSON_TYPE_STRING);
     return v.string;
+}
+
+extern void json_merge(JSONValue *obj, JSONValue sub)
+{
+    assert(obj->type == JSON_TYPE_OBJECT);
+    assert(sub.type == JSON_TYPE_OBJECT);
+    da_resize_JSONNVPair(&obj->object, obj->object.size + sub.object.size);
+    memcpy(((JSONNVPair *) obj->object.elements) + obj->object.size, sub.object.elements, sub.object.size * sizeof(JSONNVPair));
 }
 
 StringView json_encode(JSONValue value)
