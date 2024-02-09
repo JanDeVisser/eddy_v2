@@ -25,12 +25,12 @@
 
 #define MUST_OPTIONAL(T, expr)                                          \
     ({                                                                  \
-        Optional##T T##_maybe = (expr);                               \
-        if (!T##_maybe.has_value) {                                   \
+        Optional##T T##_maybe = (expr);                                 \
+        if (!T##_maybe.has_value) {                                     \
             fatal("Optional expression '%s' (%s:%d) returned no value", \
                 #expr, __FILE_NAME__, __LINE__);                        \
         }                                                               \
-        T##_maybe.value;                                              \
+        T##_maybe.value;                                                \
     })
 
 #define RETURN_VALUE(T, exp) \
@@ -39,7 +39,16 @@
     return (Optional##T) { .has_value = false }
 
 OPTIONAL_ALIAS(int, Int)
+OPTIONAL_ALIAS(uint32_t, UInt32)
 OPTIONAL_ALIAS(uint64_t, UInt64)
 OPTIONAL_ALIAS(int64_t, Int64)
+
+#define PAIR_WITH_NAME(T1, T2, N) \
+    typedef struct {              \
+        T1 key;                   \
+        T2 value;                 \
+    } pair_##N;
+
+#define PAIR(T1, T2) PAIR_WITH_NAME(T1, T2, T1##_##T2)
 
 #endif /* __OPTIONAL_H__ */
