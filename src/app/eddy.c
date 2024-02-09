@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <errno.h>
 #include <pwd.h>
 #include <stdlib.h>
 #include <sys/fcntl.h>
@@ -11,7 +12,9 @@
 #include <unistd.h>
 
 #include <eddy.h>
+#include <fs.h>
 #include <io.h>
+#include <json.h>
 #include <palette.h>
 
 #define WINDOW_WIDTH 1600
@@ -172,7 +175,18 @@ APP_CLASS_DEF(Eddy, eddy);
 
 void eddy_cmd_quit(CommandContext *ctx)
 {
-    eddy.quit = true;
+    Eddy *eddy = (Eddy*) ctx->target;
+    JSONValue state = json_object();
+    JSONValue files = json_array();
+    for (size_t ix = 0; ix < eddy->buffers.size; ++ix) {
+        if (sv_not_empty(eddy->buffers.elements[ix].name)) {
+            StringView rel = fs_relative(eddy->buffers.elements[ix].name, eddy->project_dir);
+            json_append(&files, json_string(rel));
+        }
+    }
+    json_set(&state, "files", files);
+    MUST(Size, write_file_by_name(sv_from(".eddy/state"), json_encode(state)));
+    eddy->quit = true;
 }
 
 Eddy *eddy_create()
@@ -199,12 +213,23 @@ void eddy_init(Eddy *eddy)
 
     layout_add_widget((Layout *) eddy, (Widget *) main_area);
     eddy->editor = (Editor *) layout_find_by_draw_function((Layout *) eddy, (WidgetDraw) editor_draw);
-    if (eddy->argc > 1) {
-        for (int ix = 1; ix < eddy->argc; ++ix) {
-            eddy_open_buffer(eddy, sv_from(app->argv[ix]));
+    char const *project_dir = ".";
+    int ix;
+    for (ix = 1; ix < eddy->argc; ++ix) {
+        if (strncmp(eddy->argv[ix], "--", 2) != 0) {
+            break;
         }
-    } else {
-        editor_new(eddy->editor);
+        // handle option
+    }
+    if (ix < eddy->argc) {
+        project_dir = eddy->argv[ix++];
+    }
+    eddy_open_dir(eddy, sv_from(project_dir));
+    for (; ix < eddy->argc; ++ix) {
+        eddy_open_buffer(eddy, sv_from(eddy->argv[ix]));
+    }
+    if (eddy->buffers.size == 0) {
+        eddy_new_buffer(eddy);
     }
     editor_select_buffer(eddy->editor, 0);
 
@@ -218,14 +243,13 @@ void eddy_init(Eddy *eddy)
     eddy->handlers.on_terminate = (WidgetOnTerminate) eddy_on_terminate;
     eddy->handlers.on_draw = (WidgetDraw) eddy_on_draw;
     eddy->handlers.process_input = (WidgetProcessInput) eddy_process_input;
-    eddy->focus = (Widget *) eddy->editor;
     app_init((App *) eddy);
 }
 
 void eddy_on_start(Eddy *eddy)
 {
     eddy->monitor = GetCurrentMonitor();
-    eddy->font = LoadFontEx("fonts/VictorMono-Medium.ttf", 30, 0, 250);
+    eddy->font = LoadFontEx(EDDY_DATADIR "/fonts/VictorMono-Medium.ttf", 30, 0, 250);
 }
 
 void eddy_on_terminate(Eddy *eddy)
@@ -253,13 +277,43 @@ void eddy_on_draw(Eddy *eddy)
     ClearBackground(palettes[PALETTE_DARK][PI_BACKGROUND]);
 }
 
-void eddy_open_buffer(Eddy *eddy, StringView file)
+void eddy_open_dir(Eddy *eddy, StringView dir)
 {
-    Buffer buffer = { 0 };
-    buffer.name = file;
-    buffer.text.view = MUST(StringView, read_file_by_name(file));
-    buffer.rebuild_needed = true;
-    da_append_Buffer(&eddy->buffers, buffer);
+    dir = fs_canonical(dir);
+    MUST(Int, fs_assert_dir(dir));
+    if (chdir(sv_cstr(dir)) != 0) {
+        fatal("Cannot open project directory '%.*s': Could not chdir(): %s", SV_ARG(dir), strerror(errno));
+    }
+    eddy->project_dir = dir;
+    MUST(Int, fs_assert_dir(sv_from(".eddy")));
+    if (fs_file_exists(sv_from(".eddy/state"))) {
+        StringView s = MUST(StringView, read_file_by_name(sv_from(".eddy/state")));
+        JSONValue state = MUST(JSONValue, json_decode(s));
+        JSONValue files = json_get_default(&state, "files", json_array());
+        assert(files.type == JSON_TYPE_ARRAY);
+        for (int ix = 0; ix < json_len(&files); ++ix) {
+            JSONValue f = MUST_OPTIONAL(JSONValue, json_at(&files, ix));
+            assert(f.type == JSON_TYPE_STRING);
+            MUST(Buffer, eddy_open_buffer(eddy, f.string));
+        }
+    }
+}
+
+ErrorOrBuffer eddy_open_buffer(Eddy *eddy, StringView file)
+{
+    file = fs_relative(file, eddy->project_dir);
+    for (size_t ix = 0; ix < eddy->buffers.size; ++ix) {
+        Buffer *b = eddy->buffers.elements + ix;
+        if (sv_eq(b->name, file)) {
+            RETURN(Buffer, b);
+        }
+    }
+    return buffer_open(da_append_Buffer(&eddy->buffers, (Buffer) { 0 }), file);
+}
+
+Buffer *eddy_new_buffer(Eddy *eddy)
+{
+    return da_append_Buffer(&eddy->buffers, (Buffer) { 0 });
 }
 
 void eddy_set_message(Eddy *eddy, StringView message)

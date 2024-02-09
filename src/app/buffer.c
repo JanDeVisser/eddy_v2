@@ -14,6 +14,22 @@ DECLARE_SHARED_ALLOCATOR(eddy);
 DA_IMPL(Index);
 DA_IMPL(Buffer);
 
+ErrorOrBuffer buffer_open(Buffer *buffer, StringView name)
+{
+    buffer->name = name;
+    buffer->text.view = TRY_TO(StringView, Buffer, read_file_by_name(name));
+    buffer->rebuild_needed = true;
+    RETURN(Buffer, buffer);
+}
+
+Buffer * buffer_new(Buffer *buffer)
+{
+    memset(buffer , 0, sizeof(Buffer));
+    buffer->text = sb_create();
+    buffer->rebuild_needed = true;
+    return buffer;
+}
+
 void buffer_build_indices(Buffer *buffer)
 {
     if (!buffer->rebuild_needed) {

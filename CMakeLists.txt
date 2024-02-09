@@ -62,4 +62,7 @@ configure_file(
 )
 
 add_subdirectory(src/base)
+add_subdirectory(src/lsp)
 add_subdirectory(src/app)
+
+install(DIRECTORY fonts DESTINATION share)

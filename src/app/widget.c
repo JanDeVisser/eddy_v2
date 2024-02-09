@@ -489,8 +489,8 @@ void app_process_input(App *app)
     if (!f) {
         f = (Widget *) app;
     }
-    KeyboardModifier modifier = modifier_current();
-    if (!find_and_run_shortcut(f, modifier)) {
-        layout_process_input((Layout *) app);
-    }
+        KeyboardModifier modifier = modifier_current();
+        if (!find_and_run_shortcut(f, modifier)) {
+            layout_process_input((Layout *) app);
+        }
 }

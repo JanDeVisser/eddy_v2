@@ -219,6 +219,26 @@ typedef struct _widget {
         _w;                                      \
     })
 
+#define in_place_widget(C, W, P)        \
+    ({                                  \
+        Widget *_w = (Widget *) (W);    \
+        _w->classname = #C;             \
+        _w->handlers = $##C##_handlers; \
+        _w->parent = (Widget *) (P);    \
+        _w->handlers.init(_w);          \
+        (W);                            \
+    })
+
+#define widget_new_with_parent(c, p)             \
+    ({                                           \
+        Widget *_w = (Widget *) allocate_new(c); \
+        _w->classname = #c;                      \
+        _w->handlers = $##c##_handlers;          \
+        _w->parent = (Widget *) (p);             \
+        _w->handlers.init(_w);                   \
+        _w;                                      \
+    })
+
 #define widget_new_with_policy(c, p, s)          \
     ({                                           \
         Widget *_w = (Widget *) allocate_new(c); \

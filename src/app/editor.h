@@ -10,6 +10,7 @@
 #include <widget.h>
 
 typedef struct {
+    _W
     int        buffer_num;
     size_t     cursor;
     IntVector2 cursor_pos;
@@ -19,9 +20,11 @@ typedef struct {
     int        left_column;
     size_t     selection;
     int        cursor_flash;
+    Widget    *mode;
 } BufferView;
 
 DA_WITH_NAME(BufferView, BufferViews);
+SIMPLE_WIDGET_CLASS(BufferView, view);
 
 typedef struct {
     _W;

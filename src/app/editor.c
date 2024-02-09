@@ -12,13 +12,70 @@
 #include <buffer.h>
 #include <eddy.h>
 #include <editor.h>
+#include <json.h>
+#include <lsp/lsp.h>
 #include <palette.h>
+#include <process.h>
 
 DECLARE_SHARED_ALLOCATOR(eddy);
 
 DA_IMPL(BufferView);
 WIDGET_CLASS_DEF(Gutter, gutter);
 WIDGET_CLASS_DEF(Editor, editor);
+SIMPLE_WIDGET_CLASS_DEF(BufferView, view);
+
+// -- C Mode ----------------------------------------------------------------
+
+typedef struct {
+    _W;
+} CMode;
+
+SIMPLE_WIDGET_CLASS(CMode, c_mode);
+SIMPLE_WIDGET_CLASS_DEF(CMode, c_mode);
+
+void c_mode_cmd_format_source(CommandContext *ctx)
+{
+    Editor     *editor = (Editor *) ctx->target->parent;
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
+    eddy_set_message(&eddy, ctx->called_as);
+
+    if (sv_not_empty(buffer->name)) {
+        StringView formatted = MUST(
+           StringView,
+           execute_pipe(
+               buffer->text.view,
+               sv_from("clang-format"),
+               TextFormat("--assume-filename=%.*s", SV_ARG(buffer->name)),
+               TextFormat("--cursor=%d", view->cursor)));
+        StringView header = sv_chop_to_delim(&formatted, sv_from("\n"));
+        if (sv_eq(formatted, buffer->text.view)) {
+            eddy_set_message(&eddy, sv_from("Already properly formatted"));
+            return;
+        }
+        JSONValue values = MUST(JSONValue, json_decode(header));
+        assert(values.type == JSON_TYPE_OBJECT);
+        sv_free(buffer->text.view);
+        buffer->text.view = sv_copy(formatted);
+        sv_free(formatted);
+        buffer->rebuild_needed = true;
+        view->new_cursor = json_get_int(&values, "Cursor", view->cursor);
+        view->cursor_col = -1;
+        view->selection = -1;
+        eddy_set_message(&eddy, sv_from("Formatted"));
+        return;
+    }
+    eddy_set_message(&eddy, sv_from("Cannot format untitled buffer"));
+}
+
+void c_mode_init(CMode *mode)
+{
+    widget_add_command(mode, sv_from("c-format-source"), c_mode_cmd_format_source,
+        (KeyCombo) { KEY_L, KMOD_SHIFT | KMOD_CONTROL });
+    BufferView *view = (BufferView*) mode->parent;
+    Buffer *buffer = eddy.buffers.elements + view->buffer_num;
+    lsp_on_open(buffer->name);
+}
 
 // -- Gutter -----------------------------------------------------------------
 
@@ -53,6 +110,12 @@ void gutter_process_input(Gutter *)
 {
 }
 
+// -- BufferView -------------------------------------------------------------
+
+void view_init(BufferView *view)
+{
+}
+
 // -- Editor -----------------------------------------------------------------
 
 /*
@@ -63,26 +126,38 @@ void gutter_process_input(Gutter *)
 
 void editor_new(Editor *editor)
 {
-    Buffer        buffer = { 0 };
-    StringBuilder name = { 0 };
-    buffer.text = sb_create();
-    buffer_build_indices(&buffer);
-    da_append_Buffer(&eddy.buffers, buffer);
+    Buffer *buffer = eddy_new_buffer(&eddy);
+    buffer->text = sb_create();
+    buffer->rebuild_needed = true;
     editor_select_buffer(editor, eddy.buffers.size - 1);
 }
 
 void editor_select_buffer(Editor *editor, int buffer_num)
 {
+    Buffer *buffer = eddy.buffers.elements + buffer_num;
+    app->focus = (Widget *) editor;
+    editor->current_buffer = -1;
+    BufferView *view = NULL;
     for (size_t ix = 0; ix < editor->buffers.size; ++ix) {
         if (editor->buffers.elements[ix].buffer_num == buffer_num) {
             editor->current_buffer = ix;
-            editor->buffers.elements[editor->current_buffer].cursor_flash = app->time;
-            return;
+            view = da_element_BufferView(&editor->buffers, ix);
+            break;
         }
     }
-    da_append_BufferView(&editor->buffers, (BufferView) { .buffer_num = buffer_num, .selection = -1 });
-    editor->current_buffer = editor->buffers.size - 1;
-    editor->buffers.elements[editor->current_buffer].cursor_flash = app->time;
+    if (editor->current_buffer == -1) {
+        view = da_append_BufferView(&editor->buffers, (BufferView) { .buffer_num = buffer_num, .selection = -1 });
+        in_place_widget(BufferView, view, editor);
+        editor->current_buffer = editor->buffers.size - 1;
+        if (sv_endswith(buffer->name, sv_from(".c")) || sv_endswith(buffer->name, sv_from(".h"))) {
+            view->mode = widget_new_with_parent(CMode, view);
+        }
+    }
+    assert(view);
+    view->cursor_flash = app->time;
+    if (view->mode) {
+        app->focus = view->mode;
+    }
 }
 
 /*
@@ -473,6 +548,98 @@ void editor_cmd_merge_lines(CommandContext *ctx)
     view->cursor_col = -1;
 }
 
+#define OPEN_BRACES "({["
+#define CLOSE_BRACES ")}]"
+#define BRACES OPEN_BRACES CLOSE_BRACES
+
+void _find_closing_brace(Editor *editor, size_t index, bool selection)
+{
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
+    int         brace = buffer->text.view.ptr[index];
+    int         matching = 0;
+    for (size_t ix = 0; ix < 3; ++ix) {
+        if (OPEN_BRACES[ix] == brace) {
+            matching = CLOSE_BRACES[ix];
+            break;
+        }
+    }
+    assert(matching);
+    if (selection) {
+        view->selection = index;
+    }
+    int depth = 1;
+    while (++index < buffer->text.view.length) {
+        if (buffer->text.view.ptr[index] == matching) {
+            --depth;
+        }
+        if (!depth) {
+            view->new_cursor = ++index;
+            view->cursor_col = -1;
+            return;
+        }
+        if (buffer->text.view.ptr[index] == brace) {
+            ++depth;
+        }
+    }
+}
+
+void _find_opening_brace(Editor *editor, size_t index, bool selection)
+{
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
+    int         brace = buffer->text.view.ptr[index];
+    int         matching = 0;
+    for (size_t ix = 0; ix < 3; ++ix) {
+        if (CLOSE_BRACES[ix] == brace) {
+            matching = OPEN_BRACES[ix];
+            break;
+        }
+    }
+    if (selection) {
+        view->selection = index;
+    }
+    assert(matching);
+    int depth = 1;
+    while (--index != -1) {
+        if (buffer->text.view.ptr[index] == matching) {
+            --depth;
+        }
+        if (!depth) {
+            view->new_cursor = index;
+            view->cursor_col = -1;
+            return;
+        }
+        if (buffer->text.view.ptr[index] == brace) {
+            ++depth;
+        }
+    }
+}
+
+void editor_cmd_matching_brace(CommandContext *ctx)
+{
+    Editor     *editor = (Editor *) ctx->target;
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
+    bool        selection = ctx->trigger.modifier & KMOD_SHIFT;
+    if (strchr(OPEN_BRACES, buffer->text.view.ptr[view->cursor])) {
+        _find_closing_brace(editor, view->cursor, selection);
+        return;
+    }
+    if (strchr(OPEN_BRACES, buffer->text.view.ptr[view->cursor - 1])) {
+        _find_closing_brace(editor, view->cursor - 1, selection);
+        return;
+    }
+    if (strchr(CLOSE_BRACES, buffer->text.view.ptr[view->cursor])) {
+        _find_opening_brace(editor, view->cursor, selection);
+        return;
+    }
+    if (strchr(CLOSE_BRACES, buffer->text.view.ptr[view->cursor - 1])) {
+        _find_opening_brace(editor, view->cursor - 1, selection);
+        return;
+    }
+}
+
 void editor_cmd_backspace(CommandContext *ctx)
 {
     Editor *editor = (Editor *) ctx->target;
@@ -570,6 +737,8 @@ void editor_init(Editor *editor)
         (KeyCombo) { KEY_ENTER, KMOD_NONE }, (KeyCombo) { KEY_KP_ENTER, KMOD_NONE });
     widget_add_command(editor, sv_from("merge-lines"), editor_cmd_merge_lines,
         (KeyCombo) { KEY_J, KMOD_SHIFT | KMOD_CONTROL });
+    widget_add_command(editor, sv_from("matching-brace"), editor_cmd_matching_brace,
+        (KeyCombo) { KEY_M, KMOD_CONTROL }, (KeyCombo) { KEY_M, KMOD_CONTROL | KMOD_SHIFT });
     widget_add_command(editor, sv_from("backspace"), editor_cmd_backspace,
         (KeyCombo) { KEY_BACKSPACE, KMOD_NONE });
     widget_add_command(editor, sv_from("delete-current-char"), editor_cmd_delete_current_char,
