@@ -5,10 +5,12 @@
  */
 
 #include <errno.h>
+#include <pwd.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
 #include <fs.h>
+#include <sys/syslimits.h>
 
 size_t fs_file_size(StringView file_name)
 {
@@ -27,10 +29,19 @@ bool fs_file_exists(StringView file_name)
 bool fs_is_directory(StringView file_name)
 {
     struct stat st;
-    if (stat(sv_cstr(file_name), &st) == 0) {
+    if (stat(sv_cstr(file_name), &st) != 0) {
         fatal("fs_is_directory(%.*s): Cannot stat '%.*s'", SV_ARG(file_name), SV_ARG(file_name));
     }
     return (st.st_mode & S_IFDIR) != 0;
+}
+
+bool fs_is_symlink(StringView file_name)
+{
+    struct stat st;
+    if (stat(sv_cstr(file_name), &st) != 0) {
+        fatal("fs_is_symlink(%.*s): Cannot stat '%.*s'", SV_ARG(file_name), SV_ARG(file_name));
+    }
+    return S_ISLNK(st.st_mode);
 }
 
 bool fs_is_newer(StringView file_name1, StringView file_name2)
@@ -48,10 +59,137 @@ bool fs_is_newer(StringView file_name1, StringView file_name2)
     return st1.st_mtimespec.tv_sec > st2.st_mtimespec.tv_sec;
 }
 
+ErrorOrInt fs_assert_dir(StringView dir)
+{
+    if (fs_file_exists(dir)) {
+        if (fs_is_directory(dir)) {
+            RETURN(Int, 0);
+        }
+        ERROR(Int, IOError, 0, "'fs_assert_dir('%.*s'): Exists and is not a directory", SV_ARG(dir));
+    }
+    if (mkdir(sv_cstr(dir), 0700) != 0) {
+        ERROR(Int, IOError, errno, "fs_assert_dir('%.*s'): Cannot create: %s", SV_ARG(dir), strerror(errno));
+    }
+    RETURN(Int, 0);
+}
+
+ErrorOrStringView fs_follow(StringView file_name)
+{
+    if (!fs_file_exists(file_name)) {
+        ERROR(StringView, IOError, 0, "fs_follow('%.*s'): Does not exist", SV_ARG(file_name));
+    }
+    if (!fs_is_symlink(file_name)) {
+        ERROR(StringView, IOError, 0, "fs_follow('%.*s'): Not a symlink", SV_ARG(file_name));
+    }
+    char followed[PATH_MAX + 1];
+    memset(followed, '\0', PATH_MAX + 1);
+    int len = readlink(sv_cstr(file_name), followed, PATH_MAX);
+    if (len < 0) {
+        ERROR(StringView, IOError, 0, "fs_follow('%.*s'): Error reading symlink: %s", SV_ARG(file_name), strerror(errno));
+    }
+    assert(len <= PATH_MAX)
+        followed[len]
+        = '\0';
+    RETURN(StringView, sv_copy((StringView) { followed, len }));
+}
+
 ErrorOrInt fs_unlink(StringView file_name)
 {
     if (unlink(sv_cstr(file_name)) < 0) {
         ERROR(Int, IOError, 0, "Error unlinking '%.*s': %s", SV_ARG(file_name), strerror(errno));
     }
     RETURN(Int, 0);
+}
+
+// @leak
+StringView fs_canonical(StringView name)
+{
+    assert(sv_not_empty(name));
+    char parent[PATH_MAX + 1];
+    memset(parent, '\0', PATH_MAX + 1);
+
+    if (name.ptr[0] == '~') {
+        struct passwd *pw = getpwuid(getuid());
+        strncpy(parent, pw->pw_dir, PATH_MAX);
+    } else if (name.ptr[0] != '/') {
+        getcwd(parent, PATH_MAX);
+    }
+    StringView parent_view = sv_from(parent);
+    while (parent_view.length > 0 && parent_view.ptr[0] == '/') {
+        ++parent_view.ptr;
+        --parent_view.length;
+    }
+    while (parent_view.length > 0 && parent_view.ptr[parent_view.length - 1] == '/') {
+        --parent_view.length;
+    }
+    StringList path = sv_split(parent_view, sv_from("/"));
+    StringView name_stripped = name;
+    while (name_stripped.length > 0 && name_stripped.ptr[0] == '/') {
+        ++name_stripped.ptr;
+        --name_stripped.length;
+    }
+    while (name_stripped.length > 0 && name_stripped.ptr[name_stripped.length - 1] == '/') {
+        --name_stripped.length;
+    }
+    StringList name_components = sv_split(name_stripped, sv_from("/"));
+    sl_extend(&path, &name_components);
+
+    StringBuilder sb = {0};
+    StringList    canonical_path = { 0 };
+    sl_push(&canonical_path, sv_null());
+    for (StringView comp = sl_pop_front(&path); !sv_empty(comp); comp = sl_pop_front(&path)) {
+        if (sv_eq_cstr(comp, "..")) {
+            if (canonical_path.size > 1) {
+                sl_pop(&canonical_path);
+                sb.view.length = 0;
+                sb_append_list(&sb, &canonical_path, sv_from("/"));
+            }
+        } else if (!sv_eq_cstr(comp, ".")) {
+            sl_push(&canonical_path, comp);
+            sb_append_char(&sb, '/');
+            sb_append_sv(&sb, comp);
+            if (fs_file_exists(sb.view) && fs_is_symlink(sb.view)) {
+                StringView followed = MUST(StringView, fs_follow(sb.view));
+                assert(followed.length > 0);
+                while (followed.ptr[0] == '/') {
+                    ++followed.ptr;
+                    --followed.length;
+                    canonical_path = (StringList) { 0 };
+                    sl_push(&canonical_path, sv_from(""));
+                    sb.view.length = 0;
+                    sb_append_char(&sb, '/');
+                }
+                while (followed.length > 0 && followed.ptr[followed.length - 1] == '/') {
+                    --followed.length;
+                }
+                StringList followed_path = sv_split(followed, sv_from("/"));
+                sl_pop(&canonical_path);
+                sb.view.length = 0;
+                sb_append_list(&sb, &canonical_path, sv_from("/"));
+                StringList tail = path;
+                path = (StringList) { 0 };
+                sl_extend(&path, &followed_path);
+                sl_extend(&path, &tail);
+            }
+        }
+    }
+    return sb.view;
+}
+
+// @leak
+StringView fs_relative(StringView name, StringView base)
+{
+    StringList path = sv_split(fs_canonical(name), sv_from("/"));
+    StringList base_path = sv_split(fs_canonical(base), sv_from("/"));
+
+    if (path.size < base_path.size) {
+        return name;
+    }
+    for (size_t ix = 0; ix < base_path.size; ++ix) {
+        if (!sv_eq(base_path.strings[ix], path.strings[ix])) {
+            return name;
+        }
+    }
+    StringList tail = sl_split(&path, base_path.size);
+    return sl_join(&tail, sv_from("/"));
 }
