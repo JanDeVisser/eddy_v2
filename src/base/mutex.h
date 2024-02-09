@@ -29,7 +29,7 @@ typedef struct mutex {
 #ifdef HAVE_PTHREAD_H
     pthread_mutex_t *mutex;
 #elif defined(HAVE_INITIALIZECRITICALSECTION)
-    CRITICAL_SECTION   cs;
+    CRITICAL_SECTION cs;
 #endif /* HAVE_PTHREAD_H */
 } Mutex;
 
@@ -43,20 +43,20 @@ typedef struct condition {
 #endif
 } Condition;
 
-Mutex mutex_create(void);
-void  mutex_free(Mutex mutex);
-Mutex mutex_create_withname(StringView name);
-void  mutex_lock(Mutex mutex);
-int   mutex_try_lock(Mutex mutex);
-void  mutex_unlock(Mutex mutex);
-
-Condition condition_create();
-Condition condition_create_with_borrowed_mutex(Mutex mutex);
-void      condition_acquire(Condition);
-int       condition_try_acquire(Condition);
-void      condition_release(Condition);
-void      condition_wakeup(Condition);
-void      condition_sleep(Condition);
+extern Mutex     mutex_create(void);
+extern void      mutex_free(Mutex mutex);
+extern Mutex     mutex_create_withname(StringView name);
+extern void      mutex_lock(Mutex mutex);
+extern int       mutex_try_lock(Mutex mutex);
+extern void      mutex_unlock(Mutex mutex);
+extern Condition condition_create();
+extern Condition condition_create_with_borrowed_mutex(Mutex mutex);
+extern void      condition_free(Condition condition);
+extern void      condition_acquire(Condition);
+extern int       condition_try_acquire(Condition);
+extern void      condition_release(Condition);
+extern void      condition_wakeup(Condition);
+extern void      condition_sleep(Condition);
 
 #ifdef __cplusplus
 }

@@ -134,6 +134,21 @@ void condition_free(Condition condition)
     }
 }
 
+Condition condition_create()
+{
+    Condition condition = { 0 };
+    condition.mutex = mutex_create();
+    condition.borrowed_mutex = false;
+#ifdef HAVE_PTHREAD_H
+    condition.condition = allocate_new(pthread_cond_t);
+    pthread_cond_init(condition.condition, NULL);
+#elif defined(HAVE_INITIALIZECRITICALSECTION)
+    InitializeConditionVariable(&condition->condition);
+#endif /* HAVE_PTHREAD_H */
+    trace(CAT_LIB, "Condition created");
+    return condition;
+}
+
 Condition condition_create_with_borrowed_mutex(Mutex mutex)
 {
     Condition condition = { 0 };
