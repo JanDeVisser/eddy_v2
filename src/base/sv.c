@@ -264,7 +264,7 @@ char const *sv_cstr(StringView sv)
     }
     char *old = (char *) sv.ptr;
     sv.ptr = allocate_for_length(sv.length + 1, NULL);
-    memcpy(sv.ptr, old, sv.length);
+    memcpy((char*) sv.ptr, old, sv.length);
     ((char*) sv.ptr)[sv.length] = '\0';
     free_buffer(old);
     return sv.ptr;
