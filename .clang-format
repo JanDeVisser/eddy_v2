@@ -15,3 +15,7 @@ NamespaceIndentation: None
 QualifierAlignment: Right
 PointerAlignment: Right
 SpaceAfterCStyleCast: true
+
+---
+Language: Json
+DisableFormat: true

@@ -1,0 +1,183 @@
+{
+  "enums": [
+    {
+      "name": "TraceValue",
+      "value_type": "string",
+      "optional": true,
+      "values": [
+        {"name": "Off", "value": "off"},
+        {"name": "Messages", "value": "messages"},
+        {"name": "Verbose", "value": "verbose"}
+      ]
+    },
+    {
+      "name": "TokenFormat",
+      "value_type": "string",
+      "array": true,
+      "values": [
+        {"name": "Relative", "value": "relative"}
+      ]
+    },
+    {
+      "name": "SemanticTokenTypes",
+      "value_type": "string",
+      "array": true,
+      "values": [
+        {"name": "Namespace", "value": "namespace"},
+        {"name": "Type", "value": "type"},
+        {"name": "Class", "value": "class"},
+        {"name": "Enum", "value": "enum"},
+        {"name": "Interface", "value": "interface"},
+        {"name": "Struct", "value": "struct"},
+        {"name": "TypeParameter", "value": "typeParameter"},
+        {"name": "Parameter", "value": "parameter"},
+        {"name": "Variable", "value": "variable"},
+        {"name": "Property", "value": "property"},
+        {"name": "EnumMember", "value": "enumMember"},
+        {"name": "Event", "value": "event"},
+        {"name": "Function", "value": "function"},
+        {"name": "Method", "value": "method"},
+        {"name": "Macro", "value": "macro"},
+        {"name": "Keyword", "value": "keyword"},
+        {"name": "Modifier", "value": "modifier"},
+        {"name": "Comment", "value": "comment"},
+        {"name": "String", "value": "string"},
+        {"name": "Number", "value": "number"},
+        {"name": "Regexp", "value": "regexp"},
+        {"name": "Operator", "value": "operator"},
+        {"name": "Decorator", "value": "decorator"}
+      ]
+    },
+    {
+      "name": "SemanticTokenModifiers",
+      "value_type": "string",
+      "values": [
+        {"name": "Declaration", "value": "declaration"},
+        {"name": "Definition", "value": "definition"},
+        {"name": "Readonly", "value": "readonly"},
+        {"name": "Static", "value": "static"},
+        {"name": "Deprecated", "value": "deprecated"},
+        {"name": "Abstract", "value": "abstract"},
+        {"name": "Async", "value": "async"},
+        {"name": "Modification", "value": "modification"},
+        {"name": "Documentation", "value": "documentation"},
+        {"name": "DefaultLibrary", "value": "defaultLibrary"}
+      ]
+    }
+  ],
+  "variants": [
+  ],
+  "structs": [
+    {
+      "name": "TextDocumentIdentifier", "optional": true, "array": true, "optional-array": true,
+      "fields": [
+        {"name": "uri", "type": "DocumentURI"}
+      ]
+    },
+    {
+      "name": "SemanticTokensClientCapabilities", "decode": false, "encode": true,
+      "optional": true,
+      "fields": [
+        {"name": "dynamicRegistration", "optional": true, "type": "bool"},
+        {"name": "requests", "optional":  false,
+          "struct": [
+            {"name": "range", "optional": true, "variant": [{"type": "bool"},{"type": "empty"}]},
+            {
+              "name": "full",
+              "optional": true,
+              "variant": [
+                { "type": "bool"},
+                { "struct":
+                  [ {"name": "delta", "optional": true, "type": "bool" } ]
+                }
+              ]
+            }
+          ]
+        },
+        {"name": "tokenTypes", "array": true, "type": "string"},
+        {"name": "tokenModifiers", "array": true, "type": "string"},
+        {"name": "formats", "array": "true", "type": "TokenFormat"},
+        {"name": "overlappingTokenSupport", "optional": true, "type": "bool"},
+        {"name": "multilineTokenSupport", "optional": true, "type": "bool"},
+        {"name": "serverCancelSupport", "optional": true, "type": "bool"}
+      ]
+    },
+    {
+      "name": "TextDocumentClientCapabilities", "optional": true, "decode": false, "encode": true,
+      "fields": [
+        {"name": "semanticTokens", "optional": true, "type": "SemanticTokensClientCapabilities"}
+      ]
+    },
+    {
+      "name": "ClientCapabilities", "decode": false, "encode": true,
+      "fields": [
+        {"name": "textDocument", "optional": true, "type": "TextDocumentClientCapabilities"}
+      ]
+    },
+    {
+      "name": "WorkspaceFolder", "array": true, "array-optional": true,
+      "fields": [
+        {"name": "uri", "type": "URI"},
+        {"name": "name", "type": "string"}
+      ]
+    },
+    {
+      "name": "InitializeParams", "encode": true, "decode": false,
+      "fields": [
+        {"name": "processId", "variant": [{"type": "int"}, {"type": "null"}]},
+        {"name": "clientInfo", "optional": true, "struct": [
+          {"name": "name", "type": "string"},
+          {"name": "version", "type": "string", "optional": true}
+        ] },
+        {"name": "locale", "type": "string", "optional": true},
+        {"name": "rootPath", "type": "string", "optional": true},
+        {"name": "rootUri", "type": "DocumentUri", "optional": true},
+        {"name": "initializationOptions", "type": "any", "optional": true},
+        {"name": "capabilities", "type": "ClientCapabilities"},
+        {"name": "trace", "type": "TraceValue", "optional": true},
+        {"name": "workspaceFolders", "variant": [{"type": "WorkspaceFolder", "array": true}, {"type": "null"}], "optional": true}
+      ]
+    },
+    {
+      "name": "SemanticTokensLegend",
+      "fields": [
+        {"name": "tokenTypes", "type": "string", "array": true},
+        {"name": "tokenModifiers", "type": "string", "array": true}
+      ]
+    },
+    {
+      "name": "SemanticTokensOptions", "decode": true, "encode": false,
+      "optional": true,
+      "fields": [
+        {"name": "legend", "type": "SemanticTokensLegend"},
+        {"name": "range", "optional": true, "variant": [{"type": "bool"},{"type": "empty"}]},
+        {
+          "name": "full",
+          "optional": true,
+          "variant": [
+            { "type": "bool"},
+            { "struct":
+              [ {"name": "delta", "optional": true, "type": "bool" } ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ServerCapabilities", "encode": false, "decode": true,
+      "fields": [
+        {"name": "semanticTokensProvider", "type": "SemanticTokensOptions", "optional": true}
+      ]
+    },
+    {
+      "name": "InitializeResult", "encode": false, "decode": true,
+      "fields": [
+        {"name": "capabilities", "type": "ServerCapabilities"},
+        {"name": "serverInfo", "optional": true, "struct": [
+          {"name": "name", "type": "string"},
+          {"name": "version", "type": "string", "optional": true}
+        ] }
+      ]
+    }
+  ]
+}
