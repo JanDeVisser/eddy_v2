@@ -9,3 +9,4 @@ test/scribble/.scribble
 .DS_Store
 .cache
 .vscode
+.eddy
