@@ -79,19 +79,19 @@ void read_pipe_read(ReadPipe *pipe)
     poll_fd.events = POLLIN;
 
     while (true) {
-        // printf("Polling fd %d\n", pipe->fd);
+        if (pipe->debug) fprintf(stderr, "Polling fd %d\n", pipe->fd);
         if (poll(&poll_fd, 1, -1) == -1) {
-            printf("poll() failed on fd %d: %s\n", pipe->fd, strerror(errno));
+            if (pipe->debug) fprintf(stderr, "poll() failed on fd %d: %s\n", pipe->fd, strerror(errno));
             if (errno == EINTR) {
                 continue;
             }
             break;
         }
         if (poll_fd.revents & POLLIN) {
-            // printf("Input ready on fd %d\n", pipe->fd);
+            if (pipe->debug) fprintf(stderr, "Input ready on fd %d\n", pipe->fd);
             read_pipe_drain(pipe);
         } else {
-            printf("spurious poll() return on fd %d\n", pipe->fd);
+            if (pipe->debug) fprintf(stderr, "spurious poll() return on fd %d\n", pipe->fd);
         }
     }
     read_pipe_close(pipe);
@@ -99,10 +99,14 @@ void read_pipe_read(ReadPipe *pipe)
 
 void read_pipe_drain(ReadPipe *pipe)
 {
+    if (pipe->debug) fprintf(stderr, "draining pipe\n");
     char buffer[4096];
     condition_acquire(pipe->condition);
-    for (ssize_t count = read(pipe->fd, buffer, sizeof(buffer) - 1); count != 0; count = read(pipe->fd, buffer, sizeof(buffer) - 1)) {
-        if (count > 0) {
+    fprintf(stderr, "condition acquired\n");
+    do {
+        for (ssize_t count = read(pipe->fd, buffer, sizeof(buffer) - 1); count > 0; count = read(pipe->fd, buffer, sizeof(buffer) - 1)) {
+            buffer[count] = 0;
+            if (pipe->debug) fprintf(stderr, "Read %zd bytes: %s\n", count, buffer);
             size_t ix = pipe->buffer.view.length;
             sb_append_chars(&pipe->buffer, buffer, count);
             bool prev_was_cr = false;
@@ -128,22 +132,17 @@ void read_pipe_drain(ReadPipe *pipe)
                     prev_was_cr = false;
                 }
             }
-            continue;
         }
-        switch (errno) {
-        case EINTR:
-            continue;
-        case EBADF:
-        case EAGAIN:
-            goto exit_loop;
-        default:
-            fprintf(stderr, "Error reading child process output: %s\n", strerror(errno));
-            goto exit_loop;
-        }
+    } while (errno == EINTR);
+    if (errno && errno != EAGAIN) {
+        fatal("Error reading child process output: %s\n", strerror(errno));
     }
-exit_loop:
+    if (pipe->debug) fprintf(stderr, "pipe drained\n");
     if (sv_not_empty(pipe->current_line)) {
         read_pipe_newline(pipe);
+    }
+    if (pipe->on_read) {
+        pipe->on_read(pipe);
     }
     condition_wakeup(pipe->condition);
 }
@@ -253,6 +252,14 @@ Process *_process_create(StringView cmd, ...)
     return ret;
 }
 
+void dump_stderr(ReadPipe *pipe)
+{
+    StringList lines = read_pipe_lines(pipe);
+    for (size_t ix = 0; ix < lines.size; ++ix) {
+        fprintf(stderr, "- %.*s\n", SV_ARG(lines.strings[ix]));
+    }
+}
+
 ErrorOrInt process_start(Process *p)
 {
     size_t sz = p->arguments.size;
@@ -268,8 +275,14 @@ ErrorOrInt process_start(Process *p)
 
     signal(SIGCHLD, SIG_IGN);
     TRY_TO(WritePipe, Int, write_pipe_init(&p->in));
+    p->out.debug = true;
     TRY_TO(ReadPipe, Int, read_pipe_init(&p->out));
+    p->err.on_read = dump_stderr;
     TRY_TO(ReadPipe, Int, read_pipe_init(&p->err));
+    // char buf[256];
+    // snprintf(buf, 255, "/tmp/%.*s.err", SV_ARG(p->command));
+    // int err = open(buf, O_WRONLY | O_CREAT, 0777);
+    // assert(err > 0);
 
     pid_t pid = fork();
     if (pid == -1) {
@@ -280,6 +293,7 @@ ErrorOrInt process_start(Process *p)
         write_pipe_connect_child(&p->in, STDIN_FILENO);
         read_pipe_connect_child(&p->out, STDOUT_FILENO);
         read_pipe_connect_child(&p->err, STDERR_FILENO);
+        // while ((dup2(err, STDERR_FILENO) == -1) && (errno == EINTR)) { }
         execvp(argv[0], argv);
         printf("execvp(%.*s) failed: %s\n", SV_ARG(p->command), strerror(errno));
         exit(1);

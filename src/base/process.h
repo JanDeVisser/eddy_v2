@@ -11,14 +11,19 @@
 #include <mutex.h>
 #include <sv.h>
 
-typedef struct {
+typedef struct _read_pipe ReadPipe;
+typedef void (*OnPipeRead)(ReadPipe *);
+
+struct _read_pipe {
     int           pipe[2];
     int           fd;
     StringBuilder buffer;
     StringView    current_line;
     StringList    lines;
     Condition     condition;
-} ReadPipe;
+    OnPipeRead    on_read;
+    bool          debug;
+};
 
 ERROR_OR_ALIAS(ReadPipe, ReadPipe *);
 
