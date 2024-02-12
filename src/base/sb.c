@@ -124,6 +124,9 @@ StringBuilder sb_vcreatef(char const *fmt, va_list args)
 
 StringBuilder sb_copy_chars(char const *ptr, size_t len)
 {
+    if (ptr == NULL || len == 0) {
+        return (StringBuilder) {0};
+    }
     StringBuilder sb = sb_create();
     size_t        cap = buffer_capacity(sb.view.ptr);
     sb.view.ptr = allocate_for_length(len + 1, &cap);
@@ -137,16 +140,25 @@ StringBuilder sb_copy_chars(char const *ptr, size_t len)
 
 StringBuilder sb_copy_sv(StringView sv)
 {
-    return sb_copy_chars(sv.ptr, sv.length + 1);
+    if (sv.length == 0) {
+        return (StringBuilder) {0};
+    }
+    return sb_copy_chars(sv.ptr, sv.length);
 }
 
 StringBuilder sb_copy_cstr(char const *s)
 {
+    if (s == NULL) {
+        return (StringBuilder) {0};
+    }
     return sb_copy_chars(s, strlen(s) + 1);
 }
 
 void sb_append_chars(StringBuilder *sb, char const *ptr, size_t len)
 {
+    if (ptr == NULL || len == 0) {
+        return;
+    }
     sb_reallocate(sb, sb->view.length + len + 1);
     char *p = (char *) sb->view.ptr;
     memcpy(p + sb->view.length, ptr, len);
@@ -162,6 +174,9 @@ void sb_append_sv(StringBuilder *sb, StringView sv)
 
 void sb_append_cstr(StringBuilder *sb, char const *s)
 {
+    if (s == NULL) {
+        return;
+    }
     sb_append_chars(sb, s, strlen(s));
 }
 
@@ -247,6 +262,25 @@ void sb_append_list(StringBuilder *sb, StringList *sl, StringView sep)
         }
         sb_append_sv(sb, sl->strings[ix]);
     }
+}
+
+int sb_replace_one(StringBuilder *sb, StringView pat, StringView repl)
+{
+    int loc = sv_find(sb->view, pat);
+    if (loc != -1) {
+        sb_remove(sb, loc, pat.length);
+        sb_insert_sv(sb, repl, loc);
+    }
+    return loc;
+}
+
+int sb_replace_all(StringBuilder *sb, StringView pat, StringView repl)
+{
+    int ret = 0;
+    for (int loc = sb_replace_one(sb, pat, repl); loc != -1; loc = sb_replace_one(sb, pat, repl)) {
+        ++ret;
+    }
+    return ret;
 }
 
 StringView sb_view(StringBuilder *sb)

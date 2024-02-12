@@ -123,6 +123,8 @@ extern void          sb_insert_chars(StringBuilder *sb, char const *ptr, size_t 
 extern void          sb_insert_cstr(StringBuilder *sb, char const *str, size_t at);
 extern void          sb_remove(StringBuilder *sb, size_t at, size_t num);
 extern void          sb_append_list(StringBuilder *sb, StringList *sl, StringView sep);
+extern int           sb_replace_one(StringBuilder *sb, StringView pat, StringView repl);
+extern int           sb_replace_all(StringBuilder *sb, StringView pat, StringView repl);
 extern StringView    sb_view(StringBuilder *sb);
 
 #define SB_SPEC SV_SPEC
