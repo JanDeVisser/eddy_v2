@@ -16,23 +16,8 @@
 
 Mutex mutex_create(void)
 {
-    return mutex_create_withname(sv_null());
-}
-
-void mutex_free(Mutex mutex)
-{
-#ifdef HAVE_PTHREAD_H
-    pthread_mutex_destroy(mutex.mutex);
-#elif defined(HAVE_INITIALIZECRITICALSECTION)
-    DeleteCriticalSection(&(mutex->cs));
-#endif /* HAVE_PTHREAD_H */
-}
-
-Mutex mutex_create_withname(StringView name)
-{
     Mutex mutex;
 
-    mutex.name = name;
 #ifdef HAVE_PTHREAD_H
     pthread_mutexattr_t attr;
 #endif /* HAVE_PTHREAD_H */
@@ -50,6 +35,15 @@ Mutex mutex_create_withname(StringView name)
 #endif /* HAVE_PTHREAD_H */
 
     return mutex;
+}
+
+void mutex_free(Mutex mutex)
+{
+#ifdef HAVE_PTHREAD_H
+    pthread_mutex_destroy(mutex.mutex);
+#elif defined(HAVE_INITIALIZECRITICALSECTION)
+    DeleteCriticalSection(&(mutex->cs));
+#endif /* HAVE_PTHREAD_H */
 }
 
 void mutex_lock(Mutex mutex)

@@ -18,14 +18,11 @@
 #endif /* HAVE_WINDOWS_H */
 #endif /* HAVE_INITIALIZECRITICALSECTION */
 
-#include <sv.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 typedef struct mutex {
-    StringView name;
 #ifdef HAVE_PTHREAD_H
     pthread_mutex_t *mutex;
 #elif defined(HAVE_INITIALIZECRITICALSECTION)
@@ -45,7 +42,6 @@ typedef struct condition {
 
 extern Mutex     mutex_create(void);
 extern void      mutex_free(Mutex mutex);
-extern Mutex     mutex_create_withname(StringView name);
 extern void      mutex_lock(Mutex mutex);
 extern int       mutex_try_lock(Mutex mutex);
 extern void      mutex_unlock(Mutex mutex);
