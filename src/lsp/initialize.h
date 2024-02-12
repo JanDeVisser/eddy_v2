@@ -92,24 +92,6 @@ extern SemanticTokenModifiers SemanticTokenModifiers_decode(OptionalJSONValue va
 extern OptionalJSONValue SemanticTokenModifiers_encode(SemanticTokenModifiers value);
 
 typedef struct {
-    DocumentURI uri;
-} TextDocumentIdentifier;
-
-OPTIONAL(TextDocumentIdentifier);
-OPTIONAL_JSON_ENCODE(TextDocumentIdentifier);
-OPTIONAL_JSON_DECODE(TextDocumentIdentifier);
-
-DA_WITH_NAME(TextDocumentIdentifier, TextDocumentIdentifiers);
-JSON_ENCODE(TextDocumentIdentifiers, TextDocumentIdentifiers);
-JSON_DECODE(TextDocumentIdentifiers, TextDocumentIdentifiers);
-OPTIONAL(TextDocumentIdentifiers);
-OPTIONAL_JSON_ENCODE(TextDocumentIdentifiers);
-OPTIONAL_JSON_DECODE(TextDocumentIdentifiers);
-
-extern TextDocumentIdentifier TextDocumentIdentifier_decode(OptionalJSONValue value);
-extern OptionalJSONValue TextDocumentIdentifier_encode(TextDocumentIdentifier value);
-
-typedef struct {
     OptionalBool dynamicRegistration;
     struct {
         bool has_value;

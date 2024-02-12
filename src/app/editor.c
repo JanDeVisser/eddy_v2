@@ -73,8 +73,7 @@ void c_mode_init(CMode *mode)
     widget_add_command(mode, sv_from("c-format-source"), c_mode_cmd_format_source,
         (KeyCombo) { KEY_L, KMOD_SHIFT | KMOD_CONTROL });
     BufferView *view = (BufferView*) mode->parent;
-    Buffer *buffer = eddy.buffers.elements + view->buffer_num;
-    lsp_on_open(buffer->name);
+    lsp_on_open(view->buffer_num);
 }
 
 // -- Gutter -----------------------------------------------------------------

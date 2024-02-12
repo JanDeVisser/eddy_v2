@@ -69,12 +69,6 @@
   ],
   "structs": [
     {
-      "name": "TextDocumentIdentifier", "optional": true, "array": true, "optional-array": true,
-      "fields": [
-        {"name": "uri", "type": "DocumentURI"}
-      ]
-    },
-    {
       "name": "SemanticTokensClientCapabilities", "decode": false, "encode": true,
       "optional": true,
       "fields": [

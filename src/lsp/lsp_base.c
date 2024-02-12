@@ -15,6 +15,43 @@ OPTIONAL_JSON_IMPL(DocumentUri)
 OPTIONAL_JSON_IMPL(Bool)
 DA_JSON_IMPL(StringView, StringList, strings)
 
+DA_IMPL(uint32_t)
+
+OptionalJSONValue UInts_encode(UInts value)
+{
+    JSONValue ret = json_array();
+    for (size_t ix = 0; ix < value.size; ++ix) { json_append(&ret, ((OptionalJSONValue){ .has_value = true, .value = json_int(value.elements[ix]) }).value); }
+    return (OptionalJSONValue){ .has_value = true, .value = (ret) };
+}
+
+UInts UInts_decode(OptionalJSONValue json)
+{
+    if (!(json.has_value)) { _fatal("%s:%d: " "%s:%d: assert('%s') FAILED", "_file_name_short_", 15, "_file_name_short_", 15, "json.has_value"); };
+    if (!(json.value.type == JSON_TYPE_ARRAY)) { _fatal("%s:%d: " "%s:%d: assert('%s') FAILED", "_file_name_short_", 15, "_file_name_short_", 15, "json.value.type == JSON_TYPE_ARRAY"); };
+    UInts ret = { 0 };
+    for (size_t ix = 0; ix < json_len(&json.value); ++ix) {
+        OptionalJSONValue elem = json_at(&json.value, ix);
+        da_append_uint32_t(&ret, ( {
+            if (!(elem.has_value)) { _fatal("%s:%d: " "%s:%d: assert('%s') FAILED", "_file_name_short_", 15, "_file_name_short_", 15, "elem.has_value"); };
+            if (!(elem.value.type == JSON_TYPE_INT)) { _fatal("%s:%d: " "%s:%d: assert('%s') FAILED", "_file_name_short_", 15, "_file_name_short_", 15, "elem.value.type == JSON_TYPE_INT"); };
+            (uint32_t) json_int_value(elem.value);
+        }));
+    }
+    return ret;
+}
+
+OptionalJSONValue StringView_encode(StringView sv)
+{
+    return (OptionalJSONValue) { .has_value = true, .value = json_string(sv) };
+}
+
+StringView StringView_decode(OptionalJSONValue json)
+{
+    assert(json.has_value);
+    assert(json.value.type == JSON_TYPE_STRING);
+    return json.value.string;
+}
+
 OptionalJSONValue Empty_encode(Empty value)
 {
     return (OptionalJSONValue) { .has_value = true, .value = json_object() };
@@ -37,6 +74,17 @@ Null Null_decode(OptionalJSONValue json)
     assert(json.has_value);
     assert(json.value.type == JSON_TYPE_NULL);
     return (Null) {};
+}
+
+JSONValue notification_encode(Notification *notification)
+{
+    JSONValue ret = json_object();
+    json_set_cstr(&ret, "jsonrpc", "2.0");
+    json_set_cstr(&ret, "method", notification->method);
+    if (notification->params.has_value) {
+        json_set(&ret, "params", notification->params.value);
+    }
+    return ret;
 }
 
 JSONValue request_encode(Request *request)

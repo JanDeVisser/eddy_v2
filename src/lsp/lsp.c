@@ -12,6 +12,8 @@
 
 #include <lsp/initialize.h>
 #include <lsp/lsp_base.h>
+#include <lsp/semantictokens.h>
+#include <lsp/synchronization.h>
 #include <process.h>
 #include <sys/syslimits.h>
 
@@ -25,11 +27,11 @@ Response lsp_message(char const *method, OptionalJSONValue params)
     req.params = params;
     assert(lsp);
     StringView  json = json_encode(request_encode(&req));
+    fprintf(stderr, "-> LSP %.*s\n", SV_ARG(json));
     char const *content_length = TextFormat("Content-Length: %zu\r\n\r\n", json.length + 2);
     write_pipe_write(&lsp->in, sv_from(content_length));
     write_pipe_write(&lsp->in, json);
     write_pipe_write(&lsp->in, sv_from("\r\n"));
-    printf("-> LSP %.*s\n", SV_ARG(json));
 
     read_pipe_expect(&lsp->out);
     StringList lines = read_pipe_lines(&lsp->out);
@@ -45,16 +47,28 @@ Response lsp_message(char const *method, OptionalJSONValue params)
         fprintf(stderr, "LSP replied with %.*s instead of empty line\n", SV_ARG(lines.strings[1]));
         return (Response) { 0 };
     }
-    printf("LSP -> %.*s", SV_ARG(lines.strings[2]));
+    fprintf(stderr, "LSP -> %.*s\n", SV_ARG(lines.strings[2]));
     ErrorOrJSONValue ret_maybe = json_decode(lines.strings[2]);
     if (ErrorOrJSONValue_is_error(ret_maybe)) {
         fprintf(stderr, "Could not JSON decode LSP reponse '%.*s': %s\n", SV_ARG(lines.strings[2]), Error_to_string(ret_maybe.error));
         return (Response) { 0 };
     }
-    printf("LSP -> %.*s\n", SV_ARG(lines.strings[2]));
     Response response = response_decode(&ret_maybe.value);
     assert(response.id == req.id);
     return response;
+}
+
+void lsp_notification(char const *method, OptionalJSONValue params)
+{
+    Notification notification = { method, OptionalJSONValue_empty() };
+    notification.params = params;
+    assert(lsp);
+    StringView  json = json_encode(notification_encode(&notification));
+    char const *content_length = TextFormat("Content-Length: %zu\r\n\r\n", json.length + 2);
+    write_pipe_write(&lsp->in, sv_from(content_length));
+    write_pipe_write(&lsp->in, json);
+    write_pipe_write(&lsp->in, sv_from("\r\n"));
+    fprintf(stderr, "-| LSP %.*s\n", SV_ARG(json));
 }
 
 void lsp_initialize()
@@ -91,7 +105,34 @@ void lsp_initialize()
     }
 }
 
-void lsp_on_open(StringView name)
+void lsp_on_open(int buffer_num)
 {
     lsp_initialize();
+    Buffer *buffer = eddy.buffers.elements + buffer_num;
+
+    char                 uri[PATH_MAX + 8];
+    memset(uri, '\0', PATH_MAX + 8);
+    snprintf(uri, PATH_MAX + 7, "file://%.*s/%.*s", SV_ARG(eddy.project_dir), SV_ARG(buffer->name));
+
+    DidOpenTextDocumentParams did_open = {0};
+    did_open.textDocument = (TextDocumentItem) {
+        .uri = sv_from(uri),
+        .languageId = sv_from("c"),
+        .version = 0,
+        .text = eddy.buffers.elements[buffer_num].text.view
+    };
+    OptionalJSONValue did_open_json = DidOpenTextDocumentParams_encode(did_open);
+    lsp_notification("textDocument/didOpen", did_open_json);
+
+    SemanticTokensParams semantic_tokens_params = {0};
+    semantic_tokens_params.textDocument = (TextDocumentIdentifier) {
+        .uri = sv_from(uri),
+    };
+    OptionalJSONValue semantic_tokens_params_json = SemanticTokensParams_encode(semantic_tokens_params);
+    Response          response = lsp_message("textDocument/semanticTokens/full", semantic_tokens_params_json);
+    if (response_success(&response)) {
+        SemanticTokensResult result = SemanticTokensResult_decode(response.result);
+        assert(result.tag == 0);
+        fprintf(stderr, "GOT %zu TOKENS\n", result._0.data.size);
+    }
 }

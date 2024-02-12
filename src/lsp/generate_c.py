@@ -5,6 +5,7 @@ import sys
 
 emitted_structures = set()
 emitted_types = []
+depends = []
 structures = {}
 variants = {}
 enums = {}
@@ -16,6 +17,7 @@ builtin = {
     "DocumentUri": { "name": "DocumentUri", "cname": "StringView", "calias": "StringView", "plural": "StringList" },
     "bool": { "name": "bool", "cname": "bool", "calias": "Bool" },
     "int": { "name": "int", "cname": "int", "calias": "Int" },
+    "uint": { "name": "uint", "cname": "unsigned int", "calias": "UInt" },
     "null": { "name": "null", "cname": "Null", "calias": "Null" },
     "empty": { "name": "empty", "cname": "Empty", "calias": "Empty" },
     "any": { "name": "any", "cname": "JSONValue", "calias": "JSONValue" },
@@ -196,7 +198,7 @@ def variant_def(typedef, optional, name, variant, h, indent):
         if "type" in v:
             print(f'{" "*indent}{render_type(v)} _{tag};', file=h)
         if "struct" in v:
-            struct_def(False, False, '_' + str(tag), v["struct"], h, indent)
+            inline_struct_def('_' + str(tag), v["struct"], h, indent)
         tag += 1
     indent -= 4
     print(f"{' '*indent}}};", file=h)
@@ -211,37 +213,63 @@ def emit_variant(v, h, c):
     pass
 
 
-def struct_def(typedef, optional, name, struct, h, indent):
-    if typedef:
-        print("typedef ", end="", file=h)
-    print(f"{' '*indent}struct {{", file=h)
-    indent += 4
-    if not typedef:
-        print(f'{" "*indent}bool has_value;', file=h)
-        print(f"{' '*indent}struct {{", file=h)
-        indent += 4
-    for field in struct:
-        if "type" in field:
-            print(f'{" "*indent}{render_type(field)} {field["name"]};', file=h)
-        if "struct" in field:
-            struct_def(False, "optional" in field and field["optional"],
-                       field["name"], field["struct"], h, indent)
-        if "variant" in field:
-            variant_def(False, "optional" in field and field["optional"],
-                       field["name"], field["variant"], h, indent)
+def define_field(name, field, h, indent):
+    if "type" in field:
+        p(indent, h, f'{render_type(field)} {name};')
+    if "struct" in field:
+        inline_struct_def(name, field["struct"], h, indent)
+    if "variant" in field:
+        variant_def(False, "optional" in field and field["optional"],
+                   name, field["variant"], h, indent)
+
+
+def struct_def_fields(fields, h, indent):
+    for field in fields:
+        define_field(field["name"], field, h, indent)
+
+
+def typedef_struct_def(struct, h):
+    p(0, h, 'typedef struct {')
+    indent = 4
+    struct_def_fields(struct["all_fields"], h, indent)
     indent -= 4
-    if not typedef:
-        p(indent, h, "};")
-        indent -= 4
-    print(f"{' '*indent}}}", end="", file=h)
-    if name is not None:
-        print(f' {name}', end='', file=h)
-    print(";", file=h)
+    p(indent, h, f'}} {struct["name"]};')
+
+
+def inline_struct_def(name, fields, h, indent):
+    p(indent, h, 'struct {')
+    indent += 4
+    p(indent, h,'bool has_value;')
+    p(indent, h, "struct {")
+    indent += 4
+    struct_def_fields(fields, h, indent)
+    indent -= 4
+    p(indent, h, "};")
+    indent -= 4
+    p(indent, h, f'}} {name};')
+
+
+def collect_fields(struct):
+    if "all_fields" in struct:
+        return
+    fields = []
+    if "extends" in struct:
+        bases_reversed = []
+        bases = struct["extends"]
+        while len(bases) > 0:
+            s = structures[bases.pop()]
+            bases_reversed.insert(0, s)
+            if "extends" in s:
+                bases.append(s["extends"])
+        for base in bases_reversed:
+            fields.extend(base["fields"])
+    fields.extend(struct["fields"])
+    struct["all_fields"] = fields
 
 
 def emit_struct_h(name, h):
     struct = structures[name]
-    struct_def(True, False, name, struct["fields"], h, 0)
+    typedef_struct_def(struct, h)
     print(file=h)
 
     decode = "decode" not in struct or struct["decode"]
@@ -275,128 +303,157 @@ def emit_struct_h(name, h):
     print(file=h)
 
 
-def decode_field(field, json_var, path, c, indent=4):
+def decode_variant_variant(variant, var, value, tag, c, indent):
+    if "type" in variant:
+        if variant["type"] == "bool":
+            p(indent, c, f'if ({var}.value.type == JSON_TYPE_BOOLEAN) {{')
+            p(indent, c, f'    {value}.tag = {tag};')
+            p(indent, c, f'    {value}._{tag} = {var}.value.boolean;')
+            p(indent, c, f'}}')
+        elif variant["type"] == "int":
+            p(indent, c, f'if ({var}.value.type == JSON_TYPE_INT) {{')
+            p(indent, c, f'    {value}.tag = {tag};')
+            p(indent, c, f'    {value}._{tag} = json_int_value({var}.value);')
+            p(indent, c, f'}}')
+        elif variant["type"] == "null":
+            p(indent, c, f'if ({var}.value.type == JSON_TYPE_NULL) {{')
+            p(indent, c, f'    {value}.tag = {tag};')
+            p(indent, c, f'    {value}._{tag} = (Null) {{}};')
+            p(indent, c, f'}}')
+        elif variant["type"] == "empty":
+            p(indent, c, f'if ({var}.value.type == JSON_TYPE_OBJECT && {var}.value.object.size == 0) {{')
+            p(indent, c, f'    {value}.tag = {tag};')
+            p(indent, c, f'    {value}._{tag} = (Empty) {{}};')
+            p(indent, c, f'}}')
+        elif variant["type"] == "string":
+            p(indent, c, f'if ({var}.value.type == JSON_TYPE_STRING) {{')
+            p(indent, c, f'    {value}.tag = {tag};')
+            p(indent, c, f'    {value}._{tag} = {var}.value.string;')
+            p(indent, c, f'}}')
+        else:
+            p(indent, c, f'if ({var}.value.type == JSON_TYPE_OBJECT) {{')
+            p(indent, c, f'    {value}.tag = {tag};')
+            p(indent, c, f'    {value}._{tag} = {render_prefix(variant)}_decode({var});')
+            p(indent, c, f'}}')
+    if "struct" in variant:
+        p(indent, c, f'if ({var}.value.type == JSON_TYPE_OBJECT) {{')
+        indent += 4
+        print(f'{" "*indent}{value}.tag = {tag};', file=c)
+        for struct_field in variant["struct"]:
+            decode_field(struct_field, var, f'{value}._{tag}.{struct_field["name"]}', c, indent)
+            # print(f'{" "*indent}    {value}._{tag}.{struct_variant["name"]} = {render_prefix(struct_variant)}_decode({var});', file=c)
+        indent -= 4
+        print(f'{" "*indent}}}', file=c)
+
+
+def decode_variant(variant, var, value, c, indent=4):
+    if "optional" in variant and variant["optional"]:
+        p(indent, c, f'if ({var}.has_value) {{')
+        indent += 4
+        p(indent, c, f'{value}.has_value = true;')
+    else:
+        p(indent, c, f'assert({var}.has_value);')
+    tag = 0
+    for v in variant["variant"]:
+        decode_variant_variant(v, var, value, tag, c, indent)
+        tag += 1
+    if "optional" in variant and variant["optional"]:
+        indent -= 4
+        p(indent, c, '}')
+
+
+def decode_field(field, json_var, value, c, indent=4):
     print(f'{" "*indent}{{', file=c)
     indent += 4
     var = "v"+str(indent)
     print(f'{" "*indent}OptionalJSONValue {var} = json_get(&{json_var}.value, "{field["name"]}");', file=c)
     if "type" in field:
-        print(f'{" "*indent}value.{path} = {render_prefix(field)}_decode({var});', file=c)
+        print(f'{" "*indent}{value} = {render_prefix(field)}_decode({var});', file=c)
     if "struct" in field:
         if "optional" in field and field["optional"]:
             print(f'{" "*indent}if ({var}.has_value) {{', file=c)
             indent += 4
         else:
             print(f'{" "*indent}assert({var}.has_value);', file=c)
-        p(indent, c, f"value.{path}.has_value = true;")
+        p(indent, c, f"{value}.has_value = true;")
         for struct_field in field["struct"]:
-            decode_field(struct_field, var, path + "." + struct_field["name"], c, indent)
+            decode_field(struct_field, var, f'{value}.{struct_field["name"]}', c, indent)
         if "optional" in field and field["optional"]:
             indent -= 4
             print(f'{" "*indent}}}', file=c)
     if "variant" in field:
-        if "optional" in field and field["optional"]:
-            print(f'{" "*indent}if ({var}.has_value) {{', file=c)
-            indent += 4
-            print(f'{" "*indent}value.{path}.has_value = true;', file=c)
-        else:
-            print(f'{" "*indent}assert({var}.has_value);', file=c)
-        tag = 0
-        for variant in field["variant"]:
-            if "type" in variant:
-                if variant["type"] == "bool":
-                    print(f'{" "*indent}if ({var}.value.type == JSON_TYPE_BOOLEAN) {{', file=c)
-                    print(f'{" "*indent}    value.{path}.tag = {tag};', file=c)
-                    print(f'{" "*indent}    value.{path}._{tag} = {var}.value.boolean;', file=c)
-                    print(f'{" "*indent}}}', file=c)
-                elif variant["type"] == "int":
-                    print(f'{" "*indent}if ({var}.value.type == JSON_TYPE_INT) {{', file=c)
-                    print(f'{" "*indent}    value.{path}.tag = {tag};', file=c)
-                    print(f'{" "*indent}    value.{path}._{tag} = json_int_value({var}.value);', file=c)
-                    print(f'{" "*indent}}}', file=c)
-                elif variant["type"] == "string":
-                    print(f'{" "*indent}if ({var}.value.type == JSON_TYPE_STRING) {{', file=c)
-                    print(f'{" "*indent}    value.{path}.tag = {tag};', file=c)
-                    print(f'{" "*indent}    value.{path}._{tag} = {var}.value.string;', file=c)
-                    print(f'{" "*indent}}}', file=c)
-                else:
-                    print(f'{" "*indent}if ({var}.value.type == JSON_TYPE_OBJECT) {{', file=c)
-                    print(f'{" "*indent}    value.{path}.tag = {tag};', file=c)
-                    print(f'{" "*indent}    value.{path}._{tag} = {render_prefix(variant)}_decode({var});', file=c)
-                    print(f'{" "*indent}}}', file=c)
-            if "struct" in variant:
-                print(f'{" "*indent}if ({var}.value.type == JSON_TYPE_OBJECT) {{', file=c)
-                indent += 4
-                print(f'{" "*indent}value.{path}.tag = {tag};', file=c)
-                for struct_field in variant["struct"]:
-                    decode_field(struct_field, var, f'{path}._{tag}.{struct_field["name"]}', c, indent)
-                    # print(f'{" "*indent}    value.{path}._{tag}.{struct_field["name"]} = {render_prefix(struct_field)}_decode({var});', file=c)
-                indent -= 4
-                print(f'{" "*indent}}}', file=c)
-                break
-            tag += 1
-        if "optional" in field and field["optional"]:
-            indent -= 4
-            print(f'{" "*indent}}}', file=c)
+        decode_variant(field, var, f'{value}', c, indent)
     indent -= 4
-    print(f'{" "*indent}}}', file=c)
+    p(indent, c, '}')
 
 
-def encode_field(field, path, c, indent=4):
+def encode_field(field, value, c, indent=4):
     enclosing = "v" + str(indent)
     if "type" in field:
-        p(indent, c, f'json_optional_set(&{enclosing}, "{field["name"]}", {render_prefix(field)}_encode(value.{path}));')
+        p(indent, c, f'json_optional_set(&{enclosing}, "{field["name"]}", {render_prefix(field)}_encode({value}));')
     if "struct" in field:
         if "optional" in field and field["optional"]:
-            p(indent, c, f'if (value.{path}.has_value) {{')
+            p(indent, c, f'if ({value}.has_value) {{')
         else:
             p(indent, c, '{')
         indent += 4
         var = "v"+str(indent)
         p(indent, c, f'JSONValue {var} = json_object();')
         for struct_field in field["struct"]:
-            encode_field(struct_field, path + "." + struct_field["name"], c, indent)
+            encode_field(struct_field, f'{value}.{struct_field["name"]}', c, indent)
         p(indent, c, f'json_set(&{enclosing}, "{field["name"]}", {var});')
         indent -= 4
         p(indent, c, '}')
     if "variant" in field:
-        if "optional" in field and field["optional"]:
-            p(indent, c, f'if (value.{path}.has_value) {{')
+        encode_variant(field, enclosing, value, c, indent)
+
+
+def encode_variant_variant(variant, var, value, tag, c, indent=4):
+    p(indent, c, f'case {tag}:')
+    indent += 4
+    if "type" in variant:
+        if variant["type"] == "bool":
+            p(indent, c, f'{var} = json_bool({value}._{tag});')
+        elif variant["type"] == "int":
+            p(indent, c, f'{var} = json_int({value}._{tag});')
+        elif variant["type"] == "string":
+            p(indent, c, f'{var} = json_string({value}._{tag});')
+        elif variant["type"] == "null":
+            p(indent, c, f'{var} = json_null();')
+        elif variant["type"] == "empty":
+            p(indent, c, f'{var} = json_object();')
         else:
-            p(indent, c, f'assert(value.{path}.has_value);')
-            p(indent, c, '{')
-        indent += 4
-        var = "v"+str(indent)
-        p(indent, c, f'JSONValue {var} = {{0}};')
-        tag = 0
-        p(indent, c, f'switch(value.{path}.tag) {{')
-        for variant in field["variant"]:
-            p(indent, c, f'case {tag}:')
-            indent += 4
-            if "type" in variant:
-                if variant["type"] == "bool":
-                    p(indent, c, f'{var} = json_bool(value.{path}._{tag});')
-                elif variant["type"] == "int":
-                    p(indent, c, f'{var} = json_int(value.{path}._{tag});')
-                elif variant["type"] == "string":
-                    p(indent, c, f'{var} = json_string(value.{path}._{tag});')
-                else:
-                    p(indent, c, f'{var} = {render_prefix(variant)}_encode(value.{path}._{tag}).value;')
-            if "struct" in variant:
-                p(indent, c, f'{var} = json_object();')
-                for struct_field in variant["struct"]:
-                    p(indent, c, f'json_optional_set(&{var}, "{struct_field["name"]}", {render_prefix(struct_field)}_encode(value.{path}._{tag}.{struct_field["name"]}));')
-            p(indent, c, "break;")
-            indent -= 4
-            tag += 1
-        p(indent, c, 'default:');
-        indent += 4
-        p(indent, c, 'UNREACHABLE();');
-        indent -= 4
-        p(indent, c, '}')
-        p(indent, c, f'json_set(&{enclosing}, "{field["name"]}", {var});')
-        indent -= 4
-        p(indent, c, "}")
+            p(indent, c, f'{var} = {render_prefix(variant)}_encode({value}._{tag}).value;')
+    if "struct" in variant:
+        p(indent, c, f'{var} = json_object();')
+        for struct_field in variant["struct"]:
+            p(indent, c, f'json_optional_set(&{var}, "{struct_field["name"]}", {render_prefix(struct_field)}_encode({value}._{tag}.{struct_field["name"]}));')
+    p(indent, c, "break;")
+    indent -= 4
+
+
+def encode_variant(variant, enclosing, value, c, indent=4):
+    if "optional" in variant and variant["optional"]:
+        p(indent, c, f'if ({value}.has_value) {{')
+    else:
+        p(indent, c, f'assert({value}.has_value);')
+        p(indent, c, '{')
+    indent += 4
+    var = "v"+str(indent)
+    p(indent, c, f'JSONValue {var} = {{0}};')
+    tag = 0
+    p(indent, c, f'switch ({value}.tag) {{')
+    for v in variant["variant"]:
+        encode_variant_variant(v, var, value, tag, c, indent)
+        tag += 1
+    p(indent, c, 'default:');
+    indent += 4
+    p(indent, c, 'UNREACHABLE();');
+    indent -= 4
+    p(indent, c, '}')
+    p(indent, c, f'json_set(&{enclosing}, "{variant["name"]}", {var});')
+    indent -= 4
+    p(indent, c, "}")
 
 
 def emit_struct_c(name, c):
@@ -429,8 +486,8 @@ def emit_struct_c(name, c):
     assert(v4.has_value);
     assert(v4.value.type == JSON_TYPE_OBJECT);
     {name} value = {{0}};""", file=c)
-        for field in struct["fields"]:
-            decode_field(field, "v4", field["name"], c)
+        for field in struct["all_fields"]:
+            decode_field(field, "v4", f'value.{field["name"]}', c)
         print(f"""    return value;
 }}
 """, file=c)
@@ -438,8 +495,8 @@ def emit_struct_c(name, c):
         print(f"""OptionalJSONValue {name}_encode({name} value)
 {{
     JSONValue v4 = json_object();""", file=c)
-        for field in struct["fields"]:
-            encode_field(field, field["name"], c)
+        for field in struct["all_fields"]:
+            encode_field(field, f'value.{field["name"]}', c)
         print(f"""    RETURN_VALUE(JSONValue, v4);
 }}
 """, file=c)
@@ -449,10 +506,11 @@ def emit_struct(name, h, c):
     if name in emitted_structures:
         return
     struct = structures[name]
-
     if "extends" in struct:
         for e in struct["extends"]:
             emit_struct(e, h, c)
+    collect_fields(struct)
+
     for field in struct["fields"]:
         if "type" in field:
             if field["type"] in structures:
@@ -472,35 +530,83 @@ def emit_structs(h, c):
 
 
 def emit_variant_h(name, h):
-    struct = structures[name]
-    print(f"""typedef struct {{
-    int tag;
-    union {{""", file=h)
-    for elem in variant["elements"]:
-        print(f"    {render_type(field)} {field['name']};", file=h)
-    print(f"}} {name};", file=h)
+    variant = variants[name]
+    p(0, h, 'typedef struct {')
+    indent = 4
+    p(indent, h, 'int tag;')
+    p(indent, h, 'union {')
+    indent += 4
+    tag = 0
+    for elem in variant["variant"]:
+        define_field(f'_{tag}', elem, h, indent)
+        tag += 1
+    indent -= 4
+    p(indent, h, '};')
+    indent -= 4
+    p(indent, h, f'}} {name};')
     print(file=h)
 
-    if "optional" in struct and struct['optional']:
+    if "optional" in variant and variant['optional']:
         print(f"OPTIONAL({name});", file=h)
         print(f"OPTIONAL_JSON({name});", file=h)
         print(file=h)
-    if "array" in struct and struct['array']:
-        plural = struct['plural'] if "plural" in struct else name + "s"
+    if "array" in variant and variant['array']:
+        plural = variant['plural'] if "plural" in variant else name + "s"
         print(f"DA_WITH_NAME({name}, {plural});", file=h)
-        if "optional-array" in struct and struct['optional-array']:
+        if "optional-array" in variant and variant['optional-array']:
             print(f"OPTIONAL({plural});", file=h)
             print(f"OPTIONAL_JSON({plural});", file=h)
         print(file=h)
-    if "decode" not in struct or struct["decode"]:
+    if "decode" not in variant or variant["decode"]:
         print(f"extern {name} {name}_decode(OptionalJSONValue value);", file=h)
-    if "encode" not in struct or struct["decode"]:
-        print(f"extern OptionalJSONValue {name}_decode({name} value);", file=h)
+    if "encode" not in variant or variant["decode"]:
+        print(f"extern OptionalJSONValue {name}_encode({name} value);", file=h)
     print(file=h)
 
 
 def emit_variant_c(name, c):
-    pass
+    variant = variants[name]
+    decode = "decode" not in variant or variant["decode"]
+    encode = "encode" not in variant or variant["encode"]
+
+    if "optional" in variant and variant['optional']:
+        if encode:
+            print(f"OPTIONAL_JSON_ENCODE_IMPL({name});", file=c)
+        if decode:
+            print(f"OPTIONAL_JSON_DECODE_IMPL({name});", file=c)
+        print(file=c)
+    if "array" in variant and variant['array']:
+        plural = variant['plural'] if "plural" in variant else name + "s"
+        print(f"DA_IMPL({name});", file=c)
+        if encode:
+            print(f"DA_JSON_ENCODE_IMPL({name}, {plural}, elements);", file=c)
+        if decode:
+            print(f"DA_JSON_DECODE_IMPL({name}, {plural}, elements);", file=c)
+        if "optional-array" in variant and variant['optional-array']:
+            if encode:
+                print(f"OPTIONAL_JSON_ENCODE_IMPL({plural});", file=c)
+            if decode:
+                print(f"OPTIONAL_JSON_DECODE_IMPL({plural});", file=c)
+        print(file=c)
+    if decode:
+        p(0, c, f'{name} {name}_decode(OptionalJSONValue v4)')
+        p(0, c, '{')
+        indent = 4
+        p(indent, c, 'assert(v4.has_value);')
+        p(indent, c, f'{name} value = {{0}};')
+        decode_variant(variant, "v4", "value", c)
+        print(f"""    return value;
+}}
+""", file=c)
+    if encode:
+        p(0, c, f'OptionalJSONValue {name}_encode({name} value)')
+        p(0, c, '{')
+        indent = 4
+        p(indent, c, f'JSONValue v4 = json_object();')
+        encode_variant(variant, "v4", "value", c)
+        p(indent, c, f'RETURN_VALUE(JSONValue, v4);')
+        p(0, c, '}')
+        print(file=c)
 
 
 def emit_variant(name, h, c):
@@ -508,13 +614,15 @@ def emit_variant(name, h, c):
         return
     variant = variants[name]
 
-    for elem in variant["elements"]:
-        if elem in structures:
-            emit_struct(elem, h, c)
-        if elem in variants:
-            emit_variant(elem, h, c)
-        if elem in enums:
-            emit_enum(elem, h, c)
+    for elem in variant["variant"]:
+        if "type" in elem:
+            t = elem["type"]
+            if t in structures:
+                emit_struct(t, h, c)
+            if t in variants:
+                emit_variant(t, h, c)
+            if t in enums:
+                emit_enum(t, h, c)
     emit_variant_h(name, h)
     emit_variant_c(name, c)
     emitted_structures.add(name)
@@ -549,7 +657,9 @@ def h_header(f):
     print(f"#define __LSP_{module.upper()}_H__", file=f)
     print(file=f)
     print(f"#include <lsp/lsp_base.h>", file=f)
-    print(file=f)
+    for dep in depends:
+        p(0, h, f'#include <lsp/{dep}.h>')
+    print(file=h)
 
 
 def c_footer(f):
@@ -569,6 +679,8 @@ module = sys.argv[1]
 with open(module + ".json") as fd:
     model = json.load(fd)
 
+if "depends" in model:
+    depends = model["depends"];
 for enum in model['enums']:
     enums[enum['name']] = enum
 for structure in model["structs"]:

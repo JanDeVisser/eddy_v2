@@ -1,0 +1,44 @@
+{
+  "enums": [
+  ],
+  "variants": [
+  ],
+  "structs": [
+    {
+      "name": "Position", "optional": true, "array": true, "optional-array": true,
+      "fields": [
+        {"name": "line", "type": "uint"},
+        {"name": "character", "type": "uint"}
+      ]
+    },
+    {
+      "name": "Range", "optional": true, "array": true, "optional-array": true,
+      "fields": [
+        {"name": "start", "type": "Position"},
+        {"name": "character", "type": "Position"}
+      ]
+    },
+    {
+      "name": "TextDocumentItem", "optional": true, "array": true, "optional-array": true,
+      "fields": [
+        {"name": "uri", "type": "DocumentUri"},
+        {"name": "languageId", "type": "string"},
+        {"name": "version", "type": "int"},
+        {"name": "text", "type": "string"}
+      ]
+    },
+    {
+      "name": "TextDocumentIdentifier", "optional": true, "array": true, "optional-array": true,
+      "fields": [
+        {"name": "uri", "type": "DocumentUri"}
+      ]
+    },
+    {
+      "name": "VersionedTextDocumentIdentifier", "extends": ["TextDocumentIdentifier"],
+      "optional": true, "array": true, "optional-array": true,
+      "fields": [
+        {"name": "version", "type": "int"}
+      ]
+    }
+  ]
+}

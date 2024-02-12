@@ -9,6 +9,6 @@
 
 #include <sv.h>
 
-extern void lsp_on_open(StringView name);
+extern void lsp_on_open(int buffer_num);
 
 #endif /* __LSP_LSP_H__ */

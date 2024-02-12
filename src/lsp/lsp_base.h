@@ -87,6 +87,11 @@ typedef StringView         DocumentUri;
 typedef OptionalStringView OptionalDocumentUri;
 
 typedef struct {
+    char const       *method;
+    OptionalJSONValue params;
+} Notification;
+
+typedef struct {
     int               id;
     char const       *method;
     OptionalJSONValue params;
@@ -100,19 +105,20 @@ typedef struct {
 
 #define Int_encode(V) ((OptionalJSONValue) { .has_value = true, .value = json_int(V) })
 #define Int_decode(V) ({ assert(V.has_value); assert(V.value.type == JSON_TYPE_INT); json_int_value(V.value); })
+#define UInt_encode(V) ((OptionalJSONValue) { .has_value = true, .value = json_int(V) })
+#define UInt_decode(V) ({ assert(V.has_value); assert(V.value.type == JSON_TYPE_INT); (uint32_t) json_int_value(V.value); })
 #define Bool_encode(V) ((OptionalJSONValue) { .has_value = true, .value = json_bool(V) })
 #define Bool_decode(V) ({ assert(V.has_value); assert(V.value.type == JSON_TYPE_BOOLEAN); V.value.boolean; })
-#define StringView_encode(V) ((OptionalJSONValue) { .has_value = true, .value = json_string(V) })
-#define StringView_decode(V) ({ assert(V.has_value); assert(V.value.type == JSON_TYPE_STRING); V.value.string; })
-#define URI_encode(V) ((OptionalJSONValue) { .has_value = true, .value = json_string(V) })
+#define URI_encode(V) (StringView_encode(V))
 #define URI_decode(V) ((URI) StringView_decode(V))
-#define DocumentUri_encode(V) ((OptionalJSONValue) { .has_value = true, .value = json_string(V) })
+#define DocumentUri_encode(V) (StringView_encode(V))
 #define DocumentUri_decode(V) ((DocumentUri) StringView_decode(V))
 
-extern OptionalJSONValue Null_encode(Null value);
-extern Null              Null_decode(OptionalJSONValue json);
-extern OptionalJSONValue Empty_encode(Empty value);
-extern Empty             Empty_decode(OptionalJSONValue json);
+JSON(StringView, StringView)
+JSON(Null, Null)
+JSON(Empty, Empty)
+
+extern JSONValue         notification_encode(Notification *notification);
 extern JSONValue         request_encode(Request *request);
 extern bool              response_success(Response *response);
 extern bool              response_error(Response *response);
@@ -123,5 +129,7 @@ OPTIONAL_JSON(StringView)
 OPTIONAL_JSON(URI)
 OPTIONAL_JSON(DocumentUri)
 OPTIONAL_JSON(Bool)
+DA_WITH_NAME(uint32_t, UInts);
+JSON(UInts, UInts)
 
 #endif /* __LSP_LSP_BASE_H__ */

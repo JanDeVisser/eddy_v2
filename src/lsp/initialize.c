@@ -192,34 +192,6 @@ OptionalJSONValue SemanticTokenModifiers_encode(SemanticTokenModifiers value)
     RETURN_VALUE(JSONValue, json_string(SemanticTokenModifiers_to_string(value)));
 }
 
-OPTIONAL_JSON_ENCODE_IMPL(TextDocumentIdentifier);
-OPTIONAL_JSON_DECODE_IMPL(TextDocumentIdentifier);
-
-DA_IMPL(TextDocumentIdentifier);
-DA_JSON_ENCODE_IMPL(TextDocumentIdentifier, TextDocumentIdentifiers, elements);
-DA_JSON_DECODE_IMPL(TextDocumentIdentifier, TextDocumentIdentifiers, elements);
-OPTIONAL_JSON_ENCODE_IMPL(TextDocumentIdentifiers);
-OPTIONAL_JSON_DECODE_IMPL(TextDocumentIdentifiers);
-
-TextDocumentIdentifier TextDocumentIdentifier_decode(OptionalJSONValue v4)
-{
-    assert(v4.has_value);
-    assert(v4.value.type == JSON_TYPE_OBJECT);
-    TextDocumentIdentifier value = {0};
-    {
-        OptionalJSONValue v8 = json_get(&v4.value, "uri");
-        value.uri = DocumentURI_decode(v8);
-    }
-    return value;
-}
-
-OptionalJSONValue TextDocumentIdentifier_encode(TextDocumentIdentifier value)
-{
-    JSONValue v4 = json_object();
-    json_optional_set(&v4, "uri", DocumentURI_encode(value.uri));
-    RETURN_VALUE(JSONValue, v4);
-}
-
 OPTIONAL_JSON_ENCODE_IMPL(SemanticTokensClientCapabilities);
 
 OptionalJSONValue SemanticTokensClientCapabilities_encode(SemanticTokensClientCapabilities value)
@@ -230,12 +202,12 @@ OptionalJSONValue SemanticTokensClientCapabilities_encode(SemanticTokensClientCa
         JSONValue v8 = json_object();
         if (value.requests.range.has_value) {
             JSONValue v12 = {0};
-            switch(value.requests.range.tag) {
+            switch (value.requests.range.tag) {
             case 0:
                 v12 = json_bool(value.requests.range._0);
                 break;
             case 1:
-                v12 = Empty_encode(value.requests.range._1).value;
+                v12 = json_object();
                 break;
             default:
                 UNREACHABLE();
@@ -244,7 +216,7 @@ OptionalJSONValue SemanticTokensClientCapabilities_encode(SemanticTokensClientCa
         }
         if (value.requests.full.has_value) {
             JSONValue v12 = {0};
-            switch(value.requests.full.tag) {
+            switch (value.requests.full.tag) {
             case 0:
                 v12 = json_bool(value.requests.full._0);
                 break;
@@ -318,12 +290,12 @@ OptionalJSONValue InitializeParams_encode(InitializeParams value)
     assert(value.processId.has_value);
     {
         JSONValue v8 = {0};
-        switch(value.processId.tag) {
+        switch (value.processId.tag) {
         case 0:
             v8 = json_int(value.processId._0);
             break;
         case 1:
-            v8 = Null_encode(value.processId._1).value;
+            v8 = json_null();
             break;
         default:
             UNREACHABLE();
@@ -344,12 +316,12 @@ OptionalJSONValue InitializeParams_encode(InitializeParams value)
     json_optional_set(&v4, "trace", OptionalTraceValue_encode(value.trace));
     if (value.workspaceFolders.has_value) {
         JSONValue v8 = {0};
-        switch(value.workspaceFolders.tag) {
+        switch (value.workspaceFolders.tag) {
         case 0:
             v8 = WorkspaceFolders_encode(value.workspaceFolders._0).value;
             break;
         case 1:
-            v8 = Null_encode(value.workspaceFolders._1).value;
+            v8 = json_null();
             break;
         default:
             UNREACHABLE();
@@ -402,9 +374,9 @@ SemanticTokensOptions SemanticTokensOptions_decode(OptionalJSONValue v4)
                 value.range.tag = 0;
                 value.range._0 = v8.value.boolean;
             }
-            if (v8.value.type == JSON_TYPE_OBJECT) {
+            if (v8.value.type == JSON_TYPE_OBJECT && v8.value.object.size == 0) {
                 value.range.tag = 1;
-                value.range._1 = Empty_decode(v8);
+                value.range._1 = (Empty) {};
             }
         }
     }
