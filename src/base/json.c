@@ -77,7 +77,9 @@ JSONValue json_null(void)
 
 JSONValue json_string(StringView sv)
 {
-    return (JSONValue) { .type = JSON_TYPE_STRING, .string = sv };
+    StringBuilder escaped = sb_copy_sv(sv);
+    sb_replace_all(&escaped, sv_from("\n"), sv_from("\\n"));
+    return (JSONValue) { .type = JSON_TYPE_STRING, .string = escaped.view };
 }
 
 JSONValue json_number(double number)
@@ -234,6 +236,8 @@ StringView json_encode(JSONValue value)
 
 ErrorOrJSONValue json_decode_value(StringScanner *ss)
 {
+    static StringBuilder sb = {0};
+    sb.view.length = 0;
     ss_skip_whitespace(ss);
     switch (ss_peek(ss)) {
     case 0:
@@ -278,19 +282,32 @@ ErrorOrJSONValue json_decode_value(StringScanner *ss)
         RETURN(JSONValue, result);
     }
     case '"': {
+        sb.view.length = 0;
         ss_skip_one(ss);
         ss_reset(ss);
         while (true) {
             int ch = ss_peek(ss);
             if (ch == '\\') {
-                ss_skip(ss, 2);
+                ss_skip_one(ss);
+                ch = ss_peek(ss);
+                switch (ch) {
+                case 0: ERROR(JSONValue, JSONError, 0, "Bad escape");
+                case 'n': sb_append_char(&sb, '\n'); break;
+                case 'r': sb_append_char(&sb, '\r'); break;
+                case 't': sb_append_char(&sb, '\t'); break;
+                case '\"': sb_append_char(&sb, '\"'); break;
+                case '\'': sb_append_char(&sb, '\''); break;
+                default: sb_append_char(&sb, ch);
+                }
+                ss_skip_one(ss);
             } else if (ch == '"') {
-                JSONValue ret = json_string(ss_read_from_mark(ss));
+                JSONValue ret = json_string(sb.view);
                 ss_skip(ss, 1);
                 RETURN(JSONValue, ret);
             } else if (ch == 0) {
                 ERROR(JSONValue, JSONError, 0, "Unterminated string");
             } else {
+                sb_append_char(&sb, ch);
                 ss_skip_one(ss);
             }
         }
@@ -338,6 +355,23 @@ ErrorOrJSONValue json_decode(StringView json)
     StringScanner ss = ss_create(json);
     return json_decode_value(&ss);
 }
+
+#ifdef JSON_FORMAT
+
+#include <io.h>
+
+int main(int argc, char **argv)
+{
+    if (argc != 2) {
+        return -1;
+    }
+    StringView sv = MUST(StringView, read_file_by_name(sv_from(argv[1])));
+    JSONValue json = MUST(JSONValue, json_decode(sv));
+    printf("%.*s\n", SV_ARG(json_encode(json)));
+    return 0;
+}
+
+#endif
 
 #ifdef JSON_TEST
 

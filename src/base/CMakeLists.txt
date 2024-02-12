@@ -59,4 +59,18 @@ add_executable(
 target_link_libraries(json_test base)
 target_compile_definitions(json_test PUBLIC JSON_TEST)
 
+add_executable(
+        json_format
+        json.c
+)
+
+target_link_libraries(json_format base)
+target_compile_definitions(json_format PUBLIC JSON_FORMAT)
+
 add_subdirectory("test")
+
+
+install(TARGETS json_format
+        ARCHIVE DESTINATION lib
+        RUNTIME DESTINATION bin
+        LIBRARY DESTINATION lib)
