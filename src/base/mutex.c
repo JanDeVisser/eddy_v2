@@ -7,10 +7,9 @@
 #define HAVE_PTHREAD_H
 
 #include <errno.h>
+#include <string.h>
 
-#define STATIC_ALLOCATOR
-#define ALLOCATOR_SLAB_SZ 1024
-#include <allocate.h>
+#include <errorcode.h>
 #include <log.h>
 #include <mutex.h>
 
@@ -25,9 +24,9 @@ Mutex mutex_create(void)
 #ifdef HAVE_PTHREAD_H
     pthread_mutexattr_init(&attr);
     pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
-    mutex.mutex = allocate_new(pthread_mutex_t);
+    mutex.mutex = MALLOC(pthread_mutex_t);
     if ((errno = pthread_mutex_init(mutex.mutex, &attr))) {
-        fatal("Error creating mutex: %s", strerror(errno));
+        fatal("Error creating mutex: %s", errorcode_to_string(errno));
     }
     pthread_mutexattr_destroy(&attr);
 #elif defined(HAVE_INITIALIZECRITICALSECTION)
@@ -50,7 +49,7 @@ void mutex_lock(Mutex mutex)
 {
     int retval = 0;
 
-    trace(CAT_LIB, "Locking mutex");
+    trace(CAT_THREAD, "Locking mutex");
 #ifdef HAVE_PTHREAD_H
     errno = pthread_mutex_lock(mutex.mutex);
     if (errno) {
@@ -60,9 +59,9 @@ void mutex_lock(Mutex mutex)
     EnterCriticalSection(&(mutex->cs));
 #endif /* HAVE_PTHREAD_H */
     if (retval) {
-        fatal("Error locking mutex: %d", errno);
+        fatal("Error locking mutex: %s", errorcode_to_string(errno));
     }
-    trace(CAT_LIB, "Mutex locked");
+    trace(CAT_THREAD, "Mutex locked");
 }
 
 /**
@@ -74,7 +73,7 @@ int mutex_try_lock(Mutex mutex)
 {
     int retval;
 
-    trace(CAT_LIB, "Trying to lock mutex");
+    trace(CAT_THREAD, "Trying to lock mutex");
 #ifdef HAVE_PTHREAD_H
     errno = pthread_mutex_trylock(mutex.mutex);
     switch (errno) {
@@ -91,7 +90,7 @@ int mutex_try_lock(Mutex mutex)
 #elif defined(HAVE_INITIALIZECRITICALSECTION)
     retval = (!TryEnterCriticalSection(&mutex->cs)) ? 0 : 1;
 #endif /* HAVE_PTHREAD_H */
-    trace(CAT_LIB, "Trylock mutex: %s", (retval) ? "Fail" : "Success");
+    trace(CAT_THREAD, "Trylock mutex: %s", (retval) ? "Fail" : "Success");
     return retval;
 }
 
@@ -99,7 +98,7 @@ void mutex_unlock(Mutex mutex)
 {
     int retval = 0;
 
-    trace(CAT_LIB, "Unlocking mutex");
+    trace(CAT_THREAD, "Unlocking mutex");
 #ifdef HAVE_PTHREAD_H
     errno = pthread_mutex_unlock(mutex.mutex);
     if (errno) {
@@ -109,9 +108,9 @@ void mutex_unlock(Mutex mutex)
     EnterCriticalSection(&mutex->cs);
 #endif /* HAVE_PTHREAD_H */
     if (retval) {
-        fatal("Error unlocking mutex: %d", errno);
+        fatal("Error unlocking mutex: %s", errorcode_to_string(errno));
     }
-    trace(CAT_LIB, "Mutex unlocked");
+    trace(CAT_THREAD, "Mutex unlocked");
 }
 
 /* ------------------------------------------------------------------------ */
@@ -134,12 +133,12 @@ Condition condition_create()
     condition.mutex = mutex_create();
     condition.borrowed_mutex = false;
 #ifdef HAVE_PTHREAD_H
-    condition.condition = allocate_new(pthread_cond_t);
+    condition.condition = MALLOC(pthread_cond_t);
     pthread_cond_init(condition.condition, NULL);
 #elif defined(HAVE_INITIALIZECRITICALSECTION)
     InitializeConditionVariable(&condition->condition);
 #endif /* HAVE_PTHREAD_H */
-    trace(CAT_LIB, "Condition created");
+    trace(CAT_THREAD, "Condition created");
     return condition;
 }
 
@@ -149,24 +148,24 @@ Condition condition_create_with_borrowed_mutex(Mutex mutex)
     condition.mutex = mutex;
     condition.borrowed_mutex = true;
 #ifdef HAVE_PTHREAD_H
-    condition.condition = allocate_new(pthread_cond_t);
+    condition.condition = (pthread_cond_t*) malloc(sizeof(pthread_cond_t));
     pthread_cond_init(condition.condition, NULL);
 #elif defined(HAVE_INITIALIZECRITICALSECTION)
     InitializeConditionVariable(&condition->condition);
 #endif /* HAVE_PTHREAD_H */
-    trace(CAT_LIB, "Condition created");
+    trace(CAT_THREAD, "Condition created");
     return condition;
 }
 
 void condition_acquire(Condition condition)
 {
-    trace(CAT_LIB, "Acquiring condition");
+    trace(CAT_THREAD, "Acquiring condition");
     mutex_lock(condition.mutex);
 }
 
 void condition_release(Condition condition)
 {
-    trace(CAT_LIB, "Releasing condition");
+    trace(CAT_THREAD, "Releasing condition");
     mutex_unlock(condition.mutex);
 }
 
@@ -177,7 +176,7 @@ void condition_release(Condition condition)
  */
 int condition_try_acquire(Condition condition)
 {
-    trace(CAT_LIB, "Trying to acquire condition");
+    trace(CAT_THREAD, "Trying to acquire condition");
     return mutex_try_lock(condition.mutex);
 }
 
@@ -185,7 +184,7 @@ void condition_wakeup(Condition condition)
 {
     int retval = 0;
 
-    trace(CAT_LIB, "Waking up condition");
+    trace(CAT_THREAD, "Waking up condition");
 #ifdef HAVE_PTHREAD_H
     errno = pthread_cond_signal(condition.condition);
     if (errno) {
@@ -196,16 +195,16 @@ void condition_wakeup(Condition condition)
 #endif /* HAVE_PTHREAD_H */
     mutex_unlock(condition.mutex);
     if (retval) {
-        fatal("Error waking condition: %d", errno);
+        fatal("Error waking condition: %s", errorcode_to_string(errno));
     }
-    trace(CAT_LIB, "Condition woken up");
+    trace(CAT_THREAD, "Condition woken up");
 }
 
 void condition_sleep(Condition condition)
 {
     int retval = 0;
 
-    trace(CAT_LIB, "Going to sleep on condition");
+    trace(CAT_THREAD, "Going to sleep on condition");
 #ifdef HAVE_PTHREAD_H
     errno = pthread_cond_wait(condition.condition, condition.mutex.mutex);
     if (errno) {
@@ -215,9 +214,9 @@ void condition_sleep(Condition condition)
     SleepConditionVariableCS(&condition->condition, &condition->mutex->cs, INFINITE);
 #endif /* HAVE_PTHREAD_H */
     if (retval) {
-        fatal("Error sleeping on condition: %d", errno);
+        fatal("Error sleeping on condition: %s", errorcode_to_string(errno));
     }
-    trace(CAT_LIB, "Woke up from condition");
+    trace(CAT_THREAD, "Woke up from condition");
 }
 
 /* ------------------------------------------------------------------------ */
