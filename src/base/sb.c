@@ -185,6 +185,59 @@ void sb_append_char(StringBuilder *sb, char ch)
     sb_append_chars(sb, &ch, 1);
 }
 
+void sb_append_integer(StringBuilder *sb, Integer integer)
+{
+    StringView ret;
+    switch (integer.type) {
+    case U8:
+        sb_printf(sb, "%u", integer.u8);
+        break;
+    case U16:
+        sb_printf(sb, "%u", integer.u16);
+        break;
+    case U32:
+        sb_printf(sb, "%u", integer.u32);
+        break;
+    case U64:
+        sb_printf(sb, "%llu", integer.u64);
+        break;
+    case I8:
+        sb_printf(sb, "%d", integer.i8);
+        break;
+    case I16:
+        sb_printf(sb, "%d", integer.i16);
+        break;
+    case I32:
+        sb_printf(sb, "%d", integer.i32);
+        break;
+    case I64:
+        sb_printf(sb, "%lld", integer.i64);
+        break;
+    default:
+        UNREACHABLE();
+    }
+}
+
+void sb_append_hex_integer(StringBuilder *sb, Integer integer)
+{
+    switch (integer.type) {
+    case U8:
+        sb_printf(sb, "%1x", integer.u8);
+        break;
+    case U16:
+        sb_printf(sb, "%02x", integer.u16);
+        break;
+    case U32:
+        sb_printf(sb, "%04x", integer.u32);
+        break;
+    case U64:
+        sb_printf(sb, "%08llx", integer.u64);
+        break;
+    default:
+        UNREACHABLE();
+    }
+}
+
 void sb_vprintf(StringBuilder *sb, char const *fmt, va_list args)
 {
     va_list args2;
@@ -277,7 +330,9 @@ int sb_replace_one(StringBuilder *sb, StringView pat, StringView repl)
 int sb_replace_all(StringBuilder *sb, StringView pat, StringView repl)
 {
     int ret = 0;
-    for (int loc = sb_replace_one(sb, pat, repl); loc != -1; loc = sb_replace_one(sb, pat, repl)) {
+    for (int loc = sv_find(sb->view, pat); loc != -1; loc = sv_find_from(sb->view, pat, loc + repl.length)) {
+        sb_remove(sb, loc, pat.length);
+        sb_insert_sv(sb, repl, loc);
         ++ret;
     }
     return ret;

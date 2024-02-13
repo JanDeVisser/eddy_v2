@@ -76,58 +76,16 @@ ErrorOrStringView sv_read(int fd, size_t num)
 
 StringView sv_render_integer(Integer integer)
 {
-    StringView ret;
-    switch (integer.type) {
-    case U8:
-        ret = sv_printf("%u", integer.u8);
-        break;
-    case U16:
-        ret = sv_printf("%u", integer.u16);
-        break;
-    case U32:
-        ret = sv_printf("%u", integer.u32);
-        break;
-    case U64:
-        ret = sv_printf("%llu", integer.u64);
-        break;
-    case I8:
-        ret = sv_printf("%d", integer.i8);
-        break;
-    case I16:
-        ret = sv_printf("%d", integer.i16);
-        break;
-    case I32:
-        ret = sv_printf("%d", integer.i32);
-        break;
-    case I64:
-        ret = sv_printf("%lld", integer.i64);
-        break;
-    default:
-        UNREACHABLE();
-    }
-    return ret;
+    StringBuilder sb = {0};
+    sb_append_integer(&sb, integer);
+    return sb.view;
 }
 
 StringView sv_render_hex_integer(Integer integer)
 {
-    StringView ret;
-    switch (integer.type) {
-    case U8:
-        ret = sv_printf("%1x", integer.u8);
-        break;
-    case U16:
-        ret = sv_printf("%02x", integer.u16);
-        break;
-    case U32:
-        ret = sv_printf("%04x", integer.u32);
-        break;
-    case U64:
-        ret = sv_printf("%08llx", integer.u64);
-        break;
-    default:
-        UNREACHABLE();
-    }
-    return ret;
+    StringBuilder sb = {0};
+    sb_append_hex_integer(&sb, integer);
+    return sb.view;
 }
 
 StringView sv_replicate(StringView s, int repeats)
@@ -415,7 +373,12 @@ int sv_last(StringView sv, char ch)
 
 int sv_find(StringView sv, StringView sub)
 {
-    for (int ix = 0; ix <= sv.length - sub.length; ++ix) {
+    return sv_find_from(sv, sub, 0);
+}
+
+int sv_find_from(StringView sv, StringView sub, size_t from)
+{
+    for (int ix = from; ix <= sv.length - sub.length; ++ix) {
         if (!memcmp(sv.ptr + ix, sub.ptr, sub.length))
             return ix;
     }

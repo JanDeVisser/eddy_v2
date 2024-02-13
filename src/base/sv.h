@@ -86,6 +86,7 @@ extern StringView         sv_chop_to_delim(StringView *src, StringView delim);
 extern int                sv_first(StringView sv, char ch);
 extern int                sv_last(StringView sv, char ch);
 extern int                sv_find(StringView sv, StringView sub);
+extern int                sv_find_from(StringView sv, StringView sub, size_t from);
 extern StringView         sv_substring(StringView sv, size_t at, size_t len);
 extern StringList         sv_split(StringView sv, StringView sep);
 extern StringList         sv_split_by_whitespace(StringView sv);
@@ -116,6 +117,8 @@ extern void          sb_append_chars(StringBuilder *sb, char const *ptr, size_t 
 extern void          sb_append_sv(StringBuilder *sb, StringView sv);
 extern void          sb_append_cstr(StringBuilder *sb, char const *s);
 extern void          sb_append_char(StringBuilder *sb, char ch);
+extern void          sb_append_integer(StringBuilder *sb, Integer integer);
+extern void          sb_append_hex_integer(StringBuilder *sb, Integer integer);
 extern void          sb_vprintf(StringBuilder *sb, char const *fmt, va_list args);
 extern void          sb_printf(StringBuilder *sb, char const *fmt, ...) format_args(2, 3);
 extern void          sb_insert_sv(StringBuilder *sb, StringView sv, size_t at);
@@ -162,6 +165,7 @@ extern int           ss_peek_with_offset(StringScanner *ss, size_t offset);
 extern void          ss_skip(StringScanner *ss, size_t num);
 extern void          ss_skip_one(StringScanner *ss);
 extern void          ss_skip_whitespace(StringScanner *ss);
+extern void          ss_pushback(StringScanner *ss);
 extern size_t        ss_read_number(StringScanner *ss);
 
 #endif /* __SV_H__ */
