@@ -3,7 +3,8 @@ include_directories(.)
 add_library(
         base
         STATIC
-        da.h
+        da.c
+        errorcode.c
         error_or.c
         fmt.c
         fn.c
@@ -24,7 +25,6 @@ add_library(
         ss.c
         sv.c
         threadonce.h
-        da.c
 )
 
 add_executable(
