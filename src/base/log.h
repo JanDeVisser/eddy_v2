@@ -5,11 +5,9 @@
  */
 
 #include <stdarg.h>
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
 
 #include <config.h>
+#include <mem.h>
 
 #ifndef __LOG_H__
 #define __LOG_H__
@@ -17,6 +15,9 @@
 #define TRACECATEGORIES(S) \
     S(NONE)                \
     S(LIB)                 \
+    S(THREAD)              \
+    S(PROCESS)             \
+    S(JSON)                \
     S(MEM)                 \
     S(SV)                  \
     S(PARSE)               \
@@ -25,7 +26,8 @@
     S(EXECUTE)             \
     S(COMPILE)             \
     S(HTTP)                \
-    S(IPC)
+    S(IPC)                 \
+    S(LSP)
 
 typedef enum trace_category {
 #undef TRACECATEGORY
@@ -48,12 +50,12 @@ noreturn extern                   void vfatal(char const *msg, va_list args);
 #define OUT_OF_MEMORY(msg, ...)   fatal("Out of memory in %s: " msg, __func__ __VA_OPT(, ) __VA_ARGS__)
 // clang-format on
 
-#define assert(cond)                                                    \
-    if (!(cond)) {                                                      \
+#define assert(cond)                                                         \
+    if (!(cond)) {                                                           \
         fatal("%s:%d: assert('%s') FAILED", __FILE_NAME__, __LINE__, #cond); \
     }
-#define assert_msg(cond, msg, ...)                                                                \
-    if (!(cond)) {                                                                                \
+#define assert_msg(cond, msg, ...)                                                                     \
+    if (!(cond)) {                                                                                     \
         fatal("%s:%d: assert('%s'): " msg, __FILE_NAME__, __LINE__, #cond __VA_OPT__(, ) __VA_ARGS__); \
     }
 
