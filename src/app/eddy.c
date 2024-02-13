@@ -15,6 +15,7 @@
 #include <fs.h>
 #include <io.h>
 #include <json.h>
+#include <options.h>
 #include <palette.h>
 
 #define WINDOW_WIDTH 1600
@@ -216,11 +217,20 @@ void eddy_init(Eddy *eddy)
     char const *project_dir = ".";
     int ix;
     for (ix = 1; ix < eddy->argc; ++ix) {
-        if (strncmp(eddy->argv[ix], "--", 2) != 0) {
+        if ((strlen(eddy->argv[ix]) <= 2) || eddy->argv[ix][0] != '-' || eddy->argv[ix][1] != '-') {
             break;
         }
-        // handle option
+        StringView  option = sv_from(eddy->argv[ix] + 2);
+        StringView  value = sv_from("true");
+        char const *equals = strchr(eddy->argv[ix] + 2, '=');
+        if (equals) {
+            option = (StringView) { eddy->argv[ix] + 2, equals - eddy->argv[ix] - 2 };
+            value = sv_from(equals + 1);
+        }
+        set_option(option, value);
     }
+    log_init();
+
     if (ix < eddy->argc) {
         project_dir = eddy->argv[ix++];
     }

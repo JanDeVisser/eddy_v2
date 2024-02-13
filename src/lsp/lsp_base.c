@@ -112,6 +112,7 @@ bool response_error(Response *response)
 Response response_decode(JSONValue *json)
 {
     Response ret = { 0 };
+    trace(CAT_LSP, "response_decode():\n%.*s\n", SV_ARG(json_encode(*json)));
     ret.id = json_get_int(json, "id", 0);
     ret.result = json_get(json, "result");
     ret.error = json_get(json, "error");

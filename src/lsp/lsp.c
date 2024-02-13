@@ -20,42 +20,66 @@
 static Process           *lsp = NULL;
 static ServerCapabilities server_capabilties;
 
-Response lsp_message(char const *method, OptionalJSONValue params)
+ErrorOrResponse lsp_message(char const *method, OptionalJSONValue params)
 {
     static int id = 0;
     Request    req = { .id = ++id, method, OptionalJSONValue_empty() };
     req.params = params;
     assert(lsp);
-    StringView  json = json_encode(request_encode(&req));
-    fprintf(stderr, "-> LSP %.*s\n", SV_ARG(json));
-    char const *content_length = TextFormat("Content-Length: %zu\r\n\r\n", json.length + 2);
-    write_pipe_write(&lsp->in, sv_from(content_length));
-    write_pipe_write(&lsp->in, json);
-    write_pipe_write(&lsp->in, sv_from("\r\n"));
+    {
+        StringView json = json_encode(request_encode(&req));
+        trace(CAT_LSP, "==> %.*s", SV_ARG(json));
+        char const *content_length = TextFormat("Content-Length: %zu\r\n\r\n", json.length + 2);
+        write_pipe_write(&lsp->in, sv_from(content_length));
+        write_pipe_write(&lsp->in, json);
+        write_pipe_write(&lsp->in, sv_from("\r\n"));
+    }
 
-    read_pipe_expect(&lsp->out);
-    StringList lines = read_pipe_lines(&lsp->out);
-    if (lines.size != 3) {
-        fprintf(stderr, "LSP replied with %zu lines instead of 3\n", lines.size);
-        return (Response) { 0 };
+    StringView buf = {0};
+    while (true) {
+        read_pipe_expect(&lsp->out);
+        StringView out = read_pipe_current(&lsp->out);
+        if (buf.ptr == NULL) {
+            buf = out;
+        } else {
+            assert(out.ptr == buf.ptr + buf.length);
+            buf.length += out.length;
+        }
+        StringScanner ss = ss_create(buf);
+        if (!ss_expect_sv(&ss, sv_from("Content-Length:"))) {
+            continue;
+        }
+        ss_skip_whitespace(&ss);
+        size_t content_length = ss_read_number(&ss);
+        if (!content_length) {
+            continue;
+        }
+        if (!ss_expect_sv(&ss, sv_from("\r\n\r\n"))) {
+            continue;
+        }
+        StringView json = ss_read(&ss, content_length);
+        if (json.length < content_length) {
+            continue;
+        }
+        trace(CAT_LSP, "<== %.*s", SV_ARG(json));
+        buf = (StringView) {0};
+        JSONValue ret = TRY_TO(JSONValue, Response, json_decode(json));
+        if (json_has(&ret, "method")) {
+            // Notification. Drop on the floor
+            trace(CAT_LSP, "Received '%.*s' notification", SV_ARG(json_get_string(&ret, "method", sv_null())));
+            json_free(ret);
+            continue;
+        }
+        if (json_has(&ret, "id") && json_get_int(&ret, "id", 0) != req.id) {
+            // Response for different request. Drop on the floor
+            trace(CAT_LSP, "Received response for request #%d while waiting for request #%d", json_get_int(&ret, "id", 0), req.id);
+            json_free(ret);
+            continue;
+        }
+        Response response = response_decode(&ret);
+        assert(response.id == req.id);
+        RETURN(Response, response);
     }
-    if (!sv_startswith(lines.strings[0], sv_from("Content-Length"))) {
-        fprintf(stderr, "LSP replied with %.*s instead of 'Content-Length'\n", SV_ARG(lines.strings[0]));
-        return (Response) { 0 };
-    }
-    if (!sv_empty(lines.strings[1])) {
-        fprintf(stderr, "LSP replied with %.*s instead of empty line\n", SV_ARG(lines.strings[1]));
-        return (Response) { 0 };
-    }
-    fprintf(stderr, "LSP -> %.*s\n", SV_ARG(lines.strings[2]));
-    ErrorOrJSONValue ret_maybe = json_decode(lines.strings[2]);
-    if (ErrorOrJSONValue_is_error(ret_maybe)) {
-        fprintf(stderr, "Could not JSON decode LSP reponse '%.*s': %s\n", SV_ARG(lines.strings[2]), Error_to_string(ret_maybe.error));
-        return (Response) { 0 };
-    }
-    Response response = response_decode(&ret_maybe.value);
-    assert(response.id == req.id);
-    return response;
 }
 
 void lsp_notification(char const *method, OptionalJSONValue params)
@@ -68,7 +92,7 @@ void lsp_notification(char const *method, OptionalJSONValue params)
     write_pipe_write(&lsp->in, sv_from(content_length));
     write_pipe_write(&lsp->in, json);
     write_pipe_write(&lsp->in, sv_from("\r\n"));
-    fprintf(stderr, "-| LSP %.*s\n", SV_ARG(json));
+    trace(CAT_LSP, "==| %.*s", SV_ARG(json));
 }
 
 void lsp_initialize()
@@ -92,13 +116,13 @@ void lsp_initialize()
     params.rootUri = (OptionalStringView) { .has_value = true, .value = sv_from(prj) };
 
     OptionalJSONValue params_json = InitializeParams_encode(params);
-    Response          response = lsp_message("initialize", params_json);
+    Response          response = MUST(Response, lsp_message("initialize", params_json));
     if (response_success(&response)) {
         InitializeResult result = InitializeResult_decode(response.result);
         if (result.serverInfo.has_value) {
-            fprintf(stderr, "LSP server name: %.*s\n", SV_ARG(result.serverInfo.name));
+            trace(CAT_LSP, "LSP server name: %.*s", SV_ARG(result.serverInfo.name));
             if (result.serverInfo.version.has_value) {
-                fprintf(stderr, "LSP server version: %.*s\n", SV_ARG(result.serverInfo.version.value));
+                trace(CAT_LSP, "LSP server version: %.*s", SV_ARG(result.serverInfo.version.value));
             }
         }
         server_capabilties = result.capabilities;
@@ -109,12 +133,11 @@ void lsp_on_open(int buffer_num)
 {
     lsp_initialize();
     Buffer *buffer = eddy.buffers.elements + buffer_num;
-
-    char                 uri[PATH_MAX + 8];
+    char    uri[PATH_MAX + 8];
     memset(uri, '\0', PATH_MAX + 8);
     snprintf(uri, PATH_MAX + 7, "file://%.*s/%.*s", SV_ARG(eddy.project_dir), SV_ARG(buffer->name));
 
-    DidOpenTextDocumentParams did_open = {0};
+    DidOpenTextDocumentParams did_open = { 0 };
     did_open.textDocument = (TextDocumentItem) {
         .uri = sv_from(uri),
         .languageId = sv_from("c"),
@@ -124,12 +147,12 @@ void lsp_on_open(int buffer_num)
     OptionalJSONValue did_open_json = DidOpenTextDocumentParams_encode(did_open);
     lsp_notification("textDocument/didOpen", did_open_json);
 
-    SemanticTokensParams semantic_tokens_params = {0};
+    SemanticTokensParams semantic_tokens_params = { 0 };
     semantic_tokens_params.textDocument = (TextDocumentIdentifier) {
         .uri = sv_from(uri),
     };
     OptionalJSONValue semantic_tokens_params_json = SemanticTokensParams_encode(semantic_tokens_params);
-    Response          response = lsp_message("textDocument/semanticTokens/full", semantic_tokens_params_json);
+    Response          response = MUST(Response, lsp_message("textDocument/semanticTokens/full", semantic_tokens_params_json));
     if (response_success(&response)) {
         SemanticTokensResult result = SemanticTokensResult_decode(response.result);
         assert(result.tag == 0);

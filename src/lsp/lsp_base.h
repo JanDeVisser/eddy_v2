@@ -103,6 +103,8 @@ typedef struct {
     OptionalJSONValue error;
 } Response;
 
+ERROR_OR(Response);
+
 #define Int_encode(V) ((OptionalJSONValue) { .has_value = true, .value = json_int(V) })
 #define Int_decode(V) ({ assert(V.has_value); assert(V.value.type == JSON_TYPE_INT); json_int_value(V.value); })
 #define UInt_encode(V) ((OptionalJSONValue) { .has_value = true, .value = json_int(V) })
