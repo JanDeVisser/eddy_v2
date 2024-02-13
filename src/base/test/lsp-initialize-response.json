@@ -1,0 +1,18 @@
+{
+  "id": 1,
+  "jsonrpc": "2.0",
+  "result": {
+    "capabilities": {
+      "astProvider": true,
+      "callHierarchyProvider": true,
+      "clangdInlayHintsProvider": true,
+      "codeActionProvider": true,
+      "compilationDatabase": {
+        "automaticReload": true
+      },
+      "completionProvider": {
+        "resolveProvider":false,
+        "triggerCharacters": [".","<",">",":","\"","/","*"]
+      },
+      "declarationProvider": true,
+      "definitionProvider":true,"documentFormattingProvider":true,"documentHighlightProvider":true,"documentLinkProvider":{"resolveProvider":false},"documentOnTypeFormattingProvider":{"firstTriggerCharacter":"\n","moreTriggerCharacter":[]},"documentRangeFormattingProvider":true,"documentSymbolProvider":true,"executeCommandProvider":{"commands":["clangd.applyFix","clangd.applyTweak"]},"foldingRangeProvider":true,"hoverProvider":true,"implementationProvider":true,"inlayHintProvider":true,"memoryUsageProvider":true,"referencesProvider":true,"renameProvider":true,"selectionRangeProvider":true,"semanticTokensProvider":{"full":{"delta":true},"legend":{"tokenModifiers":["declaration","deprecated","deduced","readonly","static","abstract","virtual","dependentName","defaultLibrary","usedAsMutableReference","functionScope","classScope","fileScope","globalScope"],"tokenTypes":["variable","variable","parameter","function","method","function","property","variable","class","interface","enum","enumMember","type","type","unknown","namespace","typeParameter","concept","type","macro","comment"]},"range":false},"signatureHelpProvider":{"triggerCharacters":["(",")","{","}","<",">",","]},"standardTypeHierarchyProvider":true,"textDocumentSync":{"change":2,"openClose":true,"save":true},"typeDefinitionProvider":true,"typeHierarchyProvider":true,"workspaceSymbolProvider":true},"serverInfo":{"name":"clangd","version":"Apple clangd version 15.0.0 (clang-1500.1.0.2.5) mac+xpc x86_64-apple-darwin23.4.0; target=arm64-apple-darwin23.4.0"}}}

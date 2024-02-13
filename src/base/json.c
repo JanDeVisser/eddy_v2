@@ -10,46 +10,63 @@
 DA_IMPL(JSONValue);
 DA_IMPL(JSONNVPair);
 
-void json_encode_to_builder(JSONValue *value, StringBuilder *sb, int indent)
+typedef struct {
+    StringBuilder sb;
+    StringBuilder escaped;
+    int           indent;
+} JSONEncoder;
+
+void json_encode_to_builder(JSONValue *value, JSONEncoder *encoder)
 {
     switch (value->type) {
     case JSON_TYPE_OBJECT: {
-        sb_append_cstr(sb, "{\n");
+        sb_append_cstr(&encoder->sb, "{\n");
         for (size_t ix = 0; ix < value->object.size; ix++) {
             if (ix > 0) {
-                sb_append_cstr(sb, ",\n");
+                sb_append_cstr(&encoder->sb, ",\n");
             }
             JSONNVPair *nvp = da_element_JSONNVPair(&value->object, ix);
-            sb_printf(sb, "%*s\"%.*s\": ", indent + 4, "", SV_ARG(nvp->name));
-            json_encode_to_builder(&nvp->value, sb, indent + 4);
+            encoder->indent += 4;
+            sb_printf(&encoder->sb, "%*s\"%.*s\": ", encoder->indent, "", SV_ARG(nvp->name));
+            json_encode_to_builder(&nvp->value, encoder);
+            encoder->indent -= 4;
         }
-        sb_printf(sb, "\n%*c", indent + 1, '}');
+        sb_printf(&encoder->sb, "\n%*c", encoder->indent + 1, '}');
     } break;
     case JSON_TYPE_ARRAY: {
-        sb_append_cstr(sb, "[\n");
+        sb_append_cstr(&encoder->sb, "[\n");
         for (int ix = 0; ix < value->array.size; ix++) {
             if (ix > 0) {
-                sb_append_cstr(sb, ",");
+                sb_append_cstr(&encoder->sb, ",\n");
             }
             JSONValue *elem = da_element_JSONValue(&value->array, ix);
-            json_encode_to_builder(elem, sb, indent + 4);
+            encoder->indent += 4;
+            sb_printf(&encoder->sb, "%*s", encoder->indent, "");
+            json_encode_to_builder(elem, encoder);
+            encoder->indent -= 4;
         }
-        sb_printf(sb, "\n%*c", indent + 1, ']');
+        sb_printf(&encoder->sb, "\n%*c", encoder->indent + 1, ']');
     } break;
     case JSON_TYPE_STRING:
-        sb_printf(sb, "\"%.*s\"", SV_ARG(value->string));
+        encoder->escaped.view.length = 0;
+        encoder->escaped = sb_copy_sv(value->string);
+        sb_replace_all(&encoder->escaped, sv_from("\n"), sv_from("\\n"));
+        sb_replace_all(&encoder->escaped, sv_from("\r"), sv_from("\\r"));
+        sb_replace_all(&encoder->escaped, sv_from("\t"), sv_from("\\t"));
+        sb_replace_all(&encoder->escaped, sv_from("\""), sv_from("\\\""));
+        sb_printf(&encoder->sb, "\"%.*s\"", SV_ARG(encoder->escaped.view));
         break;
     case JSON_TYPE_DOUBLE:
-        sb_printf(sb, "%f", value->double_number);
+        sb_printf(&encoder->sb, "%f", value->double_number);
         break;
     case JSON_TYPE_INT:
-        sb_printf(sb, "%.*s", SV_ARG(sv_render_integer(value->int_number)));
+        sb_append_integer(&encoder->sb, value->int_number);
         break;
     case JSON_TYPE_BOOLEAN:
-        sb_append_cstr(sb, (value->boolean) ? "true" : "false");
+        sb_append_cstr(&encoder->sb, (value->boolean) ? "true" : "false");
         break;
     case JSON_TYPE_NULL:
-        sb_append_cstr(sb, "null");
+        sb_append_cstr(&encoder->sb, "null");
         break;
     default:
         UNREACHABLE();
@@ -77,9 +94,7 @@ JSONValue json_null(void)
 
 JSONValue json_string(StringView sv)
 {
-    StringBuilder escaped = sb_copy_sv(sv);
-    sb_replace_all(&escaped, sv_from("\n"), sv_from("\\n"));
-    return (JSONValue) { .type = JSON_TYPE_STRING, .string = escaped.view };
+    return (JSONValue) { .type = JSON_TYPE_STRING, .string = sv_copy(sv) };
 }
 
 JSONValue json_number(double number)
@@ -109,6 +124,62 @@ JSONValue json_bool(bool value)
     return (JSONValue) { .type = JSON_TYPE_BOOLEAN, .boolean = value };
 }
 
+void json_free(JSONValue value)
+{
+    switch (value.type) {
+    case JSON_TYPE_OBJECT: {
+        for (size_t ix = 0; ix < value.object.size; ++ix) {
+            JSONNVPair pair = *(da_element_JSONNVPair(&value.object, ix));
+            sv_free(pair.name);
+            json_free(pair.value);
+        }
+        free(value.object.elements);
+    } break;
+    case JSON_TYPE_STRING:
+        sv_free(value.string);
+        break;
+    default:
+        break;
+    }
+}
+
+JSONValue json_move(JSONValue *from)
+{
+    JSONValue dest = *from;
+    switch (from->type) {
+    case JSON_TYPE_OBJECT:
+        from->object = (JSONNVPairs) { 0 };
+        break;
+    case JSON_TYPE_STRING:
+        from->string = (StringView) { 0 };
+        break;
+    default:
+        break;
+    }
+    from->type = JSON_TYPE_NULL;
+    return dest;
+}
+
+JSONValue json_copy(JSONValue value)
+{
+    JSONValue ret = value;
+    switch (value.type) {
+    case JSON_TYPE_OBJECT: {
+        ret.object = (JSONNVPairs) { 0 };
+        for (size_t ix = 0; ix < value.object.size; ++ix) {
+            JSONNVPair pair = *(da_element_JSONNVPair(&value.object, ix));
+            json_set(&ret, sv_cstr(pair.name), pair.value);
+        }
+    } break;
+    case JSON_TYPE_STRING:
+        ret.string = sv_copy(value.string);
+        break;
+    default:
+        break;
+    }
+    return ret;
+}
+
 void json_append(JSONValue *array, JSONValue elem)
 {
     assert(array->type == JSON_TYPE_ARRAY);
@@ -130,38 +201,51 @@ size_t json_len(JSONValue *array)
     return array->array.size;
 }
 
+static void _json_add_nvp(JSONValue *obj, StringView attr, JSONValue value)
+{
+    assert(obj->type == JSON_TYPE_OBJECT);
+    JSONNVPair pair = { .name = sv_copy(attr), .value = value };
+    for (size_t ix = 0; ix < obj->object.size; ++ix) {
+        JSONNVPair *p = da_element_JSONNVPair(&obj->object, ix);
+        if (sv_eq(pair.name, p->name)) {
+            json_free(p->value);
+            p->value = pair.value;
+            return;
+        }
+    }
+    da_append_JSONNVPair(&obj->object, pair);
+}
+
 void json_set(JSONValue *obj, char const *attr, JSONValue elem)
 {
-    json_set_sv(obj, sv_copy_cstr(attr), elem);
+    _json_add_nvp(obj, sv_from(attr), elem);
 }
 
 void json_optional_set(JSONValue *obj, char const *attr, OptionalJSONValue elem)
 {
     if (elem.has_value) {
-        json_set(obj, attr, elem.value);
+        _json_add_nvp(obj, sv_from(attr), elem.value);
     }
 }
 
 void json_set_sv(JSONValue *value, StringView attr, JSONValue elem)
 {
-    assert(value->type == JSON_TYPE_OBJECT);
-    JSONNVPair nvp = { .name = attr, .value = elem };
-    da_append_JSONNVPair(&value->object, nvp);
+    _json_add_nvp(value, attr, elem);
 }
 
-void json_set_cstr(JSONValue *obj, char const *attr, char const *s)
+void json_set_cstr(JSONValue *value, char const *attr, char const *s)
 {
-    json_set(obj, attr, json_string(sv_from(s)));
+    _json_add_nvp(value, sv_from(attr), json_string(sv_from(s)));
 }
 
-void json_set_string(JSONValue *obj, char const *attr, StringView sv)
+void json_set_string(JSONValue *value, char const *attr, StringView sv)
 {
-    json_set(obj, attr, json_string(sv));
+    _json_add_nvp(value, sv_from(attr), json_string(sv_copy(sv)));
 }
 
-void json_set_int(JSONValue *obj, char const *attr, int i)
+void json_set_int(JSONValue *value, char const *attr, int i)
 {
-    json_set(obj, attr, json_int(i));
+    _json_add_nvp(value, sv_from(attr), json_int(i));
 }
 
 bool json_has(JSONValue *value, char const *attr)
@@ -176,11 +260,11 @@ bool json_has(JSONValue *value, char const *attr)
     return false;
 }
 
-OptionalJSONValue json_get(JSONValue *obj, char const *attr)
+OptionalJSONValue json_get(JSONValue *value, char const *attr)
 {
-    assert(obj->type == JSON_TYPE_OBJECT);
-    for (size_t ix = 0; ix < obj->object.size; ++ix) {
-        JSONNVPair const *pair = da_element_JSONNVPair(&obj->object, ix);
+    assert(value->type == JSON_TYPE_OBJECT);
+    for (size_t ix = 0; ix < value->object.size; ++ix) {
+        JSONNVPair const *pair = da_element_JSONNVPair(&value->object, ix);
         if (sv_eq_cstr(pair->name, attr)) {
             RETURN_VALUE(JSONValue, pair->value);
         }
@@ -188,144 +272,173 @@ OptionalJSONValue json_get(JSONValue *obj, char const *attr)
     RETURN_EMPTY(JSONValue);
 }
 
-JSONValue json_get_default(JSONValue *obj, char const *attr, JSONValue default_)
+JSONValue json_get_default(JSONValue *value, char const *attr, JSONValue default_)
 {
-    OptionalJSONValue ret_maybe = json_get(obj, attr);
+    OptionalJSONValue ret_maybe = json_get(value, attr);
     if (ret_maybe.has_value) {
         return ret_maybe.value;
     }
     return default_;
 }
 
-bool json_get_bool(JSONValue *obj, char const *attr, bool default_)
+bool json_get_bool(JSONValue *value, char const *attr, bool default_)
 {
-    JSONValue v = json_get_default(obj, attr, json_bool(default_));
+    JSONValue v = json_get_default(value, attr, json_bool(default_));
     assert(v.type == JSON_TYPE_BOOLEAN);
     return v.boolean;
 }
 
-int json_get_int(JSONValue *obj, char const *attr, int default_)
+int json_get_int(JSONValue *value, char const *attr, int default_)
 {
-    JSONValue v = json_get_default(obj, attr, json_int(default_));
+    JSONValue v = json_get_default(value, attr, json_int(default_));
     assert(v.type == JSON_TYPE_INT);
     Integer as_i32 = MUST_OPTIONAL(Integer, integer_coerce_to(v.int_number, I32));
     return as_i32.i32;
 }
 
-StringView json_get_string(JSONValue *obj, char const *attr, StringView default_)
+StringView json_get_string(JSONValue *value, char const *attr, StringView default_)
 {
-    JSONValue v = json_get_default(obj, attr, json_string(default_));
+    JSONValue v = json_get_default(value, attr, json_string(default_));
     assert(v.type == JSON_TYPE_STRING);
     return v.string;
 }
 
-extern void json_merge(JSONValue *obj, JSONValue sub)
+void json_merge(JSONValue *value, JSONValue sub)
 {
-    assert(obj->type == JSON_TYPE_OBJECT);
+    assert(value->type == JSON_TYPE_OBJECT);
     assert(sub.type == JSON_TYPE_OBJECT);
-    da_resize_JSONNVPair(&obj->object, obj->object.size + sub.object.size);
-    memcpy(((JSONNVPair *) obj->object.elements) + obj->object.size, sub.object.elements, sub.object.size * sizeof(JSONNVPair));
+    for (size_t ix = 0; ix < sub.object.size; ++ix) {
+        JSONNVPair const *pair = da_element_JSONNVPair(&value->object, ix);
+        json_set_sv(value, pair->name, json_copy(pair->value));
+    }
 }
 
 StringView json_encode(JSONValue value)
 {
-    StringBuilder sb = { 0 };
-    json_encode_to_builder(&value, &sb, 0);
-    return sb.view;
+    JSONEncoder encoder = {0};
+    json_encode_to_builder(&value, &encoder);
+    sv_free(encoder.escaped.view);
+    return encoder.sb.view;
 }
 
-ErrorOrJSONValue json_decode_value(StringScanner *ss)
+typedef struct {
+    StringScanner ss;
+    StringBuilder sb;
+} JSONDecoder;
+
+ErrorOrStringView json_decode_string(JSONDecoder *decoder)
 {
-    static StringBuilder sb = {0};
-    sb.view.length = 0;
-    ss_skip_whitespace(ss);
-    switch (ss_peek(ss)) {
+    assert(ss_peek(&decoder->ss) == '\"');
+    size_t offset = decoder->sb.view.length;
+    ss_skip_one(&decoder->ss);
+    ss_reset(&decoder->ss);
+    while (true) {
+        int ch = ss_peek(&decoder->ss);
+        if (ch == '\\') {
+            ss_skip_one(&decoder->ss);
+            ch = ss_peek(&decoder->ss);
+            switch (ch) {
+            case 0:
+                ERROR(StringView, JSONError, 0, "Bad escape");
+            case 'n':
+                sb_append_char(&decoder->sb, '\n');
+                break;
+            case 'r':
+                sb_append_char(&decoder->sb, '\r');
+                break;
+            case 't':
+                sb_append_char(&decoder->sb, '\t');
+                break;
+            case '\"':
+                sb_append_char(&decoder->sb, '\"');
+                break;
+            default:
+                sb_append_char(&decoder->sb, ch);
+                break;
+            }
+            ss_skip_one(&decoder->ss);
+        } else if (ch == '"') {
+            ss_skip_one(&decoder->ss);
+            StringView ret = (StringView) { .ptr = decoder->sb.view.ptr + offset, .length = decoder->sb.view.length - offset };
+            RETURN(StringView, ret);
+        } else if (ch == 0) {
+            ERROR(StringView, JSONError, 0, "Unterminated string");
+        } else {
+            sb_append_char(&decoder->sb, ch);
+            ss_skip_one(&decoder->ss);
+        }
+    }
+}
+
+ErrorOrJSONValue json_decode_value(JSONDecoder *decoder)
+{
+    size_t offset = decoder->sb.view.length;
+    ss_skip_whitespace(&decoder->ss);
+    switch (ss_peek(&decoder->ss)) {
     case 0:
         ERROR(JSONValue, JSONError, 0, "Expected value");
     case '{': {
         JSONValue result = json_object();
-        ss_skip_one(ss);
-        ss_skip_whitespace(ss);
-        while (ss_peek(ss) != '}') {
-            if (ss_peek(ss) != '"') {
+        ss_skip_one(&decoder->ss);
+        ss_skip_whitespace(&decoder->ss);
+        while (ss_peek(&decoder->ss) != '}') {
+            if (ss_peek(&decoder->ss) != '"') {
                 ERROR(JSONValue, JSONError, 0, "Expected '\"'");
             }
-            JSONValue name = TRY(JSONValue, json_decode_value(ss));
-            ss_skip_whitespace(ss);
-            if (!ss_expect(ss, ':')) {
+            StringView name = TRY_TO(StringView, JSONValue, json_decode_string(decoder));
+            name = sv_copy(name);
+            trace(CAT_JSON, "Name: %.*s", SV_ARG(name));
+            ss_skip_whitespace(&decoder->ss);
+            if (!ss_expect(&decoder->ss, ':')) {
                 ERROR(JSONValue, JSONError, 0, "Expected ':'");
             }
-            ss_skip_whitespace(ss);
-            JSONValue value = TRY(JSONValue, json_decode_value(ss));
-            json_set_sv(&result, name.string, value);
-            ss_skip_whitespace(ss);
-            ss_expect(ss, ',');
-            ss_skip_whitespace(ss);
+            ss_skip_whitespace(&decoder->ss);
+            JSONValue value = TRY(JSONValue, json_decode_value(decoder));
+            trace(CAT_JSON, "NVP: %.*s: %.*s", SV_ARG(name), SV_ARG(json_encode(value)));
+            json_set_sv(&result, name, value);
+            sv_free(name);
+            ss_skip_whitespace(&decoder->ss);
+            ss_expect(&decoder->ss, ',');
+            ss_skip_whitespace(&decoder->ss);
         }
-        ss_skip_one(ss);
+        ss_skip_one(&decoder->ss);
         RETURN(JSONValue, result);
     }
     case '[': {
         JSONValue result = json_array();
-        ss_skip_one(ss);
-        ss_skip_whitespace(ss);
-        while (ss_peek(ss) != ']') {
-            JSONValue value = TRY(JSONValue, json_decode_value(ss));
-            ss_skip_whitespace(ss);
+        ss_skip_one(&decoder->ss);
+        ss_skip_whitespace(&decoder->ss);
+        while (ss_peek(&decoder->ss) != ']') {
+            JSONValue value = TRY(JSONValue, json_decode_value(decoder));
+            trace(CAT_JSON, "Array elem: %.*s", SV_ARG(json_encode(value)));
+            ss_skip_whitespace(&decoder->ss);
             json_append(&result, value);
-            if (ss_peek(ss) == ',') {
-                ss_skip_one(ss);
+            if (ss_peek(&decoder->ss) == ',') {
+                ss_skip_one(&decoder->ss);
             }
-            ss_skip_whitespace(ss);
+            ss_skip_whitespace(&decoder->ss);
         }
-        ss_skip_one(ss);
+        ss_skip_one(&decoder->ss);
         RETURN(JSONValue, result);
     }
     case '"': {
-        sb.view.length = 0;
-        ss_skip_one(ss);
-        ss_reset(ss);
-        while (true) {
-            int ch = ss_peek(ss);
-            if (ch == '\\') {
-                ss_skip_one(ss);
-                ch = ss_peek(ss);
-                switch (ch) {
-                case 0: ERROR(JSONValue, JSONError, 0, "Bad escape");
-                case 'n': sb_append_char(&sb, '\n'); break;
-                case 'r': sb_append_char(&sb, '\r'); break;
-                case 't': sb_append_char(&sb, '\t'); break;
-                case '\"': sb_append_char(&sb, '\"'); break;
-                case '\'': sb_append_char(&sb, '\''); break;
-                default: sb_append_char(&sb, ch);
-                }
-                ss_skip_one(ss);
-            } else if (ch == '"') {
-                JSONValue ret = json_string(sb.view);
-                ss_skip(ss, 1);
-                RETURN(JSONValue, ret);
-            } else if (ch == 0) {
-                ERROR(JSONValue, JSONError, 0, "Unterminated string");
-            } else {
-                sb_append_char(&sb, ch);
-                ss_skip_one(ss);
-            }
-        }
+        StringView str = TRY_TO(StringView, JSONValue, json_decode_string(decoder));
+        RETURN(JSONValue, json_string(str));
     }
     default: {
-        if (isdigit(ss_peek(ss))) {
-            ss_reset(ss);
-            while (isdigit(ss_peek(ss))) {
-                ss_skip_one(ss);
+        if (isdigit(ss_peek(&decoder->ss))) {
+            ss_reset(&decoder->ss);
+            while (isdigit(ss_peek(&decoder->ss))) {
+                ss_skip_one(&decoder->ss);
             }
-            if (ss_peek(ss) == '.') {
-                ss_skip_one(ss);
-                while (isdigit(ss_peek(ss))) {
-                    ss_skip_one(ss);
+            if (ss_peek(&decoder->ss) == '.') {
+                ss_skip_one(&decoder->ss);
+                while (isdigit(ss_peek(&decoder->ss))) {
+                    ss_skip_one(&decoder->ss);
                 }
                 ERROR(JSONValue, JSONError, 0, "Can't parse doubles in JSON yet");
             }
-            StringView         sv = ss_read_from_mark(ss);
+            StringView         sv = ss_read_from_mark(&decoder->ss);
             IntegerParseResult parse_result = sv_parse_integer(sv, I64);
             if (parse_result.success) {
                 RETURN(JSONValue, json_integer(parse_result.integer));
@@ -336,13 +449,13 @@ ErrorOrJSONValue json_decode_value(StringScanner *ss)
             }
             RETURN(JSONValue, json_integer(parse_result.integer));
         }
-        if (ss_expect_sv(ss, sv_from("true"))) {
+        if (ss_expect_sv(&decoder->ss, sv_from("true"))) {
             RETURN(JSONValue, json_bool(true));
         }
-        if (ss_expect_sv(ss, sv_from("false"))) {
+        if (ss_expect_sv(&decoder->ss, sv_from("false"))) {
             RETURN(JSONValue, json_bool(false));
         }
-        if (ss_expect_sv(ss, sv_from("null"))) {
+        if (ss_expect_sv(&decoder->ss, sv_from("null"))) {
             RETURN(JSONValue, json_null());
         }
         ERROR(JSONValue, JSONError, 0, "Invalid JSON");
@@ -352,8 +465,10 @@ ErrorOrJSONValue json_decode_value(StringScanner *ss)
 
 ErrorOrJSONValue json_decode(StringView json)
 {
-    StringScanner ss = ss_create(json);
-    return json_decode_value(&ss);
+    JSONDecoder      decoder = { .sb = sb_create(), .ss = ss_create(json) };
+    ErrorOrJSONValue ret = json_decode_value(&decoder);
+    sv_free(decoder.sb.view);
+    return ret;
 }
 
 #ifdef JSON_FORMAT
@@ -365,8 +480,9 @@ int main(int argc, char **argv)
     if (argc != 2) {
         return -1;
     }
+    log_init();
     StringView sv = MUST(StringView, read_file_by_name(sv_from(argv[1])));
-    JSONValue json = MUST(JSONValue, json_decode(sv));
+    JSONValue  json = MUST(JSONValue, json_decode(sv));
     printf("%.*s\n", SV_ARG(json_encode(json)));
     return 0;
 }

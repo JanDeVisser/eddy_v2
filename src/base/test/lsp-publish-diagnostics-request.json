@@ -1,0 +1,50 @@
+{
+  "jsonrpc": "2.0",
+  "method": "textDocument/publishDiagnostics",
+  "params": {
+    "diagnostics": [
+      {
+        "code": "pp_file_not_found",
+        "message": "'raylib.h' file not found",
+        "range": {
+          "end": {"character": 19, "line": 6},
+          "start": {"character": 9, "line": 6}
+        },
+        "severity": 1,
+        "source": "clang"
+      },
+      {
+        "code": "-Wimplicit-int",
+        "message": "Type specifier missing, defaults to 'int'; ISO C99 and later do not support implicit int (fix available)",
+        "range": {
+          "end": {"character": 24, "line": 13},
+          "start": {"character": 0, "line": 13}
+        },
+        "severity": 2,
+        "source": "clang"
+      },
+      {
+        "code": "ident_list_in_fn_declaration",
+        "message": "A parameter list without types is only allowed in a function definition",
+        "range": {
+          "end": {"character": 29, "line": 13},
+          "start": {"character": 25, "line": 13}
+        },
+        "severity": 1,
+        "source": "clang"
+      },
+      {
+        "code": "-Wimplicit-int",
+        "message": "Type specifier missing, defaults to 'int'; ISO C99 and later do not support implicit int (fix available)", "range": {"end": {"character": 21, "line": 14}, "start": {"character": 0, "line": 14}}, "severity": 2, "source": "clang"}, {"code": "ident_list_in_fn_declaration", "message": "A parameter list without types is only allowed in a function definition",
+        "range": {
+          "end": {"character": 26, "line": 14},
+          "start": {"character": 22, "line": 14}
+        },
+        "severity": 1,
+        "source": "clang"
+      }
+    ],
+    "uri": "file:///Users/jan/projects/eddy_v2/src/app/main.c",
+    "version": 0
+  }
+}
