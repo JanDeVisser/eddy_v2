@@ -73,6 +73,8 @@ void free_buffer(char *buffer)
         *((size_t *) buffer - 2) = 0;
         *((char **) buffer) = sb_freelist[bit - 5];
         sb_freelist[bit - 5] = buffer - 2 * sizeof(size_t);
+    } else {
+        free(buffer - 2 * sizeof(size_t));
     }
 }
 
@@ -125,7 +127,7 @@ StringBuilder sb_vcreatef(char const *fmt, va_list args)
 StringBuilder sb_copy_chars(char const *ptr, size_t len)
 {
     if (ptr == NULL || len == 0) {
-        return (StringBuilder) {0};
+        return (StringBuilder) { 0 };
     }
     StringBuilder sb = sb_create();
     size_t        cap = buffer_capacity(sb.view.ptr);
@@ -141,7 +143,7 @@ StringBuilder sb_copy_chars(char const *ptr, size_t len)
 StringBuilder sb_copy_sv(StringView sv)
 {
     if (sv.length == 0) {
-        return (StringBuilder) {0};
+        return (StringBuilder) { 0 };
     }
     return sb_copy_chars(sv.ptr, sv.length);
 }
@@ -149,7 +151,7 @@ StringBuilder sb_copy_sv(StringView sv)
 StringBuilder sb_copy_cstr(char const *s)
 {
     if (s == NULL) {
-        return (StringBuilder) {0};
+        return (StringBuilder) { 0 };
     }
     return sb_copy_chars(s, strlen(s) + 1);
 }
