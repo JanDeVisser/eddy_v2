@@ -42,12 +42,12 @@ void c_mode_cmd_format_source(CommandContext *ctx)
 
     if (sv_not_empty(buffer->name)) {
         StringView formatted = MUST(
-           StringView,
-           execute_pipe(
-               buffer->text.view,
-               sv_from("clang-format"),
-               TextFormat("--assume-filename=%.*s", SV_ARG(buffer->name)),
-               TextFormat("--cursor=%d", view->cursor)));
+            StringView,
+            execute_pipe(
+                buffer->text.view,
+                sv_from("clang-format"),
+                TextFormat("--assume-filename=%.*s", SV_ARG(buffer->name)),
+                TextFormat("--cursor=%d", view->cursor)));
         StringView header = sv_chop_to_delim(&formatted, sv_from("\n"));
         if (sv_eq(formatted, buffer->text.view)) {
             eddy_set_message(&eddy, sv_from("Already properly formatted"));
@@ -68,11 +68,18 @@ void c_mode_cmd_format_source(CommandContext *ctx)
     eddy_set_message(&eddy, sv_from("Cannot format untitled buffer"));
 }
 
+void c_mode_on_draw(CMode *mode)
+{
+    BufferView *view = (BufferView *) mode->parent;
+    lsp_semantic_tokens(view->buffer_num);
+}
+
 void c_mode_init(CMode *mode)
 {
     widget_add_command(mode, sv_from("c-format-source"), c_mode_cmd_format_source,
         (KeyCombo) { KEY_L, KMOD_SHIFT | KMOD_CONTROL });
-    BufferView *view = (BufferView*) mode->parent;
+    mode->handlers.on_draw = c_mode_on_draw;
+    BufferView *view = (BufferView *) mode->parent;
     lsp_on_open(view->buffer_num);
 }
 
@@ -762,6 +769,7 @@ void editor_resize(Editor *editor)
 
 void editor_draw(Editor *editor)
 {
+    static size_t frame = 1;
     editor_update_cursor(editor);
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
@@ -794,16 +802,45 @@ void editor_draw(Editor *editor)
                     palettes[PALETTE_DARK][PI_SELECTION]);
             }
         }
-        widget_render_text(editor, 0, eddy.cell.y * row,
-            (StringView) { line.line.ptr + view->left_column, line_len },
-            eddy.font, palettes[PALETTE_DARK][PI_DEFAULT]);
+        if (line.num_tokens == 0) {
+            if (frame == 0) {
+                printf("%5d:%5zu:[          ]\n", row, lineno);
+            }
+            continue;
+        }
+        if (frame == 0) {
+            printf("%5d:%5zu:[%4zu..%4zu]", row, lineno, line.first_token, line.first_token + line.num_tokens - 1);
+        }
+        for (size_t ix = line.first_token; ix < line.first_token + line.num_tokens; ++ix) {
+            DisplayToken *token = buffer->tokens.elements + ix;
+            int start_col = (int) token->index - (int) line.index_of;
+            if (start_col + (int) token->length <= (int) view->left_column) {
+                continue;
+            }
+            if (start_col >= view->left_column + editor->columns) {
+                break;
+            }
+            start_col = iclamp(start_col, view->left_column, start_col);
+            int length = iclamp((int) token->length, 0, editor->columns - start_col);
+            StringView text = (StringView) { line.line.ptr + start_col, length };
+            if (frame == 0) {
+                printf("[%zu %.*s]", ix, SV_ARG(text));
+            }
+            widget_render_text(editor, PADDING + eddy.cell.x * start_col, eddy.cell.y * row,
+                text, eddy.font, palettes[PALETTE_DARK][token->color]);
+        }
+        if (frame == 0) {
+            printf("\n");
+        }
     }
+
     double time = app->time - view->cursor_flash;
     if (time - floor(time) < 0.5) {
         int x = view->cursor_pos.x - view->left_column;
         int y = view->cursor_pos.y - view->top_line;
         widget_draw_rectangle(editor, 5.0f + x * eddy.cell.x, 5.0f + y * eddy.cell.y, 2, eddy.cell.y, palettes[PALETTE_DARK][PI_CURSOR]);
     }
+    ++frame;
 }
 
 void editor_process_input(Editor *editor)

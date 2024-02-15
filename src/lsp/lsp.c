@@ -4,21 +4,23 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <sys/syslimits.h>
 #include <unistd.h>
 
 #define STATIC_ALLOCATOR
 #include <allocate.h>
 #include <eddy.h>
+#include <palette.h>
+#include <process.h>
 
 #include <lsp/initialize.h>
 #include <lsp/lsp_base.h>
 #include <lsp/semantictokens.h>
 #include <lsp/synchronization.h>
-#include <process.h>
-#include <sys/syslimits.h>
 
 static Process           *lsp = NULL;
 static ServerCapabilities server_capabilties;
+static PaletteIndex colors[30];
 
 ErrorOrResponse lsp_message(char const *method, OptionalJSONValue params)
 {
@@ -114,6 +116,20 @@ void lsp_initialize()
     memset(prj, '\0', PATH_MAX + 8);
     snprintf(prj, PATH_MAX + 7, "file://%.*s", SV_ARG(eddy.project_dir));
     params.rootUri = (OptionalStringView) { .has_value = true, .value = sv_from(prj) };
+    params.capabilities.textDocument.has_value = true;
+
+    StringList tokenTypes = {0};
+    da_append_StringView(&tokenTypes, SemanticTokenTypes_to_string(SemanticTokenTypesComment));
+    da_append_StringView(&tokenTypes, SemanticTokenTypes_to_string(SemanticTokenTypesKeyword));
+    da_append_StringView(&tokenTypes, SemanticTokenTypes_to_string(SemanticTokenTypesVariable));
+    da_append_StringView(&tokenTypes, SemanticTokenTypes_to_string(SemanticTokenTypesType));
+
+    params.capabilities.textDocument.value.semanticTokens.has_value = true;
+    params.capabilities.textDocument.value.semanticTokens.value.multilineTokenSupport = (OptionalBool) { .has_value = true, .value = true };
+    params.capabilities.textDocument.value.semanticTokens.value.requests.has_value = true;
+    params.capabilities.textDocument.value.semanticTokens.value.requests.full.has_value = true;
+    params.capabilities.textDocument.value.semanticTokens.value.requests.full._0 = true;
+    params.capabilities.textDocument.value.semanticTokens.value.tokenTypes = tokenTypes;
 
     OptionalJSONValue params_json = InitializeParams_encode(params);
     Response          response = MUST(Response, lsp_message("initialize", params_json));
@@ -126,6 +142,38 @@ void lsp_initialize()
             }
         }
         server_capabilties = result.capabilities;
+        assert(server_capabilties.semanticTokensProvider.has_value);
+        trace(CAT_LSP, "#Token types: %zu", server_capabilties.semanticTokensProvider.value.legend.tokenTypes.size);
+        for (int i = 0; i < server_capabilties.semanticTokensProvider.value.legend.tokenTypes.size; ++i) {
+            StringView tokenType = server_capabilties.semanticTokensProvider.value.legend.tokenTypes.strings[i];
+            SemanticTokenTypes semantic_token_type = SemanticTokenTypes_parse(tokenType);
+            trace(CAT_LSP, "%d: '%.*s' %d", i, SV_ARG(tokenType), semantic_token_type);
+            switch (semantic_token_type) {
+                case SemanticTokenTypesNamespace: colors[i] = PI_KNOWN_IDENTIFIER; break;
+                case SemanticTokenTypesType: colors[i] = PI_KNOWN_IDENTIFIER; break;
+                case SemanticTokenTypesClass: colors[i] = PI_KNOWN_IDENTIFIER; break;
+                case SemanticTokenTypesEnum: colors[i] = PI_KNOWN_IDENTIFIER; break;
+                case SemanticTokenTypesInterface: colors[i] = PI_KNOWN_IDENTIFIER; break;
+                case SemanticTokenTypesStruct: colors[i] = PI_KNOWN_IDENTIFIER; break;
+                case SemanticTokenTypesTypeParameter: colors[i] = PI_KNOWN_IDENTIFIER; break;
+                case SemanticTokenTypesParameter: colors[i] = PI_KNOWN_IDENTIFIER; break;
+                case SemanticTokenTypesVariable: colors[i] = PI_KNOWN_IDENTIFIER; break;
+                case SemanticTokenTypesProperty: colors[i] = PI_KNOWN_IDENTIFIER; break;
+                case SemanticTokenTypesEnumMember: colors[i] = PI_KNOWN_IDENTIFIER; break;
+                case SemanticTokenTypesEvent: colors[i] = PI_DEFAULT; break;
+                case SemanticTokenTypesFunction: colors[i] = PI_KNOWN_IDENTIFIER; break;
+                case SemanticTokenTypesMethod: colors[i] = PI_KNOWN_IDENTIFIER; break;
+                case SemanticTokenTypesMacro: colors[i] = PI_KNOWN_IDENTIFIER; break;
+                case SemanticTokenTypesKeyword: colors[i] = PI_KEYWORD; break;
+                case SemanticTokenTypesModifier: colors[i] = PI_KEYWORD; break;
+                case SemanticTokenTypesComment: colors[i] = PI_COMMENT; break;
+                case SemanticTokenTypesString: colors[i] = PI_STRING; break;
+                case SemanticTokenTypesNumber: colors[i] = PI_NUMBER; break;
+                case SemanticTokenTypesRegexp: colors[i] = PI_STRING; break;
+                case SemanticTokenTypesOperator: colors[i] = PI_DEFAULT; break;
+                case SemanticTokenTypesDecorator: colors[i] = PI_KNOWN_IDENTIFIER; break;
+            }
+        }
     }
 }
 
@@ -146,6 +194,15 @@ void lsp_on_open(int buffer_num)
     };
     OptionalJSONValue did_open_json = DidOpenTextDocumentParams_encode(did_open);
     lsp_notification("textDocument/didOpen", did_open_json);
+}
+
+void lsp_semantic_tokens(int buffer_num)
+{
+    lsp_initialize();
+    Buffer *buffer = eddy.buffers.elements + buffer_num;
+    char    uri[PATH_MAX + 8];
+    memset(uri, '\0', PATH_MAX + 8);
+    snprintf(uri, PATH_MAX + 7, "file://%.*s/%.*s", SV_ARG(eddy.project_dir), SV_ARG(buffer->name));
 
     SemanticTokensParams semantic_tokens_params = { 0 };
     semantic_tokens_params.textDocument = (TextDocumentIdentifier) {
@@ -156,6 +213,24 @@ void lsp_on_open(int buffer_num)
     if (response_success(&response)) {
         SemanticTokensResult result = SemanticTokensResult_decode(response.result);
         assert(result.tag == 0);
-        fprintf(stderr, "GOT %zu TOKENS\n", result._0.data.size);
+        size_t lineno = 0;
+        Index *line = buffer->lines.elements + lineno;
+        size_t offset = 0;
+        UInts data = result._0.data;
+        for (size_t ix = 0; ix < result._0.data.size; ix += 5) {
+            if (data.elements[ix] > 0) {
+                lineno += data.elements[ix];
+                line = buffer->lines.elements + lineno;
+                offset = 0;
+            }
+            offset += data.elements[ix+1];
+            size_t length = data.elements[ix+2];
+            for (size_t token_ix = 0; token_ix < line->num_tokens; ++token_ix) {
+                DisplayToken *t = buffer->tokens.elements + line->first_token + token_ix;
+                if (t->index == line->index_of + offset && t->length == length) {
+                    t->color = colors[data.elements[ix+3]];
+                }
+            }
+        }
     }
 }

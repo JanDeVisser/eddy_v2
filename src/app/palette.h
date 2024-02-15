@@ -7,8 +7,8 @@
 #ifndef __PALETTE_H__
 #define __PALETTE_H__
 
-#include <stdint.h>
 #include <raylib.h>
+#include <stdint.h>
 
 #define PALETTEINDICES(S)         \
     S(DEFAULT)                    \
@@ -18,6 +18,7 @@
     S(CHAR_LITERAL)               \
     S(PUNCTUATION)                \
     S(PREPROCESSOR)               \
+    S(PREPROCESSOR_ARG)           \
     S(IDENTIFIER)                 \
     S(KNOWN_IDENTIFIER)           \
     S(PREPROC_IDENTIFIER)         \
@@ -34,14 +35,14 @@
     S(CURRENT_LINE_EDGE)          \
     S(LINE_EDITED)                \
     S(LINE_EDITED_SAVED)          \
-    S(LINE_EDITED_REVERTED)       \
-    S(MAX)
+    S(LINE_EDITED_REVERTED)
 
 typedef enum {
 #undef PALETTEINDEX
 #define PALETTEINDEX(I) PI_##I,
     PALETTEINDICES(PALETTEINDEX)
 #undef PALETTEINDEX
+        PI_MAX,
 } PaletteIndex;
 
 #define PALETTES(S) \
@@ -57,7 +58,7 @@ typedef enum {
 #undef PALETTE
 } Palette;
 
-#define ANSICOLORS(S) \
+#define ANSICOLORS(S)             \
     S(BLACK, 0xff000000)          \
     S(RED, 0xff0000cc)            \
     S(GREEN, 0xff069a4e)          \
@@ -77,15 +78,16 @@ typedef enum {
 
 typedef enum {
 #undef ANSICOLOR
-#define ANSICOLOR(C,RGB) ANSI_##C,
+#define ANSICOLOR(C, RGB) ANSI_##C,
     ANSICOLORS(ANSICOLOR)
 #undef ANSICOLOR
-    ANSI_MAX,
+        ANSI_MAX,
 } AnsiColor;
 
 typedef Color PaletteDefinition[PI_MAX];
 
+extern char const       *PaletteIndex_name(PaletteIndex index);
 extern PaletteDefinition palettes[PALETTE_MAX];
-extern uint32_t ansi_palette[ANSI_MAX];
+extern uint32_t          ansi_palette[ANSI_MAX];
 
 #endif /* __PALETTE_H__ */

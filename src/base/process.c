@@ -98,13 +98,15 @@ void read_pipe_read(ReadPipe *pipe)
         }
     }
     read_pipe_close(pipe);
-};
+}
+
+#define DRAIN_SIZE 64*1024
 
 void read_pipe_drain(ReadPipe *pipe)
 {
     if (pipe->debug)
         trace(CAT_PROCESS, "read_pipe_drain(): Waiting for mutex");
-    char buffer[4096];
+    char buffer[DRAIN_SIZE];
     condition_acquire(pipe->condition);
     if (pipe->debug)
         trace(CAT_PROCESS, "read_pipe_drain(): Mutex acquired");

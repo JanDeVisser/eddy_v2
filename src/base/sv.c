@@ -378,6 +378,10 @@ int sv_find(StringView sv, StringView sub)
 
 int sv_find_from(StringView sv, StringView sub, size_t from)
 {
+    assert(sv_not_empty(sub));
+    if (sv_empty(sv)) {
+        return -1;
+    }
     for (int ix = from; ix <= sv.length - sub.length; ++ix) {
         if (!memcmp(sv.ptr + ix, sub.ptr, sub.length))
             return ix;

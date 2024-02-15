@@ -10,5 +10,6 @@
 #include <sv.h>
 
 extern void lsp_on_open(int buffer_num);
+extern void lsp_semantic_tokens(int buffer_num);
 
 #endif /* __LSP_LSP_H__ */

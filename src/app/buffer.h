@@ -7,11 +7,23 @@
 #ifndef __APP_BUFFER_H__
 #define __APP_BUFFER_H__
 
+#include <palette.h>
 #include <sv.h>
+
+typedef struct {
+    size_t       index;
+    size_t       length;
+    size_t       line;
+    PaletteIndex color;
+} DisplayToken;
+
+DA_WITH_NAME(DisplayToken, DisplayTokens);
 
 typedef struct {
     size_t     index_of;
     StringView line;
+    size_t     first_token;
+    size_t     num_tokens;
 } Index;
 
 DA_WITH_NAME(Index, Indices);
@@ -20,6 +32,7 @@ typedef struct {
     StringView    name;
     StringBuilder text;
     Indices       lines;
+    DisplayTokens tokens;
     bool          rebuild_needed;
     bool          dirty;
 } Buffer;

@@ -282,6 +282,12 @@ void eddy_on_draw(Eddy *eddy)
         Buffer *buffer = eddy->buffers.elements + ix;
         if (buffer->rebuild_needed) {
             buffer_build_indices(buffer);
+            for (size_t view_ix = 0; view_ix < eddy->editor->buffers.size; ++view_ix) {
+                BufferView *view = eddy->editor->buffers.elements + view_ix;
+                if (view->buffer_num == ix && view->mode && view->mode->handlers.on_draw) {
+                    view->mode->handlers.on_draw(view->mode);
+                }
+            }
         }
     }
     ClearBackground(palettes[PALETTE_DARK][PI_BACKGROUND]);

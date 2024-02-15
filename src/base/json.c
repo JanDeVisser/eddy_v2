@@ -383,7 +383,7 @@ ErrorOrJSONValue json_decode_value(JSONDecoder *decoder)
         ss_skip_whitespace(&decoder->ss);
         while (ss_peek(&decoder->ss) != '}') {
             if (ss_peek(&decoder->ss) != '"') {
-                ERROR(JSONValue, JSONError, 0, "Expected '\"'");
+                ERROR(JSONValue, JSONError, 0, "At position %zu: Expected '\"', got '%c'", decoder->ss.point, ss_peek(&decoder->ss));
             }
             StringView name = TRY_TO(StringView, JSONValue, json_decode_string(decoder));
             name = sv_copy(name);

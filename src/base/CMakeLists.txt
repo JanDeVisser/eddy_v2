@@ -14,6 +14,7 @@ add_library(
         integer.c
         io.c
         json.c
+        lexer.c
         log.c
         mem.c
         mutex.c
@@ -25,6 +26,7 @@ add_library(
         ss.c
         sv.c
         threadonce.h
+        token.c
 )
 
 add_executable(

@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include <allocate.h>
 #include <buffer.h>
 #include <ctype.h>
 #include <io.h>
-
-DECLARE_SHARED_ALLOCATOR(eddy);
+#include <lang/c.h>
+#include <lexer.h>
 
 DA_IMPL(Index);
+DA_IMPL(DisplayToken);
 DA_IMPL(Buffer);
 
 ErrorOrBuffer buffer_open(Buffer *buffer, StringView name)
@@ -22,12 +22,46 @@ ErrorOrBuffer buffer_open(Buffer *buffer, StringView name)
     RETURN(Buffer, buffer);
 }
 
-Buffer * buffer_new(Buffer *buffer)
+Buffer *buffer_new(Buffer *buffer)
 {
-    memset(buffer , 0, sizeof(Buffer));
+    memset(buffer, 0, sizeof(Buffer));
     buffer->text = sb_create();
     buffer->rebuild_needed = true;
     return buffer;
+}
+
+PaletteIndex token_palette_index(Token t)
+{
+    switch (t.kind) {
+    case TK_KEYWORD:
+        return PI_KEYWORD;
+    case TK_IDENTIFIER:
+        return PI_IDENTIFIER;
+    case TK_NUMBER:
+        return PI_NUMBER;
+    case TK_QUOTED_STRING: {
+        switch (t.code) {
+        case TC_SINGLE_QUOTED_STRING:
+        case TC_UNTERMINATED_SINGLE_QUOTED_STRING:
+            return PI_CHAR_LITERAL;
+        case TC_DOUBLE_QUOTED_STRING:
+        case TC_UNTERMINATED_DOUBLE_QUOTED_STRING:
+            return PI_STRING;
+        default:
+            return PI_DEFAULT;
+        }
+    }
+    case TK_SYMBOL:
+        return PI_PUNCTUATION;
+    case TK_COMMENT:
+        return PI_COMMENT;
+    case TK_DIRECTIVE:
+        return PI_PREPROCESSOR;
+    case TK_DIRECTIVE_ARG:
+        return PI_PREPROCESSOR_ARG;
+    default:
+        return PI_DEFAULT;
+    }
 }
 
 void buffer_build_indices(Buffer *buffer)
@@ -36,15 +70,42 @@ void buffer_build_indices(Buffer *buffer)
         return;
     }
     buffer->lines.size = 0;
-    da_append_Index(&buffer->lines, (Index) { 0, buffer->text.view });
+    buffer->tokens.size = 0;
+    Lexer lexer = lexer_for_language(&c_language);
+    lexer.whitespace_significant = true;
+    lexer.include_comments = true;
+    lexer_push_source(&lexer, buffer->text.view, buffer->name);
+    Index *current = da_append_Index(&buffer->lines, (Index) { 0, buffer->text.view });
+    ;
     size_t lineno = 0;
-    for (size_t ix = 0; ix < buffer->text.view.length; ++ix) {
-        if (buffer->text.view.ptr[ix] == '\n') {
-            buffer->lines.elements[lineno].line.length = ix - buffer->lines.elements[lineno].index_of + 1;
-            da_append_Index(&buffer->lines, (Index) { ix + 1, { buffer->text.view.ptr + ix + 1, 0 } });
+    //    printf("%5zu: ", lineno);
+    for (Token t = lexer_next(&lexer); t.kind != TK_END_OF_FILE; t = lexer_next(&lexer)) {
+        lexer_lex(&lexer);
+        if (token_matches(t, TK_WHITESPACE, TC_NEWLINE)) {
+            //            if (current->num_tokens == 0) {
+            //                printf("[EOL]\n");
+            //            } else {
+            //                printf("[EOL] %zu..%zu\n", current->first_token, current->first_token + current->num_tokens-1);
+            //            }
+            buffer->lines.elements[lineno].line.length = t.location - buffer->lines.elements[lineno].index_of + 1;
+            current = da_append_Index(&buffer->lines, (Index) { t.location + 1, { buffer->text.view.ptr + t.location + 1, 0 }, 0, 0 });
             ++lineno;
+            //            printf("%5zu: ", lineno);
+            continue;
         }
+        PaletteIndex pi = token_palette_index(t);
+        //        if (token_matches(t, TK_WHITESPACE, TC_WHITESPACE)) {
+        //            printf("%*.s", (int) t.text.length, "");
+        //        } else {
+        //            printf("[%.*s %s %s]", SV_ARG(t.text), TokenKind_name(t.kind), PaletteIndex_name(pi));
+        //        }
+        if (current->num_tokens == 0) {
+            current->first_token = buffer->tokens.size;
+        }
+        ++current->num_tokens;
+        da_append_DisplayToken(&buffer->tokens, (DisplayToken) { t.location, t.text.length, lineno, pi });
     }
+    //    printf("\n[EOF]\n=====================\n");
     buffer->rebuild_needed = false;
 }
 

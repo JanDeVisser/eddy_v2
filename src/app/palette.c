@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <base/log.h>
 #include <palette.h>
 
 PaletteDefinition palettes[PALETTE_MAX] = {
@@ -15,7 +16,8 @@ PaletteDefinition palettes[PALETTE_MAX] = {
         [PI_STRING] = (Color) { .a = 0xff, .b = 0x85, .g = 0x9d, .r = 0xd6 },                     // String.
         [PI_CHAR_LITERAL] = (Color) { .a = 0xff, .b = 0x70, .g = 0xa0, .r = 0xe0 },               // Char literal.
         [PI_PUNCTUATION] = (Color) { .a = 0xff, .b = 0xb4, .g = 0xb4, .r = 0xb4 },                // Punctuation.
-        [PI_PREPROCESSOR] = (Color) { .a = 0xff, .b = 0x40, .g = 0x90, .r = 0x90 },               // Preprocessor.
+        [PI_PREPROCESSOR] = (Color) { .a = 0xff, .b = 0x40, .g = 0x90, .r = 0x90 },               // Preprocessor directive.
+        [PI_PREPROCESSOR_ARG] = (Color) { .a = 0xff, .b = 0x40, .g = 0x90, .r = 0x90 },           // Preprocessor directive argument.
         [PI_IDENTIFIER] = (Color) { .a = 0xff, .b = 0xda, .g = 0xda, .r = 0xda },                 // Identifier.
         [PI_KNOWN_IDENTIFIER] = (Color) { .a = 0xff, .b = 0xb0, .g = 0xc9, .r = 0x4e },           // Known identifier.
         [PI_PREPROC_IDENTIFIER] = (Color) { .a = 0xff, .b = 0xc0, .g = 0x40, .r = 0xa0 },         // Preproc identifier.
@@ -42,7 +44,8 @@ PaletteDefinition palettes[PALETTE_MAX] = {
         [PI_STRING] = (Color) { .a = 0xff, .b = 0x20, .g = 0x20, .r = 0xa0 },                     // String.
         [PI_CHAR_LITERAL] = (Color) { .a = 0xff, .b = 0x30, .g = 0x40, .r = 0x70 },               // Char literal.
         [PI_PUNCTUATION] = (Color) { .a = 0xff, .b = 0x00, .g = 0x00, .r = 0x00 },                // Punctuation.
-        [PI_PREPROCESSOR] = (Color) { .a = 0xff, .b = 0x40, .g = 0x90, .r = 0x90 },               // Preprocessor.
+        [PI_PREPROCESSOR] = (Color) { .a = 0xff, .b = 0x40, .g = 0x90, .r = 0x90 },               // Preprocessor directive
+        [PI_PREPROCESSOR_ARG] = (Color) { .a = 0xff, .b = 0x40, .g = 0x90, .r = 0x90 },           // Preprocessor directive argument
         [PI_IDENTIFIER] = (Color) { .a = 0xff, .b = 0x40, .g = 0x40, .r = 0x40 },                 // Identifier.
         [PI_KNOWN_IDENTIFIER] = (Color) { .a = 0xff, .b = 0x60, .g = 0x60, .r = 0x10 },           // Known identifier.
         [PI_PREPROC_IDENTIFIER] = (Color) { .a = 0xff, .b = 0xc0, .g = 0x40, .r = 0xa0 },         // Preproc identifier.
@@ -70,6 +73,7 @@ PaletteDefinition palettes[PALETTE_MAX] = {
         [PI_CHAR_LITERAL] = (Color) { .a = 0xff, .b = 0x80, .g = 0x80, .r = 0x00 },               // Char literal.
         [PI_PUNCTUATION] = (Color) { .a = 0xff, .b = 0xff, .g = 0xff, .r = 0xff },                // Punctuation.
         [PI_PREPROCESSOR] = (Color) { .a = 0xff, .b = 0x00, .g = 0x80, .r = 0x00 },               // Preprocessor.
+        [PI_PREPROCESSOR_ARG] = (Color) { .a = 0xff, .b = 0x00, .g = 0x80, .r = 0x00 },           // Preprocessor argument.
         [PI_IDENTIFIER] = (Color) { .a = 0xff, .b = 0x00, .g = 0xff, .r = 0xff },                 // Identifier.
         [PI_KNOWN_IDENTIFIER] = (Color) { .a = 0xff, .b = 0xff, .g = 0xff, .r = 0xff },           // Known identifier.
         [PI_PREPROC_IDENTIFIER] = (Color) { .a = 0xff, .b = 0xff, .g = 0x00, .r = 0xff },         // Preproc identifier.
@@ -96,3 +100,17 @@ uint32_t ansi_palette[ANSI_MAX] = {
     ANSICOLORS(ANSICOLOR)
 #undef ANSICOLOR
 };
+
+char const *PaletteIndex_name(PaletteIndex index)
+{
+    switch (index) {
+#undef PALETTEINDEX
+#define PALETTEINDEX(I) \
+    case PI_##I:        \
+        return #I;
+        PALETTEINDICES(PALETTEINDEX)
+#undef PALETTEINDEX
+    default:
+        UNREACHABLE();
+    }
+}

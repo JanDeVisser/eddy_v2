@@ -9,7 +9,7 @@ add_executable(
 )
 
 target_include_directories(eddy PRIVATE ${raylib_INCLUDE_DIRS})
-target_link_libraries(eddy PRIVATE base lsp ${raylib_LIBRARIES})
+target_link_libraries(eddy PRIVATE base lang lsp ${raylib_LIBRARIES})
 
 install(TARGETS eddy
         ARCHIVE DESTINATION lib

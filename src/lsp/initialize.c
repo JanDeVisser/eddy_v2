@@ -5,8 +5,8 @@
  *
  * THIS IS GENERATED CODE. DO NOT MODIFY.
  */
- 
-// clang-format off 
+
+// clang-format off
 
 #include <lsp/initialize.h>
 
@@ -132,7 +132,9 @@ SemanticTokenTypes SemanticTokenTypes_parse(StringView s)
     if (sv_eq_cstr(s, "regexp")) return SemanticTokenTypesRegexp;
     if (sv_eq_cstr(s, "operator")) return SemanticTokenTypesOperator;
     if (sv_eq_cstr(s, "decorator")) return SemanticTokenTypesDecorator;
-    UNREACHABLE();
+    trace(CAT_LSP, "SemanticTokenTypes_parse('%.*s')?", SV_ARG(s));
+    return SemanticTokenTypesVariable;
+    // UNREACHABLE();
 }
 
 SemanticTokenTypes SemanticTokenTypes_decode(OptionalJSONValue json)
@@ -439,4 +441,3 @@ InitializeResult InitializeResult_decode(OptionalJSONValue v4)
 }
 
 // clang-format on
-
