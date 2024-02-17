@@ -24,6 +24,7 @@ typedef struct string_view {
 
 OPTIONAL(StringView)
 ERROR_OR(StringView);
+ERROR_OR(OptionalStringView);
 
 DA_ELEMENTS(StringView, strings)
 typedef DA_StringView StringList;
@@ -67,6 +68,7 @@ extern StringView         sv_decode_quoted_str(StringView str);
 extern StringView         sv_replace(StringView str, StringView from, StringView to);
 extern bool               sv_empty(StringView sv);
 extern bool               sv_not_empty(StringView sv);
+extern bool               sv_is_whitespace(StringView sv);
 extern size_t             sv_length(StringView sv);
 extern bool               sv_is_cstr(StringView sv);
 extern char const        *sv_cstr(StringView sv);
@@ -148,6 +150,7 @@ extern bool        sl_empty(StringList *sl);
 extern size_t      sl_size(StringList *sl);
 
 extern StringScanner ss_create(StringView sv);
+extern void          ss_rewind(StringScanner *ss);
 extern void          ss_reset(StringScanner *ss);
 extern bool          ss_expect(StringScanner *ss, char ch);
 extern bool          ss_expect_sv(StringScanner *ss, StringView sv);
@@ -162,6 +165,7 @@ extern StringView    ss_read_from_mark(StringScanner *ss);
 extern int           ss_readchar(StringScanner *ss);
 extern int           ss_peek(StringScanner *ss);
 extern int           ss_peek_with_offset(StringScanner *ss, size_t offset);
+extern StringView    ss_peek_sv(StringScanner *ss, size_t length);
 extern void          ss_skip(StringScanner *ss, size_t num);
 extern void          ss_skip_one(StringScanner *ss);
 extern void          ss_skip_whitespace(StringScanner *ss);

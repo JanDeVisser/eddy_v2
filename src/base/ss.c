@@ -78,6 +78,17 @@ int ss_peek_with_offset(StringScanner *ss, size_t offset)
     return ((ss->point + offset) < ss->string.length) ? ss->string.ptr[ss->point + offset] : 0;
 }
 
+StringView ss_peek_sv(StringScanner *ss, size_t length)
+{
+    if (ss->point + length > ss->string.length) {
+        length = ss->string.length - ss->point;
+    }
+    if (length == 0) {
+        return sv_null();
+    }
+    return (StringView) { .ptr = ss->string.ptr + ss->point, length };
+}
+
 void ss_skip(StringScanner *ss, size_t num)
 {
     if (ss->point + num > ss->string.length) {
