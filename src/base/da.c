@@ -45,3 +45,6 @@ void *da_element(DA_void *array, size_t ix, size_t elem_size)
 
 DA_IMPL_TYPE(char_ptr, char *)
 DA_IMPL_TYPE(void_ptr, void *)
+DA_IMPL(uint32_t)
+DA_IMPL(size_t)
+DA_IMPL(char)

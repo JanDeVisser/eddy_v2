@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include <stdlib.h>
-
 #ifndef __DA_H__
 #define __DA_H__
+
+#include <stdlib.h>
 
 #define DIA_ELEMENTS(T, E) \
     size_t size;           \
@@ -96,5 +96,8 @@ extern void *da_element(DA_void *array, size_t ix, size_t elem_size);
 
 DA_STRUCT(void_ptr, void *);
 DA_STRUCT(char_ptr, char *);
+DA_WITH_NAME(uint32_t, UInts);
+DA_WITH_NAME(size_t, Sizes);
+DA_WITH_NAME(char, Chars);
 
 #endif /* __DA_H__ */
