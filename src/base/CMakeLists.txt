@@ -27,6 +27,7 @@ add_library(
         sv.c
         threadonce.h
         token.c
+        xml.c
 )
 
 add_executable(
@@ -69,10 +70,18 @@ add_executable(
 target_link_libraries(json_format base)
 target_compile_definitions(json_format PUBLIC JSON_FORMAT)
 
+add_executable(
+        xml_format
+        xml.c
+)
+
+target_link_libraries(xml_format base)
+target_compile_definitions(xml_format PUBLIC XML_FORMAT)
+
 add_subdirectory("test")
 
 
-install(TARGETS json_format
+install(TARGETS json_format xml_format
         ARCHIVE DESTINATION lib
         RUNTIME DESTINATION bin
         LIBRARY DESTINATION lib)
