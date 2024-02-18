@@ -41,6 +41,7 @@ typedef enum trace_category {
 // clang-format off
 extern void log_init();
 extern format_args(2, 3)          void trace(TraceCategory category, char const *msg, ...);
+extern                            bool log_category_on(TraceCategory category);
 extern                            void vtrace(char const *msg, va_list args);
 noreturn extern format_args(1, 2) void _fatal(char const *msg, ...);
 noreturn extern                   void vfatal(char const *msg, va_list args);

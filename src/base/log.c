@@ -68,6 +68,11 @@ void trace(TraceCategory category, char const *msg, ...)
     va_end(args);
 }
 
+bool log_category_on(TraceCategory category)
+{
+    return s_categories[(int) category];
+}
+
 void vtrace(char const *msg, va_list args)
 {
     vemit_log_message(LL_TRACE, CAT_COUNT, msg, args);
