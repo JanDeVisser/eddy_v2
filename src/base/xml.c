@@ -116,6 +116,46 @@ StringView xml_to_string(XMLNode node)
     }
 }
 
+StringView _xml_debug(XMLNode node, XMLNodeImpl *impl)
+{
+    switch (impl->type) {
+    case XML_TYPE_DOCUMENT:
+        return sv_printf("D [%zu][%zu]", impl->document.processing_instructions.size, impl->document.children.size);
+    case XML_TYPE_ELEMENT:
+        return sv_printf("E %.*s [%zu][%zu]", SV_ARG(impl->element.tag), impl->element.attributes.size, impl->element.children.size);
+    case XML_TYPE_PROCESSING_INSTRUCTION:
+        return sv_printf("P %.*s [%zu]", SV_ARG(impl->pi.tag), impl->element.attributes.size);
+    case XML_TYPE_ATTRIBUTE:
+        return sv_printf("A %.*s='%.*s'", SV_ARG(impl->attribute.tag), SV_ARG(impl->attribute.text));
+    case XML_TYPE_TEXT:
+        if (impl->text.length > 20) {
+            return get_string(node, "T '%.*s...'", impl->text.ptr, 20);
+        }
+        return get_string(node, "T '%.*s'", SV_ARG(impl->text));
+    default:
+        UNREACHABLE();
+    }
+}
+
+StringView xml_debug(XMLNode node)
+{
+    XMLNodeImpl *impl = xml_impl(node);
+    StringView   debug = _xml_debug(node, impl);
+    StringView   ret = sv_printf("[%zu] %.*s", node.index, SV_ARG(debug));
+    sv_free(debug);
+    return ret;
+}
+
+#define TRACE(node, msg, ...)                                        \
+    if (log_category_on(CAT_XML)) {                                  \
+        StringView _debug = xml_debug(node);                         \
+        StringView _msg = sv_printf(msg __VA_OPT__(, ) __VA_ARGS__); \
+        trace(CAT_XML, "%.*s: %.*s", SV_ARG(_debug), SV_ARG(_msg));  \
+        sv_free(_msg);                                               \
+        sv_free(_debug);                                             \
+    }                                                                \
+    while (0)
+
 XMLNode xml_document()
 {
     XMLNodeImpls *impls = MALLOC(XMLNodeImpls);
@@ -124,7 +164,7 @@ XMLNode xml_document()
 
     XMLNode pi = xml_processing_instruction(ret, sv_from("xml"));
     xml_set_attribute(pi, sv_from("version"), sv_from("1.0"));
-    trace(CAT_XML, "Created document");
+    TRACE(ret, "Created document");
     return ret;
 }
 
@@ -153,15 +193,35 @@ XMLNodes xml_children_by_tag(XMLNode node, StringView tag)
 {
     XMLNodeImpl *impl = xml_impl(node);
     assert(impl->type == XML_TYPE_DOCUMENT || impl->type == XML_TYPE_ELEMENT);
-    XMLNodes ret;
-    for (size_t ix = 0; ix < impl->element.attributes.size; ++ix) {
+    XMLNodes ret = { 0 };
+    for (size_t ix = 0; ix < impl->element.children.size; ++ix) {
         XMLNode      elem = { node.registry, impl->element.children.elements[ix] };
         XMLNodeImpl *elem_impl = xml_impl(elem);
+        if (elem_impl->type != XML_TYPE_ELEMENT) {
+            continue;
+        }
         if (sv_eq(elem_impl->element.tag, tag)) {
             da_append_XMLNode(&ret, elem);
         }
     }
     return ret;
+}
+
+OptionalXMLNode xml_first_child_by_tag(XMLNode node, StringView tag)
+{
+    XMLNodeImpl *impl = xml_impl(node);
+    assert(impl->type == XML_TYPE_DOCUMENT || impl->type == XML_TYPE_ELEMENT);
+    for (size_t ix = 0; ix < impl->element.children.size; ++ix) {
+        XMLNode      elem = { node.registry, impl->element.children.elements[ix] };
+        XMLNodeImpl *elem_impl = xml_impl(elem);
+        if (elem_impl->type != XML_TYPE_ELEMENT) {
+            continue;
+        }
+        if (sv_eq(elem_impl->element.tag, tag)) {
+            RETURN_VALUE(XMLNode, elem);
+        }
+    }
+    RETURN_EMPTY(XMLNode);
 }
 
 size_t xml_attribute_count(XMLNode node)
@@ -211,7 +271,7 @@ OptionalStringView xml_text_of(XMLNode node)
         RETURN_VALUE(StringView, impl->attribute.text);
     case XML_TYPE_ELEMENT:
     case XML_TYPE_DOCUMENT: {
-        if (impl->element.children.size != 0 || xml_node_type(xml_child(node, 0)) != XML_TYPE_TEXT) {
+        if (impl->element.children.size == 0 || xml_node_type(xml_child(node, 0)) != XML_TYPE_TEXT) {
             RETURN_EMPTY(StringView);
         }
         return xml_text_of(xml_child(node, 0));
@@ -225,12 +285,16 @@ XMLNode xml_processing_instruction(XMLNode parent, StringView tag)
 {
     XMLNodeImpl *parent_impl = xml_impl(parent);
     assert(parent_impl->type == XML_TYPE_DOCUMENT);
+    if (sv_eq_cstr(tag, "xml") && parent_impl->document.processing_instructions.size != 0) {
+        return (XMLNode) { parent.registry, parent_impl->document.processing_instructions.elements[0] };
+    }
     XMLNode      pi = xml_create(parent.registry, parent.index, XML_TYPE_PROCESSING_INSTRUCTION);
     XMLNodeImpl *pi_impl = xml_impl(pi);
     pi_impl->pi.tag = sv_copy(tag);
-    if (!sv_eq_cstr(pi_impl->pi.tag, "xml") || parent_impl->document.processing_instructions.size == 0) {
-        da_append_size_t(&parent_impl->document.processing_instructions, pi.index);
-    }
+    da_append_size_t(&parent_impl->document.processing_instructions, pi.index);
+    StringView pi_debug = xml_debug(pi);
+    TRACE(parent, "xml_processing_instruction(%.*s)", SV_ARG(pi_debug));
+    sv_free(pi_debug);
     return pi;
 }
 
@@ -243,6 +307,9 @@ XMLNode xml_element(XMLNode parent, StringView tag)
     XMLNodeImpl *elem_impl = xml_impl(elem);
     elem_impl->element.tag = sv_copy(tag);
     da_append_size_t(&parent_impl->element.children, elem.index);
+    StringView elem_debug = xml_debug(elem);
+    TRACE(parent, "xml_element(%.*s)", SV_ARG(elem_debug));
+    sv_free(elem_debug);
     return elem;
 }
 
@@ -251,11 +318,14 @@ XMLNode xml_text(XMLNode parent, StringView text)
     XMLNodeImpl *parent_impl = xml_impl(parent);
     assert(parent_impl->type == XML_TYPE_DOCUMENT || parent_impl->type == XML_TYPE_ELEMENT);
     assert(xml_child_count(parent) == 0);
-    XMLNode      elem = xml_create(parent.registry, parent.index, XML_TYPE_TEXT);
-    XMLNodeImpl *elem_impl = xml_impl(elem);
-    elem_impl->text = sv_copy(text);
-    da_append_size_t(&parent_impl->element.children, elem.index);
-    return elem;
+    XMLNode      txt = xml_create(parent.registry, parent.index, XML_TYPE_TEXT);
+    XMLNodeImpl *txt_impl = xml_impl(txt);
+    txt_impl->text = sv_copy(text);
+    da_append_size_t(&parent_impl->element.children, txt.index);
+    StringView debug = xml_debug(txt);
+    TRACE(parent, "xml_text(%.*s)", SV_ARG(debug));
+    sv_free(debug);
+    return txt;
 }
 
 XMLNode xml_text_element(XMLNode parent, StringView tag, StringView text)
@@ -322,10 +392,10 @@ XMLNode xml_set_attribute(XMLNode node, StringView attr_tag, StringView text)
     assert(parent_impl->type == XML_TYPE_PROCESSING_INSTRUCTION || parent_impl->type == XML_TYPE_ELEMENT);
     for (size_t ix = 0; ix < parent_impl->element.attributes.size; ++ix) {
         XMLNodeImpl *attr = xml_impl((XMLNode) { node.registry, parent_impl->element.attributes.elements[ix] });
-        ;
         if (sv_eq(attr->attribute.tag, attr_tag)) {
             sv_free(attr->attribute.text);
             attr->attribute.text = sv_copy(text);
+            TRACE(node, "xml_set_attribute(%.*s, '%.*s') -> overwriting %zu", SV_ARG(attr_tag), SV_ARG(text), parent_impl->element.attributes.size);
             return node;
         }
     }
@@ -334,6 +404,7 @@ XMLNode xml_set_attribute(XMLNode node, StringView attr_tag, StringView text)
     impl->attribute.tag = sv_copy(attr_tag);
     impl->attribute.text = sv_copy(text);
     da_append_size_t(&parent_impl->element.attributes, a.index);
+    TRACE(node, "xml_set_attribute(%.*s, '%.*s') -> new %zu", SV_ARG(attr_tag), SV_ARG(text), parent_impl->element.attributes.size);
     return a;
 }
 
@@ -567,7 +638,7 @@ ErrorOrOptionalXMLNode deserialize_element(XMLDeserializer *deserializer, XMLNod
         ERROR(OptionalXMLNode, XMLError, deserializer->ss.point, "Expected >");
     }
     ss_skip_whitespace(&deserializer->ss);
-    trace(CAT_XML, "Element '%.*s' [%zu] deserialized", SV_ARG(tag), xml_child_count(result));
+    trace(CAT_XML, "Element '%.*s' [%zu] [%zu] deserialized", SV_ARG(tag), xml_attribute_count(result), xml_child_count(result));
     RETURN(OptionalXMLNode, OptionalXMLNode_create(result));
 }
 
@@ -575,7 +646,13 @@ ErrorOrOptionalXMLNode deserialize_node(XMLDeserializer *deserializer, XMLNode p
 {
     OptionalXMLNode ret = { 0 };
 
-    trace(CAT_XML, "deserialize_node(%zu, %.*s)", deserializer->ss.point, SV_ARG(xml_to_string(parent)));
+    if (xml_node_type(parent) == XML_TYPE_ELEMENT) {
+        StringView debug = xml_debug(parent);
+        trace(CAT_XML, "deserialize_node(%zu, %.*s)", deserializer->ss.point, SV_ARG(debug));
+        sv_free(debug);
+    } else {
+        trace(CAT_XML, "deserialize_node(%zu, [%zu] %.*s)", deserializer->ss.point, parent.index, SV_ARG(xml_to_string(parent)));
+    }
     // ss_skip_whitespace(&deserializer->ss);
     switch (ss_peek(&deserializer->ss)) {
     case 0:

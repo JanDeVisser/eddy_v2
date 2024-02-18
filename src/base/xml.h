@@ -67,6 +67,7 @@ ERROR_OR(OptionalXMLNode)
 
 extern char const        *XMLType_name(XMLType type);
 extern StringView         xml_to_string(XMLNode node);
+extern StringView         xml_debug(XMLNode node);
 extern XMLNode            xml_document();
 extern XMLNode            xml_document_fragment();
 extern XMLNode            xml_processing_instruction(XMLNode parent, StringView tag);
@@ -80,6 +81,7 @@ extern XMLType            xml_node_type(XMLNode node);
 extern size_t             xml_child_count(XMLNode node);
 extern XMLNode            xml_child(XMLNode node, size_t ix);
 extern XMLNodes           xml_children_by_tag(XMLNode node, StringView tag);
+extern OptionalXMLNode    xml_first_child_by_tag(XMLNode node, StringView tag);
 extern size_t             xml_attribute_count(XMLNode node);
 extern XMLNode            xml_attribute(XMLNode node, size_t ix);
 extern OptionalXMLNode    xml_attribute_by_tag(XMLNode node, StringView tag);
