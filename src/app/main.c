@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include <raylib.h>
-
 #include <allocate.h>
 
 #include <eddy.h>
