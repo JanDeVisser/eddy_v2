@@ -7,6 +7,8 @@
 #ifndef __LSP_LSP_BASE_H__
 #define __LSP_LSP_BASE_H__
 
+#include <stdint.h>
+
 #include <json.h>
 #include <lsp.h>
 
@@ -132,5 +134,6 @@ OPTIONAL_JSON(URI)
 OPTIONAL_JSON(DocumentUri)
 OPTIONAL_JSON(Bool)
 JSON(UInts, UInts)
+OPTIONAL_JSON(UInt)
 
 #endif /* __LSP_LSP_BASE_H__ */

@@ -331,10 +331,20 @@ def decode_variant_variant(variant, var, value, tag, c, indent):
             p(indent, c, f'    {value}._{tag} = {var}.value.string;')
             p(indent, c, f'}}')
         else:
-            p(indent, c, f'if ({var}.value.type == JSON_TYPE_OBJECT) {{')
-            p(indent, c, f'    {value}.tag = {tag};')
-            p(indent, c, f'    {value}._{tag} = {render_prefix(variant)}_decode({var});')
-            p(indent, c, f'}}')
+            if variant["type"] in enums:
+                enum = enums[variant["type"]]
+                if enum['value_type'] == "string":
+                    p(indent, c, f'if ({var}.value.type == JSON_TYPE_STRING) {{')
+                else:
+                    p(indent, c, f'if ({var}.value.type == JSON_TYPE_INT) {{')
+                p(indent, c, f'    {value}.tag = {tag};')
+                p(indent, c, f'    {value}._{tag} = {render_prefix(variant)}_decode({var});')
+                p(indent, c, f'}}')
+            else:
+                p(indent, c, f'if ({var}.value.type == JSON_TYPE_OBJECT) {{')
+                p(indent, c, f'    {value}.tag = {tag};')
+                p(indent, c, f'    {value}._{tag} = {render_prefix(variant)}_decode({var});')
+                p(indent, c, f'}}')
     if "struct" in variant:
         p(indent, c, f'if ({var}.value.type == JSON_TYPE_OBJECT) {{')
         indent += 4

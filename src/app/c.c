@@ -22,78 +22,46 @@ void c_mode_cmd_format_source(CommandContext *ctx)
     Editor     *editor = (Editor *) ctx->target->parent->parent;
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
-    eddy_set_message(&eddy, ctx->called_as);
+    eddy_set_message(&eddy, "%.*", SV_ARG(ctx->called_as));
 
-    if (sv_not_empty(buffer->name)) {
-        StringView output = MUST(
-            StringView,
-            execute_pipe(
-                buffer->text.view,
-                sv_from("clang-format"),
-                "--output-replacements-xml",
-                TextFormat("--assume-filename=%.*s", SV_ARG(buffer->name)),
-                TextFormat("--cursor=%d", view->cursor)));
-
-        trace(CAT_LSP, "clang-format: %.*s\n", SV_ARG(output));
-        XMLNode         doc = MUST(XMLNode, xml_deserialize(output));
-        StringView doc_sv = xml_serialize(doc);
-        trace(CAT_LSP, "doc serialized %.*s\n", SV_ARG(doc_sv));
-        OptionalXMLNode replacements_maybe = xml_first_child_by_tag(doc, sv_from("replacements"));
-        if (!replacements_maybe.has_value) {
-            return;
-        }
-        XMLNodes replacements = xml_children_by_tag(replacements_maybe.value, sv_from("replacement"));
-        trace(CAT_LSP, "clang-format returned %zu replacements", replacements.size);
-        for (size_t ix = 0; ix < replacements.size; ++ix) {
-            XMLNode            repl = replacements.elements[ix];
-            StringView         replacement_text = sv_null();
-            OptionalStringView repl_text_maybe = xml_text_of(repl);
-            if (repl_text_maybe.has_value) {
-                replacement_text = repl_text_maybe.value;
-            }
-            trace(CAT_LSP, "[%zu] replacement '%.*s'", ix, SV_ARG(replacement_text));
-            EditType           edit_type = ETReplace;
-            XMLNode            attr = MUST_OPTIONAL(XMLNode, xml_attribute_by_tag(repl, sv_from("length")));
-            StringView         attr_text = MUST_OPTIONAL(StringView, xml_text_of(attr));
-            trace(CAT_LSP, "[%zu] length '%.*s'", ix, SV_ARG(attr_text));
-            IntegerParseResult parse_result = sv_parse_u32(attr_text);
-            assert(parse_result.success);
-            uint32_t length = parse_result.integer.u32;
-            attr = MUST_OPTIONAL(XMLNode, xml_attribute_by_tag(repl, sv_from("offset")));
-            attr_text = MUST_OPTIONAL(StringView, xml_text_of(attr));
-            trace(CAT_LSP, "[%zu] offset '%.*s'", ix, SV_ARG(attr_text));
-            parse_result = sv_parse_u32(attr_text);
-            assert(parse_result.success);
-            uint32_t offset = parse_result.integer.u32;
-            if (sv_empty(replacement_text)) {
-                buffer_delete(buffer, offset, length);
-            } else if (length == 0) {
-                buffer_insert(buffer, replacement_text, offset);
-            } else {
-                buffer_replace(buffer, offset, length, replacement_text);
-            }
-        }
-        OptionalXMLNode cursor_maybe = xml_first_child_by_tag(replacements_maybe.value, sv_from("cursor"));
-        if (cursor_maybe.has_value) {
-            StringView position = MUST_OPTIONAL(StringView, xml_text_of(cursor_maybe.value));
-            IntegerParseResult parse_result = sv_parse_u32(position);
-            assert(parse_result.success);
-            uint32_t pos = parse_result.integer.u32;
-            view->new_cursor = pos;
-            view->cursor_col = -1;
-            view->selection = -1;
-        }
-        xml_free(doc);
-        eddy_set_message(&eddy, sv_from("Formatted"));
+    if (sv_empty(buffer->name)) {
+        eddy_set_message(&eddy, "Cannot format untitled buffer");
         return;
     }
-    eddy_set_message(&eddy, sv_from("Cannot format untitled buffer"));
+    int num = lsp_format(view->buffer_num);
+    if (num >= 0) {
+        eddy_set_message(&eddy, "Formatted. Made %d changes", num);
+    }
 }
 
 void c_mode_on_draw(CMode *mode)
 {
-    BufferView *view = (BufferView *) mode->parent;
-    lsp_semantic_tokens(view->buffer_num);
+}
+
+void c_mode_buffer_event_listener(Buffer *buffer, BufferEvent event)
+{
+    switch (event.type) {
+    case ETInsert:
+        lsp_did_change(buffer->buffer_ix, event.range.start, event.range.end, buffer_sv_from_ref(buffer, event.insert.text));
+        break;
+    case ETDelete:
+        lsp_did_change(buffer->buffer_ix, event.range.start, event.range.end, sv_null());
+        break;
+    case ETReplace:
+        lsp_did_change(buffer->buffer_ix, event.range.start, event.range.end, buffer_sv_from_ref(buffer, event.replace.replacement));
+        break;
+    case ETIndexed:
+        lsp_semantic_tokens(buffer->buffer_ix);
+        break;
+    case ETSave:
+        lsp_did_save(buffer->buffer_ix);
+        break;
+    case ETClose:
+        lsp_did_close(buffer->buffer_ix);
+        break;
+    default:
+        break;
+    }
 }
 
 void c_mode_init(CMode *mode)
@@ -102,7 +70,10 @@ void c_mode_init(CMode *mode)
         (KeyCombo) { KEY_L, KMOD_SHIFT | KMOD_CONTROL });
     mode->handlers.on_draw = (WidgetOnDraw) c_mode_on_draw;
     BufferView *view = (BufferView *) mode->parent;
+    Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
+    buffer_add_listener(buffer, c_mode_buffer_event_listener);
     lsp_on_open(view->buffer_num);
+    lsp_semantic_tokens(view->buffer_num);
 }
 
 typedef enum {
@@ -152,11 +123,11 @@ int handle_include_directive(Lexer *lexer)
 
 int handle_macro_name_directive(Lexer *lexer)
 {
-    char const *buffer = lexer_source(lexer).ptr;
-    size_t      ix = 0;
-    size_t      state = (size_t) lexer->language_data;
+    char const  *buffer = lexer_source(lexer).ptr;
+    size_t const state = (size_t) lexer->language_data;
     switch (state) {
     case CDirectiveStateInit: {
+        size_t ix = 0;
         while (buffer[ix] == ' ' || buffer[ix] == '\t') {
             ++ix;
         }

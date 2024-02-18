@@ -4,9 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <ctype.h>
+
 #include <buffer.h>
 #include <c.h>
-#include <ctype.h>
+#include <eddy.h>
 #include <io.h>
 #include <lexer.h>
 
@@ -14,11 +16,13 @@ DA_IMPL(Index);
 DA_IMPL(DisplayToken);
 DA_IMPL(Buffer);
 
-DA_IMPL(Edit);
+DA_IMPL(BufferEvent);
+
+void buffer_apply(Buffer *buffer, BufferEvent event);
 
 ErrorOrBuffer buffer_open(Buffer *buffer, StringView name)
 {
-    buffer->name = name;
+    buffer->name = sv_copy(name);
     buffer->text.view = TRY_TO(StringView, Buffer, read_file_by_name(name));
     buffer->lines.size = 0;
     buffer_build_indices(buffer);
@@ -27,12 +31,9 @@ ErrorOrBuffer buffer_open(Buffer *buffer, StringView name)
 
 void buffer_close(Buffer *buffer)
 {
-    sv_free(buffer->text.view);
-    sv_free(buffer->undo_buffer.view);
-    free(buffer->undo_stack.elements);
-    free(buffer->tokens.elements);
-    free(buffer->lines.elements);
-    memset(buffer, 0, sizeof(Buffer));
+    BufferEvent event = { 0 };
+    event.type = ETClose;
+    buffer_apply(buffer, event);
 }
 
 PaletteIndex token_palette_index(Token t)
@@ -71,8 +72,8 @@ PaletteIndex token_palette_index(Token t)
 
 void buffer_build_indices(Buffer *buffer)
 {
-    assert(buffer->indexed_version <= buffer->undo_stack.size);
-    if (buffer->indexed_version == buffer->undo_stack.size && buffer->lines.size > 0) {
+    assert(buffer->indexed_version <= buffer->version);
+    if (buffer->indexed_version == buffer->version && buffer->lines.size > 0) {
         return;
     }
     buffer->lines.size = 0;
@@ -96,7 +97,7 @@ void buffer_build_indices(Buffer *buffer)
             buffer->lines.elements[lineno].line.length = t.location - buffer->lines.elements[lineno].index_of + 1;
             current = da_append_Index(&buffer->lines, (Index) { t.location + 1, { buffer->text.view.ptr + t.location + 1, 0 }, 0, 0 });
             // ++lineno;
-            printf("%5zu: ", lineno);
+            // printf("%5zu: ", lineno);
             continue;
         }
         PaletteIndex pi = token_palette_index(t);
@@ -112,7 +113,11 @@ void buffer_build_indices(Buffer *buffer)
         da_append_DisplayToken(&buffer->tokens, (DisplayToken) { t.location, t.text.length, lineno, pi });
     }
     // printf("\n[EOF]\n=====================\n");
-    buffer->indexed_version = buffer->undo_stack.size;
+    buffer->indexed_version = buffer->version;
+    BufferEvent event = { .type = ETIndexed };
+    for (BufferEventListenerList *list_entry = buffer->listeners; list_entry != NULL; list_entry = list_entry->next) {
+        list_entry->listener(buffer, event);
+    }
 }
 
 size_t buffer_line_for_index(Buffer *buffer, int index)
@@ -137,6 +142,20 @@ size_t buffer_line_for_index(Buffer *buffer, int index)
     }
 }
 
+IntVector2 buffer_index_to_position(Buffer *buffer, int index)
+{
+    IntVector2 ret = { 0 };
+    ret.line = buffer_line_for_index(buffer, index);
+    ret.column = index - buffer->lines.elements[ret.line].index_of;
+    return ret;
+}
+
+size_t buffer_position_to_index(Buffer *buffer, IntVector2 position)
+{
+    Index *line = buffer->lines.elements + position.line;
+    return line->index_of + position.column;
+}
+
 StringRef append_to_undo_buffer(Buffer *buffer, StringView sv)
 {
     if (sv.ptr < buffer->undo_buffer.view.ptr || sv.ptr > buffer->undo_buffer.view.ptr + buffer->undo_buffer.view.length) {
@@ -152,103 +171,153 @@ StringRef append_to_undo_buffer_from_text(Buffer *buffer, size_t at, size_t coun
     return append_to_undo_buffer(buffer, (StringView) { buffer->text.view.ptr + at, count });
 }
 
-StringView sv_from_ref(Buffer *buffer, StringRef ref)
+StringView buffer_sv_from_ref(Buffer *buffer, StringRef ref)
 {
+    if (ref.length == 0) {
+        return sv_null();
+    }
     return (StringView) { buffer->undo_buffer.view.ptr + ref.index, ref.length };
 }
 
-void buffer_apply(Buffer *buffer, Edit edit)
+void buffer_apply(Buffer *buffer, BufferEvent event)
 {
-    switch (edit.type) {
+    switch (event.type) {
     case ETInsert: {
-        if (edit.insert.text.length == 0) {
+        if (event.insert.text.length == 0) {
             return;
         }
-        StringView sv = sv_from_ref(buffer, edit.insert.text);
-        if (edit.position < buffer->text.view.length) {
-            sb_insert_sv(&buffer->text, sv, edit.position);
+        event.range.start = buffer_index_to_position(buffer, event.position);
+        event.range.end = event.range.start;
+        StringView sv = buffer_sv_from_ref(buffer, event.insert.text);
+        if (event.position < buffer->text.view.length) {
+            sb_insert_sv(&buffer->text, sv, event.position);
         } else {
             sb_append_sv(&buffer->text, sv);
         }
+        ++buffer->version;
     } break;
     case ETDelete: {
-        if (edit.delete.count == 0) {
+        if (event.delete.count == 0) {
             return;
         }
-        sb_remove(&buffer->text, edit.position, edit.delete.count);
+        event.range.start = buffer_index_to_position(buffer, event.position);
+        event.range.end = buffer_index_to_position(buffer, event.position + event.delete.count);
+        sb_remove(&buffer->text, event.position, event.delete.count);
+        ++buffer->version;
     } break;
     case ETReplace: {
-        if (edit.replace.replacement.length == 0) {
+        if (event.replace.replacement.length == 0) {
             return;
         }
-        sb_remove(&buffer->text, edit.position, edit.replace.overwritten.length);
-        StringView sv = sv_from_ref(buffer, edit.replace.replacement);
-        if (edit.position < buffer->text.view.length) {
-            sb_insert_sv(&buffer->text, sv, edit.position);
+        event.range.start = buffer_index_to_position(buffer, event.position);
+        event.range.end = buffer_index_to_position(buffer, event.position + event.replace.overwritten.length);
+        sb_remove(&buffer->text, event.position, event.replace.overwritten.length);
+        StringView sv = buffer_sv_from_ref(buffer, event.replace.replacement);
+        if (event.position < buffer->text.view.length) {
+            sb_insert_sv(&buffer->text, sv, event.position);
         } else {
             sb_append_sv(&buffer->text, sv);
         }
+        ++buffer->version;
+    } break;
+    case ETSave: {
+        assert(buffer->saved_version <= buffer->version);
+        StringView name = buffer_sv_from_ref(buffer, event.save.file_name);
+        if (sv_empty(name) && buffer->saved_version == buffer->version) {
+            return;
+        }
+        if (sv_not_empty(name)) {
+            buffer->name = sv_copy(name);
+            sv_free(buffer->uri);
+        }
+        if (sv_empty(buffer->name)) {
+            return;
+        }
+        MUST(Size, write_file_by_name(buffer->name, buffer->text.view));
+        buffer->saved_version = buffer->undo_stack.size;
+    } break;
+    case ETClose: {
+        for (BufferEventListenerList *list_entry = buffer->listeners; list_entry != NULL; list_entry = list_entry->next) {
+            list_entry->listener(buffer, event);
+        }
+        sv_free(buffer->text.view);
+        sv_free(buffer->undo_buffer.view);
+        sv_free(buffer->name);
+        sv_free(buffer->uri);
+        free(buffer->undo_stack.elements);
+        free(buffer->tokens.elements);
+        free(buffer->lines.elements);
+        for (BufferEventListenerList *entry = buffer->listeners; entry;) {
+            BufferEventListenerList *next = entry->next;
+            free(entry);
+            entry = next;
+        }
+        memset(buffer, 0, sizeof(Buffer));
+        return;
     } break;
     default:
         break;
     }
+    for (BufferEventListenerList *list_entry = buffer->listeners; list_entry != NULL; list_entry = list_entry->next) {
+        list_entry->listener(buffer, event);
+    }
 }
 
-void buffer_edit(Buffer *buffer, Edit edit)
+void buffer_edit(Buffer *buffer, BufferEvent event)
 {
-    switch (edit.type) {
+    switch (event.type) {
     case ETInsert: {
-        if (edit.insert.text.length == 0) {
+        if (event.insert.text.length == 0) {
             return;
         }
-        edit.position = iclamp(edit.position, 0, buffer->text.view.length);
+        event.position = iclamp(event.position, 0, buffer->text.view.length);
     } break;
     case ETDelete: {
-        edit.position = iclamp(edit.position, 0, buffer->text.view.length);
-        edit.delete.count = iclamp(edit.delete.count, 0, buffer->text.view.length - edit.position);
-        if (edit.delete.count == 0) {
+        event.position = iclamp(event.position, 0, buffer->text.view.length);
+        event.delete.count = iclamp(event.delete.count, 0, buffer->text.view.length - event.position);
+        if (event.delete.count == 0) {
             return;
         }
-        edit.delete.deleted = append_to_undo_buffer_from_text(buffer, edit.position, edit.delete.count);
+        event.delete.deleted = append_to_undo_buffer_from_text(buffer, event.position, event.delete.count);
     } break;
     case ETReplace: {
-        edit.position = iclamp(edit.position, 0, buffer->text.view.length);
-        int count = iclamp(edit.replace.overwritten.length, 0, buffer->text.view.length - edit.position);
+        event.position = iclamp(event.position, 0, buffer->text.view.length);
+        int count = iclamp(event.replace.overwritten.length, 0, buffer->text.view.length - event.position);
         if (count <= 0) {
             return;
         }
-        edit.replace.overwritten = append_to_undo_buffer_from_text(buffer, edit.position, count);
+        event.replace.overwritten = append_to_undo_buffer_from_text(buffer, event.position, count);
     } break;
     default:
         break;
     }
-    buffer_apply(buffer, edit);
-    da_append_Edit(&buffer->undo_stack, edit);
+    buffer_apply(buffer, event);
+    da_append_BufferEvent(&buffer->undo_stack, event);
     buffer->undo_pointer = buffer->undo_stack.size;
 }
 
-Edit revert_edit(Edit edit)
+BufferEvent revert_edit(BufferEvent event)
 {
-    Edit ret = {0};
-    switch (edit.type) {
+    BufferEvent ret = { 0 };
+    switch (event.type) {
     case ETInsert:
         ret.type = ETDelete;
-        ret.position = edit.position;
-        ret.delete.count = edit.insert.text.length;
+        ret.position = event.position;
+        ret.delete.count = event.insert.text.length;
         break;
     case ETDelete:
         ret.type = ETInsert;
-        ret.position = edit.position;
-        ret.insert.text = edit.delete.deleted;
+        ret.position = event.position;
+        ret.insert.text = event.delete.deleted;
         break;
     case ETReplace:
         ret.type = ETReplace;
-        ret.position = edit.position;
-        ret.replace.overwritten = edit.replace.replacement;
-        ret.replace.replacement = edit.replace.overwritten;
+        ret.position = event.position;
+        ret.replace.overwritten = event.replace.replacement;
+        ret.replace.replacement = event.replace.overwritten;
         break;
     default:
-        UNREACHABLE();
+        break;
     }
     return ret;
 }
@@ -271,30 +340,30 @@ void buffer_redo(Buffer *buffer)
 
 void buffer_insert(Buffer *buffer, StringView text, int pos)
 {
-    Edit edit = {0};
-    edit.type = ETInsert;
-    edit.position = pos;
-    edit.insert.text = append_to_undo_buffer(buffer, text);
-    buffer_edit(buffer, edit);
+    BufferEvent event = { 0 };
+    event.type = ETInsert;
+    event.position = pos;
+    event.insert.text = append_to_undo_buffer(buffer, text);
+    buffer_edit(buffer, event);
 }
 
 void buffer_delete(Buffer *buffer, size_t at, size_t count)
 {
-    Edit edit = {0};
-    edit.type = ETDelete;
-    edit.position = at;
-    edit.delete.count = count;
-    buffer_edit(buffer, edit);
+    BufferEvent event = { 0 };
+    event.type = ETDelete;
+    event.position = at;
+    event.delete.count = count;
+    buffer_edit(buffer, event);
 }
 
 void buffer_replace(Buffer *buffer, size_t at, size_t num, StringView replacement)
 {
-    Edit edit = {0};
-    edit.type = ETReplace;
-    edit.position = at;
-    edit.replace.replacement = append_to_undo_buffer(buffer, replacement);
-    edit.replace.overwritten.length = num;
-    buffer_edit(buffer, edit);
+    BufferEvent event = { 0 };
+    event.type = ETReplace;
+    event.position = at;
+    event.replace.replacement = append_to_undo_buffer(buffer, replacement);
+    event.replace.overwritten.length = num;
+    buffer_edit(buffer, event);
 }
 
 void buffer_merge_lines(Buffer *buffer, int top_line)
@@ -311,15 +380,19 @@ void buffer_merge_lines(Buffer *buffer, int top_line)
 
 void buffer_save(Buffer *buffer)
 {
-    assert(buffer->saved_version <= buffer->undo_stack.size);
-    if (buffer->saved_version == buffer->undo_stack.size) {
-        return;
-    }
-    if (sv_empty(buffer->name)) {
-        return;
-    }
-    write_file_by_name(buffer->name, buffer->text.view);
-    buffer->saved_version = buffer->undo_stack.size;
+    BufferEvent event = { 0 };
+    event.type = ETSave;
+    event.position = 0;
+    buffer_apply(buffer, event);
+}
+
+void buffer_save_as(Buffer *buffer, StringView name)
+{
+    BufferEvent event = { 0 };
+    event.type = ETSave;
+    event.position = 0;
+    event.save.file_name = append_to_undo_buffer(buffer, name);
+    buffer_apply(buffer, event);
 }
 
 size_t buffer_word_boundary_left(Buffer *buffer, size_t index)
@@ -349,4 +422,20 @@ size_t buffer_word_boundary_right(Buffer *buffer, size_t index)
         }
     }
     return index;
+}
+
+void buffer_add_listener(Buffer *buffer, BufferEventListener listener)
+{
+    BufferEventListenerList *list_entry = MALLOC(BufferEventListenerList);
+    list_entry->listener = listener;
+    list_entry->next = buffer->listeners;
+    buffer->listeners = list_entry;
+}
+
+StringView buffer_uri(Buffer *buffer)
+{
+    if (sv_empty(buffer->uri) && sv_not_empty(buffer->name)) {
+        buffer->uri = sv_printf("file://%.*s/%.*s", SV_ARG(eddy.project_dir), SV_ARG(buffer->name));
+    }
+    return buffer->uri;
 }

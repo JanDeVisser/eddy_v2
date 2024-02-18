@@ -7,6 +7,7 @@ add_library(
         lsp_base.c
         base.c
         initialize.c
+        language.c
         semantictokens.c
         synchronization.c
 )

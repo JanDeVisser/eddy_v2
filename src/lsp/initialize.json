@@ -63,11 +63,30 @@
         {"name": "Documentation", "value": "documentation"},
         {"name": "DefaultLibrary", "value": "defaultLibrary"}
       ]
+    },
+    {
+      "name": "TextDocumentSyncKind",
+      "value_type": "int", "optional": true,
+      "values": [
+        {"name": "Node", "value": 0},
+        {"name": "Full", "value": 1},
+        {"name": "Incremental", "value": 2}
+      ]
     }
   ],
   "variants": [
   ],
   "structs": [
+    {
+      "name": "TextDocumentSyncClientCapabilities", "decode": false, "encode": true,
+      "optional": true,
+      "fields": [
+        {"name": "dynamicRegistration", "optional": true, "type": "bool"},
+        {"name": "willSave", "optional": true, "type": "bool"},
+        {"name": "willSaveWaitUntil", "optional": true, "type": "bool"},
+        {"name": "didSave", "optional": true, "type": "bool"}
+      ]
+    },
     {
       "name": "SemanticTokensClientCapabilities", "decode": false, "encode": true,
       "optional": true,
@@ -99,6 +118,7 @@
     {
       "name": "TextDocumentClientCapabilities", "optional": true, "decode": false, "encode": true,
       "fields": [
+        {"name": "synchronization", "optional": true, "type": "TextDocumentSyncClientCapabilities"},
         {"name": "semanticTokens", "optional": true, "type": "SemanticTokensClientCapabilities"}
       ]
     },
@@ -158,8 +178,22 @@
       ]
     },
     {
+      "name": "TextDocumentSyncOptions", "encode": false, "decode": true, "optional": true,
+      "fields": [
+        {"name": "openClose", "optional": true, "type": "bool"},
+        {"name": "change", "optional": true, "type": "TextDocumentSyncKind"}
+      ]
+    },
+    {
       "name": "ServerCapabilities", "encode": false, "decode": true,
       "fields": [
+        {
+          "name": "textDocumentSync", "optional": true,
+          "variant": [
+            {"type": "TextDocumentSyncOptions"},
+            {"type": "TextDocumentSyncKind"}
+          ]
+        },
         {"name": "semanticTokensProvider", "type": "SemanticTokensOptions", "optional": true}
       ]
     },

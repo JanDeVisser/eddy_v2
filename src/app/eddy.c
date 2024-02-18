@@ -5,7 +5,7 @@
  */
 
 #include <errno.h>
-    #include <pwd.h>
+#include <pwd.h>
 #include <stdlib.h>
 #include <sys/fcntl.h>
 #include <sys/stat.h>
@@ -174,7 +174,7 @@ APP_CLASS_DEF(Eddy, eddy);
 
 void eddy_cmd_quit(CommandContext *ctx)
 {
-    Eddy *eddy = (Eddy*) ctx->target;
+    Eddy     *eddy = (Eddy*) ctx->target;
     JSONValue state = json_object();
     JSONValue files = json_array();
     for (size_t ix = 0; ix < eddy->buffers.size; ++ix) {
@@ -213,7 +213,7 @@ void eddy_init(Eddy *eddy)
     layout_add_widget((Layout *) eddy, (Widget *) main_area);
     eddy->editor = (Editor *) layout_find_by_draw_function((Layout *) eddy, (WidgetDraw) editor_draw);
     char const *project_dir = ".";
-    int ix;
+    int         ix;
     for (ix = 1; ix < eddy->argc; ++ix) {
         if ((strlen(eddy->argv[ix]) <= 2) || eddy->argv[ix][0] != '-' || eddy->argv[ix][1] != '-') {
             break;
@@ -302,8 +302,8 @@ void eddy_open_dir(Eddy *eddy, StringView dir)
     MUST(Int, fs_assert_dir(sv_from(".eddy")));
     if (fs_file_exists(sv_from(".eddy/state"))) {
         StringView s = MUST(StringView, read_file_by_name(sv_from(".eddy/state")));
-        JSONValue state = MUST(JSONValue, json_decode(s));
-        JSONValue files = json_get_default(&state, "files", json_array());
+        JSONValue  state = MUST(JSONValue, json_decode(s));
+        JSONValue  files = json_get_default(&state, "files", json_array());
         assert(files.type == JSON_TYPE_ARRAY);
         for (int ix = 0; ix < json_len(&files); ++ix) {
             JSONValue f = MUST_OPTIONAL(JSONValue, json_at(&files, ix));
@@ -338,7 +338,7 @@ Buffer *eddy_new_buffer(Eddy *eddy)
             return b;
         }
     }
-    Buffer *b = da_append_Buffer(&eddy->buffers, (Buffer) {0});
+    Buffer *b = da_append_Buffer(&eddy->buffers, (Buffer) {0 });
     b->buffer_ix = eddy->buffers.size - 1;
     buffer_build_indices(b);
     return b;
@@ -346,21 +346,24 @@ Buffer *eddy_new_buffer(Eddy *eddy)
 
 void eddy_close_buffer(Eddy *eddy, int buffer_num)
 {
-    Buffer     *buffer = eddy->buffers.elements + buffer_num;
+    Buffer *buffer = eddy->buffers.elements + buffer_num;
     buffer_close(buffer);
     if (buffer_num == eddy->buffers.size) {
         --eddy->buffers.size;
     }
 }
 
-void eddy_set_message(Eddy *eddy, StringView message)
+void eddy_set_message(Eddy *eddy, char const *fmt, ...)
 {
     MessageLine *message_line = (MessageLine *) layout_find_by_draw_function((Layout *) eddy, (WidgetDraw) message_line_draw);
     assert(message_line);
     if (!sv_empty(message_line->message)) {
         sv_free(message_line->message);
     }
-    message_line->message = message;
+    va_list args;
+    va_start(args, fmt);
+    message_line->message = sv_vprintf(fmt, args);
+    va_end(args);
     message_line->time = eddy->time;
 }
 

@@ -132,9 +132,7 @@ SemanticTokenTypes SemanticTokenTypes_parse(StringView s)
     if (sv_eq_cstr(s, "regexp")) return SemanticTokenTypesRegexp;
     if (sv_eq_cstr(s, "operator")) return SemanticTokenTypesOperator;
     if (sv_eq_cstr(s, "decorator")) return SemanticTokenTypesDecorator;
-    trace(CAT_LSP, "SemanticTokenTypes_parse('%.*s')?", SV_ARG(s));
-    return SemanticTokenTypesVariable;
-    // UNREACHABLE();
+    if (sv_eq_cstr(s, "unknown")) return SemanticTokenTypesString; // FIXME
 }
 
 SemanticTokenTypes SemanticTokenTypes_decode(OptionalJSONValue json)
@@ -194,6 +192,32 @@ OptionalJSONValue SemanticTokenModifiers_encode(SemanticTokenModifiers value)
     RETURN_VALUE(JSONValue, json_string(SemanticTokenModifiers_to_string(value)));
 }
 
+OPTIONAL_JSON_IMPL(TextDocumentSyncKind);
+
+TextDocumentSyncKind TextDocumentSyncKind_decode(OptionalJSONValue json)
+{
+    assert(json.has_value);
+    assert(json.value.type == JSON_TYPE_INT);
+    return (TextDocumentSyncKind) json_int_value(json.value);
+}
+
+OptionalJSONValue TextDocumentSyncKind_encode(TextDocumentSyncKind value)
+{
+    RETURN_VALUE(JSONValue, json_int((int) value));
+}
+
+OPTIONAL_JSON_ENCODE_IMPL(TextDocumentSyncClientCapabilities);
+
+OptionalJSONValue TextDocumentSyncClientCapabilities_encode(TextDocumentSyncClientCapabilities value)
+{
+    JSONValue v4 = json_object();
+    json_optional_set(&v4, "dynamicRegistration", OptionalBool_encode(value.dynamicRegistration));
+    json_optional_set(&v4, "willSave", OptionalBool_encode(value.willSave));
+    json_optional_set(&v4, "willSaveWaitUntil", OptionalBool_encode(value.willSaveWaitUntil));
+    json_optional_set(&v4, "didSave", OptionalBool_encode(value.didSave));
+    RETURN_VALUE(JSONValue, v4);
+}
+
 OPTIONAL_JSON_ENCODE_IMPL(SemanticTokensClientCapabilities);
 
 OptionalJSONValue SemanticTokensClientCapabilities_encode(SemanticTokensClientCapabilities value)
@@ -247,6 +271,7 @@ OPTIONAL_JSON_ENCODE_IMPL(TextDocumentClientCapabilities);
 OptionalJSONValue TextDocumentClientCapabilities_encode(TextDocumentClientCapabilities value)
 {
     JSONValue v4 = json_object();
+    json_optional_set(&v4, "synchronization", OptionalTextDocumentSyncClientCapabilities_encode(value.synchronization));
     json_optional_set(&v4, "semanticTokens", OptionalSemanticTokensClientCapabilities_encode(value.semanticTokens));
     RETURN_VALUE(JSONValue, v4);
 }
@@ -402,11 +427,43 @@ SemanticTokensOptions SemanticTokensOptions_decode(OptionalJSONValue v4)
     return value;
 }
 
+OPTIONAL_JSON_DECODE_IMPL(TextDocumentSyncOptions);
+
+TextDocumentSyncOptions TextDocumentSyncOptions_decode(OptionalJSONValue v4)
+{
+    assert(v4.has_value);
+    assert(v4.value.type == JSON_TYPE_OBJECT);
+    TextDocumentSyncOptions value = {0};
+    {
+        OptionalJSONValue v8 = json_get(&v4.value, "openClose");
+        value.openClose = OptionalBool_decode(v8);
+    }
+    {
+        OptionalJSONValue v8 = json_get(&v4.value, "change");
+        value.change = OptionalTextDocumentSyncKind_decode(v8);
+    }
+    return value;
+}
+
 ServerCapabilities ServerCapabilities_decode(OptionalJSONValue v4)
 {
     assert(v4.has_value);
     assert(v4.value.type == JSON_TYPE_OBJECT);
     ServerCapabilities value = {0};
+    {
+        OptionalJSONValue v8 = json_get(&v4.value, "textDocumentSync");
+        if (v8.has_value) {
+            value.textDocumentSync.has_value = true;
+            if (v8.value.type == JSON_TYPE_OBJECT) {
+                value.textDocumentSync.tag = 0;
+                value.textDocumentSync._0 = TextDocumentSyncOptions_decode(v8);
+            }
+            if (v8.value.type == JSON_TYPE_INT) {
+                value.textDocumentSync.tag = 1;
+                value.textDocumentSync._1 = TextDocumentSyncKind_decode(v8);
+            }
+        }
+    }
     {
         OptionalJSONValue v8 = json_get(&v4.value, "semanticTokensProvider");
         value.semanticTokensProvider = OptionalSemanticTokensOptions_decode(v8);

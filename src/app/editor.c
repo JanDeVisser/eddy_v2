@@ -749,7 +749,7 @@ void editor_cmd_save(CommandContext *ctx)
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
     buffer_save(buffer);
-    eddy_set_message(&eddy, sv_from("Buffer saved"));
+    eddy_set_message(&eddy, "Buffer saved");
 }
 
 void editor_cmd_undo(CommandContext *ctx)
@@ -835,9 +835,9 @@ void editor_init(Editor *editor)
         (KeyCombo) { KEY_V, KMOD_CONTROL });
     widget_add_command(editor, sv_from("editor-save"), editor_cmd_save,
         (KeyCombo) { KEY_S, KMOD_CONTROL });
-    widget_add_command(editor, sv_from("editor-undo"), editor_cmd_save,
+    widget_add_command(editor, sv_from("editor-undo"), editor_cmd_undo,
         (KeyCombo) { KEY_Z, KMOD_CONTROL });
-    widget_add_command(editor, sv_from("editor-redo"), editor_cmd_save,
+    widget_add_command(editor, sv_from("editor-redo"), editor_cmd_redo,
         (KeyCombo) { KEY_Z, KMOD_CONTROL | KMOD_SHIFT});
     widget_add_command(editor, sv_from("editor-close-buffer"), editor_cmd_close_buffer,
         (KeyCombo) { KEY_W, KMOD_CONTROL});

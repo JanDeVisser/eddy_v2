@@ -10,6 +10,7 @@
 #define STATIC_ALLOCATOR
 #include <allocate.h>
 #include <eddy.h>
+#include <language.h>
 #include <palette.h>
 #include <process.h>
 
@@ -63,7 +64,7 @@ ErrorOrResponse lsp_message(char const *method, OptionalJSONValue params)
         if (json.length < content_length) {
             continue;
         }
-        trace(CAT_LSP, "<== %.*s", SV_ARG(json));
+        // trace(CAT_LSP, "<== %.*s", SV_ARG(json));
         buf = (StringView) {0};
         JSONValue ret = TRY_TO(JSONValue, Response, json_decode(json));
         if (json_has(&ret, "method")) {
@@ -124,6 +125,13 @@ void lsp_initialize()
     da_append_StringView(&tokenTypes, SemanticTokenTypes_to_string(SemanticTokenTypesVariable));
     da_append_StringView(&tokenTypes, SemanticTokenTypes_to_string(SemanticTokenTypesType));
 
+    params.capabilities.textDocument.value.synchronization.has_value = true;
+    params.capabilities.textDocument.value.synchronization.value.didSave.has_value = true;
+    params.capabilities.textDocument.value.synchronization.value.didSave.value = true;
+    params.capabilities.textDocument.value.synchronization.value.willSave.has_value = true;
+    params.capabilities.textDocument.value.synchronization.value.didSave.value = false;
+    params.capabilities.textDocument.value.synchronization.value.willSaveWaitUntil.has_value = true;
+    params.capabilities.textDocument.value.synchronization.value.willSaveWaitUntil.value = false;
     params.capabilities.textDocument.value.semanticTokens.has_value = true;
     params.capabilities.textDocument.value.semanticTokens.value.multilineTokenSupport = (OptionalBool) { .has_value = true, .value = true };
     params.capabilities.textDocument.value.semanticTokens.value.requests.has_value = true;
@@ -161,7 +169,7 @@ void lsp_initialize()
                 case SemanticTokenTypesProperty: colors[i] = PI_KNOWN_IDENTIFIER; break;
                 case SemanticTokenTypesEnumMember: colors[i] = PI_KNOWN_IDENTIFIER; break;
                 case SemanticTokenTypesEvent: colors[i] = PI_DEFAULT; break;
-                case SemanticTokenTypesFunction: colors[i] = PI_KNOWN_IDENTIFIER; break;
+                case SemanticTokenTypesFunction: colors[i] = PI_FUNCTION; break;
                 case SemanticTokenTypesMethod: colors[i] = PI_KNOWN_IDENTIFIER; break;
                 case SemanticTokenTypesMacro: colors[i] = PI_KNOWN_IDENTIFIER; break;
                 case SemanticTokenTypesKeyword: colors[i] = PI_KEYWORD; break;
@@ -181,16 +189,16 @@ void lsp_on_open(int buffer_num)
 {
     lsp_initialize();
     Buffer *buffer = eddy.buffers.elements + buffer_num;
-    char    uri[PATH_MAX + 8];
-    memset(uri, '\0', PATH_MAX + 8);
-    snprintf(uri, PATH_MAX + 7, "file://%.*s/%.*s", SV_ARG(eddy.project_dir), SV_ARG(buffer->name));
 
+    if (sv_empty(buffer->name)) {
+        return;
+    }
     DidOpenTextDocumentParams did_open = { 0 };
     did_open.textDocument = (TextDocumentItem) {
-        .uri = sv_from(uri),
+        .uri = buffer_uri(buffer),
         .languageId = sv_from("c"),
         .version = 0,
-        .text = eddy.buffers.elements[buffer_num].text.view
+        .text = buffer->text.view
     };
     OptionalJSONValue did_open_json = DidOpenTextDocumentParams_encode(did_open);
     lsp_notification("textDocument/didOpen", did_open_json);
@@ -200,13 +208,13 @@ void lsp_semantic_tokens(int buffer_num)
 {
     lsp_initialize();
     Buffer *buffer = eddy.buffers.elements + buffer_num;
-    char    uri[PATH_MAX + 8];
-    memset(uri, '\0', PATH_MAX + 8);
-    snprintf(uri, PATH_MAX + 7, "file://%.*s/%.*s", SV_ARG(eddy.project_dir), SV_ARG(buffer->name));
 
+    if (sv_empty(buffer->name)) {
+        return;
+    }
     SemanticTokensParams semantic_tokens_params = { 0 };
     semantic_tokens_params.textDocument = (TextDocumentIdentifier) {
-        .uri = sv_from(uri),
+        .uri = buffer_uri(buffer),
     };
     OptionalJSONValue semantic_tokens_params_json = SemanticTokensParams_encode(semantic_tokens_params);
     Response          response = MUST(Response, lsp_message("textDocument/semanticTokens/full", semantic_tokens_params_json));
@@ -233,4 +241,108 @@ void lsp_semantic_tokens(int buffer_num)
             }
         }
     }
+}
+
+void lsp_did_save(int buffer_num)
+{
+    lsp_initialize();
+    Buffer *buffer = eddy.buffers.elements + buffer_num;
+
+    if (sv_empty(buffer->name)) {
+        return;
+    }
+    DidSaveTextDocumentParams did_save = { 0 };
+    did_save.textDocument = (TextDocumentIdentifier) {
+        .uri = buffer_uri(buffer),
+    };
+    did_save.text = OptionalStringView_create(buffer->text.view);
+    OptionalJSONValue did_save_json = DidSaveTextDocumentParams_encode(did_save);
+    lsp_notification("textDocument/didSave", did_save_json);
+}
+
+void lsp_did_close(int buffer_num)
+{
+    lsp_initialize();
+    Buffer *buffer = eddy.buffers.elements + buffer_num;
+
+    if (sv_empty(buffer->name)) {
+        return;
+    }
+    DidCloseTextDocumentParams did_close = { 0 };
+    did_close.textDocument = (TextDocumentIdentifier) {
+        .uri = buffer_uri(buffer),
+    };
+    OptionalJSONValue did_close_json = DidCloseTextDocumentParams_encode(did_close);
+    lsp_notification("textDocument/didClose", did_close_json);
+}
+
+void lsp_did_change(int buffer_num, IntVector2 start, IntVector2 end, StringView text)
+{
+    lsp_initialize();
+    Buffer *buffer = eddy.buffers.elements + buffer_num;
+
+    if (sv_empty(buffer->name)) {
+        return;
+    }
+    DidChangeTextDocumentParams did_change = {0};
+    did_change.textDocument.uri = buffer_uri(buffer);
+    did_change.textDocument.version = buffer->version;
+    TextDocumentContentChangeEvent contentChange = {0};
+    contentChange.range.start.line = start.line;
+    contentChange.range.start.character = start.column;
+    contentChange.range.end.line = end.line;
+    contentChange.range.end.character = end.column;
+    contentChange.text = text;
+    da_append_TextDocumentContentChangeEvent(&did_change.contentChanges, contentChange);
+    OptionalJSONValue did_change_json = DidChangeTextDocumentParams_encode(did_change);
+    lsp_notification("textDocument/didChange", did_change_json);
+}
+
+int lsp_format(int buffer_num)
+{
+    lsp_initialize();
+    Buffer *buffer = eddy.buffers.elements + buffer_num;
+
+    if (sv_empty(buffer->name)) {
+        return -1;
+    }
+
+    DocumentFormattingParams params = {0};
+    params.textDocument.uri = buffer_uri(buffer);
+    params.options.insertSpaces = true;
+    params.options.tabSize = 4;
+    params.options.trimTrailingWhitespace = (OptionalBool) {.has_value = true, .value = true};
+    params.options.insertFinalNewline = (OptionalBool) {.has_value = true, .value = true};
+    params.options.trimFinalNewlines = (OptionalBool) {.has_value = true, .value = true};
+
+    OptionalJSONValue params_json = DocumentFormattingParams_encode(params);
+    Response          response = MUST(Response, lsp_message("textDocument/formatting", params_json));
+    if (response_error(&response)) {
+        return -1;
+    }
+    StringView s = json_encode(response.result.value);
+    trace(CAT_LSP, "Formatting edits: %.*s", SV_ARG(s));
+    sv_free(s);
+
+    if (response.result.value.type != JSON_TYPE_ARRAY) {
+        return -1;
+    }
+    TextEdits edits = TextEdits_decode(response.result);
+    for (size_t ix = 0; ix < edits.size; ++ix) {
+        TextEdit edit = edits.elements[ix];
+        IntVector2 start = { edit.range.start.character, edit.range.start.line };
+        IntVector2 end = { edit.range.end.character, edit.range.end.line };
+        size_t offset = buffer_position_to_index(buffer, start);
+        size_t length = buffer_position_to_index(buffer, end) - offset;
+
+        if (sv_empty(edit.newText)) {
+            buffer_delete(buffer, offset, length);
+        } else if (length == 0) {
+            buffer_insert(buffer, edit.newText, offset);
+        } else {
+            buffer_replace(buffer, offset, length, edit.newText);
+        }
+    }
+    free(edits.elements);
+    return edits.size;
 }

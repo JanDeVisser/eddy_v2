@@ -34,7 +34,7 @@ extern OptionalJSONValue Position_encode(Position value);
 
 typedef struct {
     Position start;
-    Position character;
+    Position end;
 } Range;
 
 OPTIONAL(Range);
@@ -89,6 +89,25 @@ OPTIONAL_JSON_DECODE(TextDocumentIdentifiers);
 
 extern TextDocumentIdentifier TextDocumentIdentifier_decode(OptionalJSONValue value);
 extern OptionalJSONValue TextDocumentIdentifier_encode(TextDocumentIdentifier value);
+
+typedef struct {
+    Range range;
+    StringView newText;
+} TextEdit;
+
+OPTIONAL(TextEdit);
+OPTIONAL_JSON_ENCODE(TextEdit);
+OPTIONAL_JSON_DECODE(TextEdit);
+
+DA_WITH_NAME(TextEdit, TextEdits);
+JSON_ENCODE(TextEdits, TextEdits);
+JSON_DECODE(TextEdits, TextEdits);
+OPTIONAL(TextEdits);
+OPTIONAL_JSON_ENCODE(TextEdits);
+OPTIONAL_JSON_DECODE(TextEdits);
+
+extern TextEdit TextEdit_decode(OptionalJSONValue value);
+extern OptionalJSONValue TextEdit_encode(TextEdit value);
 
 typedef struct {
     StringView uri;

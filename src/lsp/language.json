@@ -1,0 +1,24 @@
+{
+  "depends": ["base"],
+  "enums": [],
+  "variants": [],
+  "structs": [
+    {
+      "name": "FormattingOptions", "encode": true, "decode": false,
+      "fields": [
+        {"name": "tabSize", "type": "int"},
+        {"name": "insertSpaces", "type": "bool"},
+        {"name": "trimTrailingWhitespace", "type": "bool", "optional": true},
+        {"name": "insertFinalNewline", "type": "bool", "optional": true},
+        {"name": "trimFinalNewlines", "type": "bool", "optional": true}
+      ]
+    },
+    {
+      "name": "DocumentFormattingParams", "encode": true, "decode": false,
+      "fields": [
+        {"name": "textDocument", "type": "TextDocumentIdentifier"},
+        {"name": "options", "type": "FormattingOptions"}
+      ]
+    }
+  ]
+}

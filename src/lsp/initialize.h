@@ -91,6 +91,30 @@ extern SemanticTokenModifiers SemanticTokenModifiers_parse(StringView s);
 extern SemanticTokenModifiers SemanticTokenModifiers_decode(OptionalJSONValue value);
 extern OptionalJSONValue SemanticTokenModifiers_encode(SemanticTokenModifiers value);
 
+typedef enum {
+    TextDocumentSyncKindNode = 0,
+    TextDocumentSyncKindFull = 1,
+    TextDocumentSyncKindIncremental = 2,
+} TextDocumentSyncKind;
+
+OPTIONAL(TextDocumentSyncKind);
+OPTIONAL_JSON(TextDocumentSyncKind);
+
+extern TextDocumentSyncKind TextDocumentSyncKind_decode(OptionalJSONValue value);
+extern OptionalJSONValue TextDocumentSyncKind_encode(TextDocumentSyncKind value);
+
+typedef struct {
+    OptionalBool dynamicRegistration;
+    OptionalBool willSave;
+    OptionalBool willSaveWaitUntil;
+    OptionalBool didSave;
+} TextDocumentSyncClientCapabilities;
+
+OPTIONAL(TextDocumentSyncClientCapabilities);
+OPTIONAL_JSON_ENCODE(TextDocumentSyncClientCapabilities);
+
+extern OptionalJSONValue TextDocumentSyncClientCapabilities_encode(TextDocumentSyncClientCapabilities value);
+
 typedef struct {
     OptionalBool dynamicRegistration;
     struct {
@@ -133,6 +157,7 @@ OPTIONAL_JSON_ENCODE(SemanticTokensClientCapabilities);
 extern OptionalJSONValue SemanticTokensClientCapabilities_encode(SemanticTokensClientCapabilities value);
 
 typedef struct {
+    OptionalTextDocumentSyncClientCapabilities synchronization;
     OptionalSemanticTokensClientCapabilities semanticTokens;
 } TextDocumentClientCapabilities;
 
@@ -232,6 +257,24 @@ OPTIONAL_JSON_DECODE(SemanticTokensOptions);
 extern SemanticTokensOptions SemanticTokensOptions_decode(OptionalJSONValue value);
 
 typedef struct {
+    OptionalBool openClose;
+    OptionalTextDocumentSyncKind change;
+} TextDocumentSyncOptions;
+
+OPTIONAL(TextDocumentSyncOptions);
+OPTIONAL_JSON_DECODE(TextDocumentSyncOptions);
+
+extern TextDocumentSyncOptions TextDocumentSyncOptions_decode(OptionalJSONValue value);
+
+typedef struct {
+    struct {
+        bool has_value;
+        int tag;
+        union {
+            TextDocumentSyncOptions _0;
+            TextDocumentSyncKind _1;
+        };
+    } textDocumentSync;
     OptionalSemanticTokensOptions semanticTokensProvider;
 } ServerCapabilities;
 

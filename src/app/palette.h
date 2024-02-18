@@ -22,6 +22,7 @@
     S(IDENTIFIER)                 \
     S(KNOWN_IDENTIFIER)           \
     S(PREPROC_IDENTIFIER)         \
+    S(FUNCTION)                   \
     S(COMMENT)                    \
     S(MULTI_LINE_COMMENT)         \
     S(BACKGROUND)                 \

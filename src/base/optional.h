@@ -43,6 +43,7 @@ OPTIONAL_ALIAS(uint32_t, UInt32)
 OPTIONAL_ALIAS(uint64_t, UInt64)
 OPTIONAL_ALIAS(int64_t, Int64)
 OPTIONAL_ALIAS(bool, Bool)
+typedef OptionalUInt32 OptionalUInt;
 
 #define PAIR_WITH_NAME(T1, T2, N) \
     typedef struct {              \

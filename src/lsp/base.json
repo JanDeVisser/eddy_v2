@@ -15,7 +15,7 @@
       "name": "Range", "optional": true, "array": true, "optional-array": true,
       "fields": [
         {"name": "start", "type": "Position"},
-        {"name": "character", "type": "Position"}
+        {"name": "end", "type": "Position"}
       ]
     },
     {
@@ -31,6 +31,13 @@
       "name": "TextDocumentIdentifier", "optional": true, "array": true, "optional-array": true,
       "fields": [
         {"name": "uri", "type": "DocumentUri"}
+      ]
+    },
+    {
+      "name": "TextEdit", "optional": true, "array": true, "optional-array": true,
+      "fields": [
+        {"name": "range", "type": "Range"},
+        {"name": "newText", "type": "string" }
       ]
     },
     {
