@@ -15,8 +15,6 @@ OPTIONAL_JSON_IMPL(DocumentUri)
 OPTIONAL_JSON_IMPL(Bool)
 DA_JSON_IMPL(StringView, StringList, strings)
 
-DA_IMPL(uint32_t)
-
 OptionalJSONValue UInts_encode(UInts value)
 {
     JSONValue ret = json_array();

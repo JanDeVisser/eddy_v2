@@ -131,7 +131,6 @@ OPTIONAL_JSON(StringView)
 OPTIONAL_JSON(URI)
 OPTIONAL_JSON(DocumentUri)
 OPTIONAL_JSON(Bool)
-DA_WITH_NAME(uint32_t, UInts);
 JSON(UInts, UInts)
 
 #endif /* __LSP_LSP_BASE_H__ */

@@ -210,13 +210,13 @@ typedef struct _widget {
         .init = (WidgetInit) prefix##_init, \
     }
 
-#define widget_new(c)                            \
-    ({                                           \
-        Widget *_w = (Widget *) allocate_new(c); \
-        _w->classname = #c;                      \
-        _w->handlers = $##c##_handlers;          \
-        _w->handlers.init(_w);                   \
-        _w;                                      \
+#define widget_new(c)                      \
+    ({                                     \
+        Widget *_w = (Widget *) MALLOC(c); \
+        _w->classname = #c;                \
+        _w->handlers = $##c##_handlers;    \
+        _w->handlers.init(_w);             \
+        _w;                                \
     })
 
 #define in_place_widget(C, W, P)        \
@@ -229,25 +229,25 @@ typedef struct _widget {
         (W);                            \
     })
 
-#define widget_new_with_parent(c, p)             \
-    ({                                           \
-        Widget *_w = (Widget *) allocate_new(c); \
-        _w->classname = #c;                      \
-        _w->handlers = $##c##_handlers;          \
-        _w->parent = (Widget *) (p);             \
-        _w->handlers.init(_w);                   \
-        _w;                                      \
+#define widget_new_with_parent(c, p)       \
+    ({                                     \
+        Widget *_w = (Widget *) MALLOC(c); \
+        _w->classname = #c;                \
+        _w->handlers = $##c##_handlers;    \
+        _w->parent = (Widget *) (p);       \
+        _w->handlers.init(_w);             \
+        _w;                                \
     })
 
-#define widget_new_with_policy(c, p, s)          \
-    ({                                           \
-        Widget *_w = (Widget *) allocate_new(c); \
-        _w->classname = #c;                      \
-        _w->handlers = $##c##_handlers;          \
-        _w->handlers.init(_w);                   \
-        _w->policy = (p);                        \
-        _w->policy_size = (s);                   \
-        _w;                                      \
+#define widget_new_with_policy(c, p, s)    \
+    ({                                     \
+        Widget *_w = (Widget *) MALLOC(c); \
+        _w->classname = #c;                \
+        _w->handlers = $##c##_handlers;    \
+        _w->handlers.init(_w);             \
+        _w->policy = (p);                  \
+        _w->policy_size = (s);             \
+        _w;                                \
     })
 
 #define _LAYOUT_FIELDS                \

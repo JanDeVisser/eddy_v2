@@ -10,10 +10,11 @@
 #include <allocate.h>
 
 #include <buffer.h>
+#include <c.h>
 #include <eddy.h>
 #include <editor.h>
+#include <fs.h>
 #include <json.h>
-#include <lsp/lsp.h>
 #include <palette.h>
 #include <process.h>
 
@@ -23,65 +24,6 @@ DA_IMPL(BufferView);
 WIDGET_CLASS_DEF(Gutter, gutter);
 WIDGET_CLASS_DEF(Editor, editor);
 SIMPLE_WIDGET_CLASS_DEF(BufferView, view);
-
-// -- C Mode ----------------------------------------------------------------
-
-typedef struct {
-    _W;
-} CMode;
-
-SIMPLE_WIDGET_CLASS(CMode, c_mode);
-SIMPLE_WIDGET_CLASS_DEF(CMode, c_mode);
-
-void c_mode_cmd_format_source(CommandContext *ctx)
-{
-    Editor     *editor = (Editor *) ctx->target->parent;
-    BufferView *view = editor->buffers.elements + editor->current_buffer;
-    Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
-    eddy_set_message(&eddy, ctx->called_as);
-
-    if (sv_not_empty(buffer->name)) {
-        StringView formatted = MUST(
-            StringView,
-            execute_pipe(
-                buffer->text.view,
-                sv_from("clang-format"),
-                TextFormat("--assume-filename=%.*s", SV_ARG(buffer->name)),
-                TextFormat("--cursor=%d", view->cursor)));
-        StringView header = sv_chop_to_delim(&formatted, sv_from("\n"));
-        if (sv_eq(formatted, buffer->text.view)) {
-            eddy_set_message(&eddy, sv_from("Already properly formatted"));
-            return;
-        }
-        JSONValue values = MUST(JSONValue, json_decode(header));
-        assert(values.type == JSON_TYPE_OBJECT);
-        sv_free(buffer->text.view);
-        buffer->text.view = sv_copy(formatted);
-        sv_free(formatted);
-        buffer->rebuild_needed = true;
-        view->new_cursor = json_get_int(&values, "Cursor", view->cursor);
-        view->cursor_col = -1;
-        view->selection = -1;
-        eddy_set_message(&eddy, sv_from("Formatted"));
-        return;
-    }
-    eddy_set_message(&eddy, sv_from("Cannot format untitled buffer"));
-}
-
-void c_mode_on_draw(CMode *mode)
-{
-    BufferView *view = (BufferView *) mode->parent;
-    lsp_semantic_tokens(view->buffer_num);
-}
-
-void c_mode_init(CMode *mode)
-{
-    widget_add_command(mode, sv_from("c-format-source"), c_mode_cmd_format_source,
-        (KeyCombo) { KEY_L, KMOD_SHIFT | KMOD_CONTROL });
-    mode->handlers.on_draw = c_mode_on_draw;
-    BufferView *view = (BufferView *) mode->parent;
-    lsp_on_open(view->buffer_num);
-}
 
 // -- Gutter -----------------------------------------------------------------
 
@@ -133,9 +75,26 @@ void view_init(BufferView *view)
 void editor_new(Editor *editor)
 {
     Buffer *buffer = eddy_new_buffer(&eddy);
-    buffer->text = sb_create();
-    buffer->rebuild_needed = true;
-    editor_select_buffer(editor, eddy.buffers.size - 1);
+    editor_select_buffer(editor, buffer->buffer_ix);
+}
+
+ErrorOrInt editor_open(Editor *editor, StringView file)
+{
+    Buffer *buffer = TRY_TO(Buffer, Int, eddy_open_buffer(&eddy, file));
+    editor_select_buffer(editor, buffer->buffer_ix);
+    RETURN(Int, editor->current_buffer);
+}
+
+void editor_select_view(Editor *editor, int view_ix)
+{
+    assert(view_ix >= 0 && view_ix < editor->buffers.size);
+    BufferView *view = editor->buffers.elements + view_ix;
+    assert(view);
+    editor->current_buffer = view_ix;
+    view->cursor_flash = app->time;
+    if (view->mode) {
+        app->focus = view->mode;
+    }
 }
 
 void editor_select_buffer(Editor *editor, int buffer_num)
@@ -146,24 +105,113 @@ void editor_select_buffer(Editor *editor, int buffer_num)
     BufferView *view = NULL;
     for (size_t ix = 0; ix < editor->buffers.size; ++ix) {
         if (editor->buffers.elements[ix].buffer_num == buffer_num) {
-            editor->current_buffer = ix;
-            view = da_element_BufferView(&editor->buffers, ix);
+            editor_select_view(editor, ix);
+            return;
+        }
+    }
+    int view_ix = 0;
+    for (size_t ix = 0; ix < editor->buffers.size; ++ix) {
+        if (editor->buffers.elements[ix].buffer_num == -1) {
+            view = editor->buffers.elements + ix;
+            view_ix = ix;
             break;
         }
     }
-    if (editor->current_buffer == -1) {
+    if (!view) {
+        view_ix = editor->buffers.size;
         view = da_append_BufferView(&editor->buffers, (BufferView) { .buffer_num = buffer_num, .selection = -1 });
-        in_place_widget(BufferView, view, editor);
-        editor->current_buffer = editor->buffers.size - 1;
-        if (sv_endswith(buffer->name, sv_from(".c")) || sv_endswith(buffer->name, sv_from(".h"))) {
-            view->mode = widget_new_with_parent(CMode, view);
+    }
+    in_place_widget(BufferView, view, editor);
+    if (sv_endswith(buffer->name, sv_from(".c")) || sv_endswith(buffer->name, sv_from(".h"))) {
+        view->mode = widget_new_with_parent(CMode, view);
+    }
+    editor_select_view(editor, view_ix);
+}
+
+bool editor_has_prev(Editor *editor)
+{
+    int prev = editor->current_buffer-1;
+    while (prev >= 0) {
+        if (editor->buffers.elements[prev].buffer_num == -1) {
+            break;
         }
+        --prev;
     }
-    assert(view);
-    view->cursor_flash = app->time;
-    if (view->mode) {
-        app->focus = view->mode;
+    return prev >= 0;
+}
+
+bool editor_has_next(Editor *editor)
+{
+    int next = editor->current_buffer+1;
+    while (next < editor->buffers.size) {
+        if (editor->buffers.elements[next].buffer_num == -1) {
+            break;
+        }
+        ++next;
     }
+    return next < editor->buffers.size;
+}
+
+void editor_select_prev(Editor *editor)
+{
+    if (!editor_has_prev(editor)) {
+        return;
+    }
+    int prev = editor->current_buffer-1;
+    while (prev >= 0) {
+        if (editor->buffers.elements[prev].buffer_num == -1) {
+            break;
+        }
+        --prev;
+    }
+    if (prev >= 0) {
+        editor_select_buffer(editor, prev);
+    }
+}
+
+void editor_select_next(Editor *editor)
+{
+    int next = editor->current_buffer+1;
+    while (next < editor->buffers.size) {
+        if (editor->buffers.elements[next].buffer_num == -1) {
+            break;
+        }
+        ++next;
+    }
+    if (next < editor->buffers.size) {
+        editor_select_buffer(editor, next);
+    }
+}
+
+void editor_close_view(Editor *editor)
+{
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    Widget *mode = view->mode;
+    if (mode && mode->handlers.on_terminate) {
+        mode->handlers.on_terminate(mode);
+    }
+    memset(view, 0, sizeof(BufferView));
+    if (editor->current_buffer == editor->buffers.size - 1) {
+        --editor->buffers.size;
+    } else {
+        view->buffer_num = -1;
+    }
+    int current = editor->current_buffer;
+    editor_select_prev(editor);
+    if (editor->current_buffer == current) {
+        editor_select_next(editor);
+    }
+    if (editor->current_buffer == current) {
+        editor_new(editor);
+    }
+}
+
+void editor_close_buffer(Editor *editor)
+{
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    int buffer_num = view->buffer_num;
+    editor_close_view(editor);
+    eddy_close_buffer(&eddy, buffer_num);
 }
 
 /*
@@ -704,6 +752,34 @@ void editor_cmd_save(CommandContext *ctx)
     eddy_set_message(&eddy, sv_from("Buffer saved"));
 }
 
+void editor_cmd_undo(CommandContext *ctx)
+{
+    Editor     *editor = (Editor *) ctx->target;
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
+    buffer_undo(buffer);
+}
+
+void editor_cmd_redo(CommandContext *ctx)
+{
+    Editor     *editor = (Editor *) ctx->target;
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
+    buffer_redo(buffer);
+}
+
+void editor_cmd_close_buffer(CommandContext *ctx)
+{
+    Editor     *editor = (Editor *) ctx->target;
+    editor_close_buffer(editor);
+}
+
+void editor_cmd_close_view(CommandContext *ctx)
+{
+    Editor     *editor = (Editor *) ctx->target;
+    editor_close_view(editor);
+}
+
 /*
  * ---------------------------------------------------------------------------
  * Life cycle
@@ -759,6 +835,14 @@ void editor_init(Editor *editor)
         (KeyCombo) { KEY_V, KMOD_CONTROL });
     widget_add_command(editor, sv_from("editor-save"), editor_cmd_save,
         (KeyCombo) { KEY_S, KMOD_CONTROL });
+    widget_add_command(editor, sv_from("editor-undo"), editor_cmd_save,
+        (KeyCombo) { KEY_Z, KMOD_CONTROL });
+    widget_add_command(editor, sv_from("editor-redo"), editor_cmd_save,
+        (KeyCombo) { KEY_Z, KMOD_CONTROL | KMOD_SHIFT});
+    widget_add_command(editor, sv_from("editor-close-buffer"), editor_cmd_close_buffer,
+        (KeyCombo) { KEY_W, KMOD_CONTROL});
+    widget_add_command(editor, sv_from("editor-close-view"), editor_cmd_close_view,
+        (KeyCombo) { KEY_W, KMOD_CONTROL | KMOD_SHIFT });
 }
 
 void editor_resize(Editor *editor)

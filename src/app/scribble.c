@@ -5,7 +5,7 @@
  */
 
 #include <base/io.h>
-#include <lang/scribble.h>
+#include <app/scribble.h>
 
 int scribble_handle_directive(Lexer *lexer, int directive)
 {

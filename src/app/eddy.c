@@ -5,7 +5,7 @@
  */
 
 #include <errno.h>
-#include <pwd.h>
+    #include <pwd.h>
 #include <stdlib.h>
 #include <sys/fcntl.h>
 #include <sys/stat.h>
@@ -23,8 +23,6 @@
 
 AppState state = { 0 };
 Eddy     eddy = { 0 };
-
-DECLARE_SHARED_ALLOCATOR(eddy);
 
 LAYOUT_CLASS_DEF(StatusBar, sb);
 
@@ -66,9 +64,9 @@ void sb_file_name_draw(Label *label)
     BufferView *view = editor->buffers.elements + eddy.editor->current_buffer;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
     if (sv_empty(buffer->name)) {
-        label->text = sv_from(TextFormat("untitled-%d%c", view->buffer_num, (buffer->dirty) ? '*' : ' '));
+        label->text = sv_from(TextFormat("untitled-%d%c", view->buffer_num, buffer->saved_version != buffer->undo_stack.size ? '*' : ' '));
     } else {
-        label->text = sv_from(TextFormat("%.*s%c", SV_ARG(buffer->name), (buffer->dirty) ? '*' : ' '));
+        label->text = sv_from(TextFormat("%.*s%c", SV_ARG(buffer->name), buffer->saved_version != buffer->undo_stack.size ? '*' : ' '));
     }
     label_draw(label);
 }
@@ -280,7 +278,7 @@ void eddy_on_draw(Eddy *eddy)
 {
     for (size_t ix = 0; ix < eddy->buffers.size; ++ix) {
         Buffer *buffer = eddy->buffers.elements + ix;
-        if (buffer->rebuild_needed) {
+        if (buffer->indexed_version != buffer->undo_stack.size) {
             buffer_build_indices(buffer);
             for (size_t view_ix = 0; view_ix < eddy->editor->buffers.size; ++view_ix) {
                 BufferView *view = eddy->editor->buffers.elements + view_ix;
@@ -317,19 +315,42 @@ void eddy_open_dir(Eddy *eddy, StringView dir)
 
 ErrorOrBuffer eddy_open_buffer(Eddy *eddy, StringView file)
 {
+    assert(sv_not_empty(file));
     file = fs_relative(file, eddy->project_dir);
     for (size_t ix = 0; ix < eddy->buffers.size; ++ix) {
         Buffer *b = eddy->buffers.elements + ix;
         if (sv_eq(b->name, file)) {
+            buffer_build_indices(b);
             RETURN(Buffer, b);
         }
     }
-    return buffer_open(da_append_Buffer(&eddy->buffers, (Buffer) { 0 }), file);
+    return buffer_open(eddy_new_buffer(eddy), file);
 }
 
 Buffer *eddy_new_buffer(Eddy *eddy)
 {
-    return da_append_Buffer(&eddy->buffers, (Buffer) { 0 });
+    Buffer *buffer;
+    for (size_t ix = 0; ix < eddy->buffers.size; ++ix) {
+        Buffer *b = eddy->buffers.elements + ix;
+        if (sv_empty(b->name) && sv_empty(b->text.view)) {
+            buffer_build_indices(b);
+            b->buffer_ix = ix;
+            return b;
+        }
+    }
+    Buffer *b = da_append_Buffer(&eddy->buffers, (Buffer) {0});
+    b->buffer_ix = eddy->buffers.size - 1;
+    buffer_build_indices(b);
+    return b;
+}
+
+void eddy_close_buffer(Eddy *eddy, int buffer_num)
+{
+    Buffer     *buffer = eddy->buffers.elements + buffer_num;
+    buffer_close(buffer);
+    if (buffer_num == eddy->buffers.size) {
+        --eddy->buffers.size;
+    }
 }
 
 void eddy_set_message(Eddy *eddy, StringView message)

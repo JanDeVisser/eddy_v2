@@ -10,8 +10,7 @@
 #include <widget.h>
 
 typedef struct {
-    _W
-    int        buffer_num;
+    _W int     buffer_num;
     size_t     cursor;
     IntVector2 cursor_pos;
     int        cursor_col;
@@ -43,15 +42,22 @@ typedef struct {
 } Gutter;
 
 WIDGET_CLASS(Gutter, gutter);
-extern void editor_new(Editor *editor);
-extern void editor_select_buffer(Editor *editor, int buffer_num);
-extern void editor_update_cursor(Editor *editor);
-extern void editor_insert(Editor *editor, StringView text, size_t at);
-extern void editor_delete(Editor *editor, size_t at, size_t count);
-extern void editor_lines_up(Editor *editor, int count);
-extern void editor_lines_down(Editor *editor, int count);
-extern void editor_manage_selection(Editor *editor, BufferView *view, bool selection);
-extern void editor_selection_to_clipboard(Editor *editor);
-extern void editor_select_line(Editor *editor);
+extern void       editor_new(Editor *editor);
+extern ErrorOrInt editor_open(Editor *editor, StringView file);
+extern void       editor_select_buffer(Editor *editor, int buffer_num);
+extern void       editor_close_view(Editor *editor);
+extern void       editor_close_buffer(Editor *editor);
+extern bool       editor_has_prev(Editor *editor);
+extern bool       editor_has_next(Editor *editor);
+extern void       editor_select_prev(Editor *editor);
+extern void       editor_select_next(Editor *editor);
+extern void       editor_update_cursor(Editor *editor);
+extern void       editor_insert(Editor *editor, StringView text, size_t at);
+extern void       editor_delete(Editor *editor, size_t at, size_t count);
+extern void       editor_lines_up(Editor *editor, int count);
+extern void       editor_lines_down(Editor *editor, int count);
+extern void       editor_manage_selection(Editor *editor, BufferView *view, bool selection);
+extern void       editor_selection_to_clipboard(Editor *editor);
+extern void       editor_select_line(Editor *editor);
 
 #endif /* __APP_EDITOR_H__ */

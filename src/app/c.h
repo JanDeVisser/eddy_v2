@@ -7,7 +7,14 @@
 #ifndef __LANG_C_H__
 #define __LANG_C_H__
 
-#include <base/lexer.h>
+#include <lexer.h>
+#include <widget.h>
+
+typedef struct {
+    _W;
+} CMode;
+
+SIMPLE_WIDGET_CLASS(CMode, c_mode);
 
 int handle_c_directive(Lexer *lexer, int directive);
 

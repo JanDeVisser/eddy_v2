@@ -217,13 +217,14 @@ ErrorOrSize write_pipe_write(WritePipe *pipe, StringView sv)
 ErrorOrSize write_pipe_write_chars(WritePipe *pipe, char const *buf, size_t num)
 {
     ssize_t count;
-    // printf("Writing %zu bytes to fd %d\n", num, pipe->fd);
     while (true) {
         count = write(pipe->fd, buf, num);
-        if (count >= 0)
+        if (count >= 0) {
             break;
-        if (errno != EINTR)
+        }
+        if (errno != EINTR) {
             ERROR(Size, ProcessError, errno, "Error writing to child process input");
+        }
     }
     RETURN(Size, count);
 }
@@ -267,8 +268,14 @@ void dump_stderr(ReadPipe *pipe)
     fprintf(stderr, "%.*s\n", SV_ARG(read_pipe_current(pipe)));
 }
 
+void sigchld(int)
+{
+    trace(CAT_PROCESS, "SIGCHLD caught");
+}
+
 ErrorOrInt process_start(Process *p)
 {
+    signal(SIGCHLD, sigchld);
     size_t sz = p->arguments.size;
     char **argv = allocate_array(char *, sz + 2);
     argv[0] = (char *) sv_cstr(p->command);
@@ -277,10 +284,10 @@ ErrorOrInt process_start(Process *p)
     }
     argv[sz + 1] = NULL;
     StringView args = sl_join(&p->arguments, sv_from(" "));
-    printf("[CMD] %.*s %.*s\n", SV_ARG(p->command), SV_ARG(args));
+    trace(CAT_PROCESS, "[CMD] %.*s %.*s\n", SV_ARG(p->command), SV_ARG(args));
     sv_free(args);
 
-    signal(SIGCHLD, SIG_IGN);
+    // signal(SIGCHLD, SIG_IGN);
     TRY_TO(WritePipe, Int, write_pipe_init(&p->in));
     p->out.debug = true;
     TRY_TO(ReadPipe, Int, read_pipe_init(&p->out));
@@ -300,7 +307,6 @@ ErrorOrInt process_start(Process *p)
         write_pipe_connect_child(&p->in, STDIN_FILENO);
         read_pipe_connect_child(&p->out, STDOUT_FILENO);
         read_pipe_connect_child(&p->err, STDERR_FILENO);
-        // while ((dup2(err, STDERR_FILENO) == -1) && (errno == EINTR)) { }
         execvp(argv[0], argv);
         fatal("execvp(%.*s) failed: %s", SV_ARG(p->command), errorcode_to_string(errno));
     }

@@ -7,8 +7,6 @@
 #ifndef __APP_EDDY_H__
 #define __APP_EDDY_H__
 
-#include <allocate.h>
-
 #include <buffer.h>
 #include <editor.h>
 #include <widget.h>
@@ -55,6 +53,7 @@ extern void          eddy_on_terminate(Eddy *eddy);
 extern void          eddy_open_dir(Eddy *eddy, StringView dir);
 extern ErrorOrBuffer eddy_open_buffer(Eddy *eddy, StringView file);
 extern Buffer       *eddy_new_buffer(Eddy *eddy);
+extern void          eddy_close_buffer(Eddy *eddy, int buffer_num);
 extern void          eddy_set_message(Eddy *eddy, StringView message);
 extern void          eddy_clear_message(Eddy *eddy);
 extern Eddy         *eddy_create();
