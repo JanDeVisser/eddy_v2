@@ -29,14 +29,13 @@ ErrorOrResponse lsp_message(char const *method, OptionalJSONValue params)
     Request    req = { .id = ++id, method, OptionalJSONValue_empty() };
     req.params = params;
     assert(lsp);
-    {
-        StringView json = json_encode(request_encode(&req));
-        trace(CAT_LSP, "==> %.*s", SV_ARG(json));
-        char const *content_length = TextFormat("Content-Length: %zu\r\n\r\n", json.length + 2);
-        write_pipe_write(&lsp->in, sv_from(content_length));
-        write_pipe_write(&lsp->in, json);
-        write_pipe_write(&lsp->in, sv_from("\r\n"));
-    }
+    StringView request_json = json_encode(request_encode(&req));
+    // trace(CAT_LSP, "==> %.*s", SV_ARG(request_json));
+    StringView req_content_length = sv_printf("Content-Length: %zu\r\n\r\n", request_json.length + 2);
+    TRY_TO(Size, Response, write_pipe_write(&lsp->in, req_content_length));
+    sv_free(req_content_length);
+    TRY_TO(Size, Response, write_pipe_write(&lsp->in, request_json));
+    TRY_TO(Size, Response, write_pipe_write(&lsp->in, sv_from("\r\n")));
 
     StringView buf = {0};
     while (true) {
@@ -53,20 +52,27 @@ ErrorOrResponse lsp_message(char const *method, OptionalJSONValue params)
             continue;
         }
         ss_skip_whitespace(&ss);
-        size_t content_length = ss_read_number(&ss);
-        if (!content_length) {
+        size_t resp_content_length = ss_read_number(&ss);
+        if (!resp_content_length) {
             continue;
         }
         if (!ss_expect_sv(&ss, sv_from("\r\n\r\n"))) {
             continue;
         }
-        StringView json = ss_read(&ss, content_length);
-        if (json.length < content_length) {
+        StringView response_json = ss_read(&ss, resp_content_length);
+        if (response_json.length < resp_content_length) {
             continue;
         }
-        // trace(CAT_LSP, "<== %.*s", SV_ARG(json));
+        // trace(CAT_LSP, "<== %.*s", SV_ARG(response_json));
         buf = (StringView) {0};
-        JSONValue ret = TRY_TO(JSONValue, Response, json_decode(json));
+        ErrorOrJSONValue ret_maybe = json_decode(response_json);
+        if (ErrorOrJSONValue_is_error(ret_maybe)) {
+            trace(CAT_LSP, "==> %.*s", SV_ARG(request_json));
+            trace(CAT_LSP, "<== %.*s", SV_ARG(response_json));
+            return ErrorOrResponse_copy(ret_maybe.error);
+        }
+        JSONValue ret = ret_maybe.value;
+
         if (json_has(&ret, "method")) {
             // Notification. Drop on the floor
             trace(CAT_LSP, "Received '%.*s' notification", SV_ARG(json_get_string(&ret, "method", sv_null())));
@@ -81,6 +87,7 @@ ErrorOrResponse lsp_message(char const *method, OptionalJSONValue params)
         }
         Response response = response_decode(&ret);
         assert(response.id == req.id);
+        sv_free(request_json);
         RETURN(Response, response);
     }
 }
@@ -151,11 +158,11 @@ void lsp_initialize()
         }
         server_capabilties = result.capabilities;
         assert(server_capabilties.semanticTokensProvider.has_value);
-        trace(CAT_LSP, "#Token types: %zu", server_capabilties.semanticTokensProvider.value.legend.tokenTypes.size);
+        // trace(CAT_LSP, "#Token types: %zu", server_capabilties.semanticTokensProvider.value.legend.tokenTypes.size);
         for (int i = 0; i < server_capabilties.semanticTokensProvider.value.legend.tokenTypes.size; ++i) {
             StringView tokenType = server_capabilties.semanticTokensProvider.value.legend.tokenTypes.strings[i];
             SemanticTokenTypes semantic_token_type = SemanticTokenTypes_parse(tokenType);
-            trace(CAT_LSP, "%d: '%.*s' %d", i, SV_ARG(tokenType), semantic_token_type);
+            // trace(CAT_LSP, "%d: '%.*s' %d", i, SV_ARG(tokenType), semantic_token_type);
             switch (semantic_token_type) {
                 case SemanticTokenTypesNamespace: colors[i] = PI_KNOWN_IDENTIFIER; break;
                 case SemanticTokenTypesType: colors[i] = PI_KNOWN_IDENTIFIER; break;
@@ -321,7 +328,7 @@ int lsp_format(int buffer_num)
         return -1;
     }
     StringView s = json_encode(response.result.value);
-    trace(CAT_LSP, "Formatting edits: %.*s", SV_ARG(s));
+    // trace(CAT_LSP, "Formatting edits: %.*s", SV_ARG(s));
     sv_free(s);
 
     if (response.result.value.type != JSON_TYPE_ARRAY) {
@@ -343,6 +350,6 @@ int lsp_format(int buffer_num)
             buffer_replace(buffer, offset, length, edit.newText);
         }
     }
-    free(edits.elements);
+    da_free_TextEdit(&edits);
     return edits.size;
 }
