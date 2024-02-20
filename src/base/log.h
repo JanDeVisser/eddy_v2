@@ -14,6 +14,7 @@
 
 #define TRACECATEGORIES(S) \
     S(NONE)                \
+    S(DA)                  \
     S(LIB)                 \
     S(THREAD)              \
     S(PROCESS)             \

@@ -133,7 +133,7 @@ void json_free(JSONValue value)
             sv_free(pair.name);
             json_free(pair.value);
         }
-        free(value.object.elements);
+        da_free_JSONValue(&value.object);
     } break;
     case JSON_TYPE_STRING:
         sv_free(value.string);

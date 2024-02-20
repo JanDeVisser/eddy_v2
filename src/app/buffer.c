@@ -244,9 +244,9 @@ void buffer_apply(Buffer *buffer, BufferEvent event)
         sv_free(buffer->undo_buffer.view);
         sv_free(buffer->name);
         sv_free(buffer->uri);
-        free(buffer->undo_stack.elements);
-        free(buffer->tokens.elements);
-        free(buffer->lines.elements);
+        da_free_BufferEvent(&buffer->undo_stack);
+        da_free_DisplayToken(&buffer->tokens);
+        da_free_Index(&buffer->lines);
         for (BufferEventListenerList *entry = buffer->listeners; entry;) {
             BufferEventListenerList *next = entry->next;
             free(entry);

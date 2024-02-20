@@ -153,8 +153,7 @@ StringView xml_debug(XMLNode node)
         trace(CAT_XML, "%.*s: %.*s", SV_ARG(_debug), SV_ARG(_msg));  \
         sv_free(_msg);                                               \
         sv_free(_debug);                                             \
-    }                                                                \
-    while (0)
+    }
 
 XMLNode xml_document()
 {
@@ -353,15 +352,15 @@ void _xml_free(XMLNode node)
         for (size_t ix = 0; ix < impl->element.children.size; ++ix) {
             _xml_free((XMLNode) { node.registry, impl->element.children.elements[ix] });
         }
-        free(impl->element.attributes.elements);
-        free(impl->element.children.elements);
+        da_free_size_t(&impl->element.attributes);
+        da_free_size_t(&impl->element.children);
         sv_free(impl->element.tag);
     } break;
     case XML_TYPE_PROCESSING_INSTRUCTION: {
         for (size_t ix = 0; ix < impl->pi.attributes.size; ++ix) {
             _xml_free((XMLNode) { node.registry, impl->pi.attributes.elements[ix] });
         }
-        free(impl->pi.attributes.elements);
+        da_free_size_t(&impl->pi.attributes);
         sv_free(impl->pi.tag);
     } break;
     case XML_TYPE_DOCUMENT: {
@@ -371,10 +370,10 @@ void _xml_free(XMLNode node)
         for (size_t ix = 0; ix < impl->element.children.size; ++ix) {
             _xml_free((XMLNode) { node.registry, impl->element.children.elements[ix] });
         }
-        free(impl->document.processing_instructions.elements);
-        free(impl->document.children.elements);
+        da_free_size_t(&impl->document.processing_instructions);
+        da_free_size_t(&impl->document.children);
         sv_free(impl->document.sb.view);
-        free(node.registry->elements);
+        da_free_XMLNodeImpl(node.registry);
         free(node.registry);
     } break;
     }
@@ -395,7 +394,7 @@ XMLNode xml_set_attribute(XMLNode node, StringView attr_tag, StringView text)
         if (sv_eq(attr->attribute.tag, attr_tag)) {
             sv_free(attr->attribute.text);
             attr->attribute.text = sv_copy(text);
-            TRACE(node, "xml_set_attribute(%.*s, '%.*s') -> overwriting %zu", SV_ARG(attr_tag), SV_ARG(text), parent_impl->element.attributes.size);
+            TRACE(node, "xml_set_attribute(%.*s, '%.*s') -> overwriting %zu", SV_ARG(attr_tag), SV_ARG(text), parent_impl->element.attributes.size)
             return node;
         }
     }
@@ -404,7 +403,7 @@ XMLNode xml_set_attribute(XMLNode node, StringView attr_tag, StringView text)
     impl->attribute.tag = sv_copy(attr_tag);
     impl->attribute.text = sv_copy(text);
     da_append_size_t(&parent_impl->element.attributes, a.index);
-    TRACE(node, "xml_set_attribute(%.*s, '%.*s') -> new %zu", SV_ARG(attr_tag), SV_ARG(text), parent_impl->element.attributes.size);
+    TRACE(node, "xml_set_attribute(%.*s, '%.*s') -> new %zu", SV_ARG(attr_tag), SV_ARG(text), parent_impl->element.attributes.size)
     return a;
 }
 
