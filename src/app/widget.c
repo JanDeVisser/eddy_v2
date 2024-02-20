@@ -42,6 +42,16 @@ bool icontains(int v, int min, int max)
     return v >= min && v <= max;
 }
 
+float fclamp(float v, float min, float max)
+{
+    return fmin(fmax(v, min), max);
+}
+
+bool fcontains(float v, float min, float max)
+{
+    return v >= min && v <= max;
+}
+
 char const *rect_tostring(Rect r)
 {
     return TextFormat("%.1fx%f.1@+%.1f,+%.1f", r.width, r.height, r.x, r.y);
@@ -107,14 +117,48 @@ bool _is_key_pressed(int key, char const *keystr, ...)
     return false;
 }
 
+Rectangle widget_normalize(void *w, float left, float top, float width, float height)
+{
+    Widget *widget = (Widget *) w;
+    if (left < 0) {
+        left = widget->viewport.width + left;
+    }
+    if (top < 0) {
+        top = widget->viewport.height + top;
+    }
+    if (width <= 0) {
+        width = widget->viewport.width + 2*width;
+    }
+    if (height <= 0) {
+        height = widget->viewport.height + 2*height;
+    }
+    left = fclamp(left, 0, widget->viewport.width);
+    top = fclamp(top, 0, widget->viewport.height);
+    width = fclamp(width, 0, widget->viewport.width - 1);
+    height = fclamp(height, 0, widget->viewport.height - 1);
+    return (Rectangle) { .x = widget->viewport.x + left, .y = widget->viewport.y + top, .width = width, .height = height };
+}
+
 void widget_render_text(void *w, float x, float y, StringView text, Font font, Color color)
 {
     Widget *widget = (Widget *) w;
+    if (sv_empty(text)) {
+        return;
+    }
     char    ch = text.ptr[text.length];
     if (ch) {
         ((char *) text.ptr)[text.length] = 0;
     }
-    Vector2 pos = { widget->viewport.x + PADDING + x, widget->viewport.y + PADDING + y };
+    if (x < 0 || y < 0) {
+        Vector2 m = MeasureTextEx(font, text.ptr, font.baseSize, 2);
+        if (x < 0) {
+            x = widget->viewport.width - m.x + x;
+        }
+        if (y < 0) {
+            y = widget->viewport.height - m.y + y;
+        }
+    }
+    Vector2 pos = { widget->viewport.x + x, widget->viewport.y + y };
     DrawTextEx(font, text.ptr, pos, font.baseSize, 2, color);
     if (ch) {
         ((char *) text.ptr)[text.length] = ch;
@@ -126,6 +170,13 @@ void widget_render_text_bitmap(void *w, float x, float y, StringView text, Color
     Widget *widget = (Widget *) w;
     char    ch = text.ptr[text.length];
     ((char *) text.ptr)[text.length] = 0;
+    if (x < 0) {
+        int text_width = MeasureText(text.ptr, 20);
+        x = widget->viewport.width - text_width + x;
+    }
+    if (y < 0) {
+        y = widget->viewport.height - 20 + y;
+    }
     DrawText(text.ptr, widget->viewport.x + PADDING + x, widget->viewport.y + PADDING + y, 20, color);
     ((char *) text.ptr)[text.length] = ch;
 }
@@ -133,13 +184,19 @@ void widget_render_text_bitmap(void *w, float x, float y, StringView text, Color
 void widget_draw_rectangle(void *w, float x, float y, float width, float height, Color color)
 {
     Widget *widget = (Widget *) w;
-    DrawRectangle(widget->viewport.x + x, widget->viewport.y + y, width, height, color);
+    DrawRectangleRec(widget_normalize(w, x, y, width, height), color);
+}
+
+void widget_draw_outline(void *w, float x, float y, float width, float height, Color color)
+{
+    Widget *widget = (Widget *) w;
+    DrawRectangleLinesEx(widget_normalize(w, x, y, width, height), 1, color);
 }
 
 void _widget_add_command(void *w, StringView cmd, CommandHandler handler, ...)
 {
     Widget *widget = (Widget *) w;
-    da_append_Command(&widget->commands, (Command) { cmd, handler });
+    da_append_Command(&widget->commands, (Command) { w, cmd, handler });
     size_t  ix = widget->commands.size - 1;
     va_list bindings;
     va_start(bindings, handler);
@@ -160,10 +217,11 @@ void layout_init(Layout *)
 {
 }
 
-void layout_add_widget(Layout *layout, Widget *widget)
+void layout_add_widget(Layout *layout, void *widget)
 {
-    da_append_Widget(&layout->widgets, widget);
-    widget->parent = (Widget *) layout;
+    Widget *w = (Widget *) widget;
+    da_append_Widget(&layout->widgets, w);
+    w->parent = (Widget *) layout;
 }
 
 void layout_resize(Layout *layout)
@@ -190,8 +248,8 @@ void layout_resize(Layout *layout)
     //     fixed_pos);
     for (size_t ix = 0; ix < layout->widgets.size; ++ix) {
         w = layout->widgets.elements[ix];
-        w->viewport.size[fixed_coord] = fixed_size;
-        w->viewport.position[fixed_coord] = fixed_pos;
+        w->viewport.size[fixed_coord] = fixed_size - w->padding.coords[fixed_coord] - w->padding.coords[fixed_coord+2];
+        w->viewport.position[fixed_coord] = fixed_pos + w->padding.coords[fixed_coord];
         float sz = 0;
         // printf("Component widget %s has policy %d\n", w->classname, w->policy);
         switch (w->policy) {
@@ -202,7 +260,7 @@ void layout_resize(Layout *layout)
             sz = (total * w->policy_size) / 100.0f;
         } break;
         case SP_CHARACTERS: {
-            sz = floorf(w->policy_size * ((layout->orientation == CO_VERTICAL) ? app->cell.y : app->cell.x) + 2 * PADDING);
+            sz = ceilf(1.2 * w->policy_size * ((layout->orientation == CO_VERTICAL) ? app->cell.y : app->cell.x));
         } break;
         case SP_CALCULATED: {
             NYI("SP_CALCULATED not yet supported");
@@ -213,7 +271,7 @@ void layout_resize(Layout *layout)
         } break;
         }
         assert_msg(sz != 0, "Size Policy %d resulted in zero size", (int) w->policy);
-        w->viewport.size[var_coord] = sz;
+        w->viewport.size[var_coord] = sz - w->padding.coords[var_coord] - w->padding.coords[var_coord+2];
         if (sz > 0) {
             allocated += sz;
             // printf("Allocating %f, now allocated %f\n", sz, allocated);
@@ -228,15 +286,15 @@ void layout_resize(Layout *layout)
             w = layout->widgets.elements[ix];
             if (w->policy == SP_STRETCH) {
                 // printf("Allocating %f to stretchable %s\n", stretch, w->classname);
-                w->viewport.size[var_coord] = stretch;
+                w->viewport.size[var_coord] = stretch - w->padding.coords[var_coord] - w->padding.coords[var_coord+2];
             }
         }
     }
 
     for (size_t ix = 0; ix < layout->widgets.size; ++ix) {
         w = layout->widgets.elements[ix];
-        w->viewport.position[var_coord] = var_offset;
-        var_offset += w->viewport.size[var_coord];
+        w->viewport.position[var_coord] = var_offset + w->padding.coords[var_coord];
+        var_offset += w->viewport.size[var_coord] + w->padding.coords[var_coord] + w->padding.coords[var_coord+2];
         // printf("Resizing %s to %s\n", w->classname, rect_tostring(w->viewport));
         if (w->handlers.resize) {
             w->handlers.resize(w);
@@ -256,6 +314,10 @@ void layout_draw(Layout *layout)
     for (size_t ix = 0; ix < layout->widgets.size; ++ix) {
         w = layout->widgets.elements[ix];
         if (w->viewport.width > 0.0f && w->viewport.height > 0.0f && w->handlers.draw) {
+            DrawRectangle(w->viewport.x - w->padding.left, w->viewport.y - w->padding.top,
+                w->viewport.width + w->padding.left + w->padding.right,
+                w->viewport.height + w->padding.top + w->padding.bottom,
+                w->background);
             w->handlers.draw(w);
         }
     }
@@ -343,7 +405,9 @@ void spacer_init(Spacer *spacer)
 void label_init(Label *label)
 {
     label->policy = SP_CHARACTERS;
+    label->policy_size = 1.0f;
     label->color = RAYWHITE;
+    label->padding = DEFAULT_PADDING;
 }
 
 void label_resize(Label *label)
@@ -482,15 +546,29 @@ bool find_and_run_shortcut(Widget *w, KeyboardModifier modifier)
 
 void app_process_input(App *app)
 {
-    Widget *f = app->focus;
-    if (app->modals.size) {
-        f = app->modals.elements[app->modals.size - 1];
+    if (app->pending_commands.size > 0) {
+        // Command command = *da_element_Command(&app->pending_commands, 0);
+        // memmove(app->pending_commands.elements, app->pending_commands.elements + 1, sizeof(Command) * app->pending_commands.size);
+        // --app->pending_commands.size;
+        Command command = da_pop_front_Command(&app->pending_commands);
+        CommandContext ctx = { 0 };
+        ctx.trigger = (KeyCombo) {.key = KEY_NULL, KMOD_NONE };
+        ctx.called_as = command.name;
+        ctx.target = command.target;
+        command.handler(&ctx);
+        return;
     }
+    if (app->modals.size) {
+        Widget *modal = app->modals.elements[app->modals.size - 1];
+        modal->handlers.process_input(modal);
+        return;
+    }
+    Widget *f = app->focus;
     if (!f) {
         f = (Widget *) app;
     }
-        KeyboardModifier modifier = modifier_current();
-        if (!find_and_run_shortcut(f, modifier)) {
-            layout_process_input((Layout *) app);
-        }
+    KeyboardModifier modifier = modifier_current();
+    if (!find_and_run_shortcut(f, modifier)) {
+        layout_process_input((Layout *) app);
+    }
 }

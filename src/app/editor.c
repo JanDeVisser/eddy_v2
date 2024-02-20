@@ -31,6 +31,8 @@ void gutter_init(Gutter *gutter)
 {
     gutter->policy = SP_CHARACTERS;
     gutter->policy_size = 4;
+    gutter->padding = DEFAULT_PADDING;
+    gutter->background = palettes[PALETTE_DARK][PI_BACKGROUND];
 }
 
 void gutter_resize(Gutter *)
@@ -123,7 +125,7 @@ void editor_select_buffer(Editor *editor, int buffer_num)
     }
     in_place_widget(BufferView, view, editor);
     if (sv_endswith(buffer->name, sv_from(".c")) || sv_endswith(buffer->name, sv_from(".h"))) {
-        view->mode = widget_new_with_parent(CMode, view);
+        view->mode = (Widget*) widget_new_with_parent(CMode, view);
     }
     editor_select_view(editor, view_ix);
 }
@@ -789,6 +791,8 @@ void editor_cmd_close_view(CommandContext *ctx)
 void editor_init(Editor *editor)
 {
     editor->policy = SP_STRETCH;
+    editor->background = palettes[PALETTE_DARK][PI_BACKGROUND];
+    editor->padding = DEFAULT_PADDING;
     widget_add_command(editor, sv_from("cursor-up"), editor_cmd_up,
         (KeyCombo) { KEY_UP, KMOD_NONE }, (KeyCombo) { KEY_UP, KMOD_SHIFT });
     widget_add_command(editor, sv_from("select-word"), editor_cmd_select_word,
@@ -857,8 +861,7 @@ void editor_draw(Editor *editor)
     editor_update_cursor(editor);
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
-    widget_draw_rectangle(editor, 0, 0, editor->viewport.width, editor->viewport.height,
-        palettes[PALETTE_DARK][PI_BACKGROUND]);
+    widget_draw_rectangle(editor, 0, 0, 0, 0, palettes[PALETTE_DARK][PI_BACKGROUND]);
 
     int selection_start = -1, selection_end = -1;
     if (view->selection != -1) {
@@ -881,7 +884,7 @@ void editor_draw(Editor *editor)
                     width = editor->columns - selection_offset;
                 }
                 widget_draw_rectangle(editor,
-                    PADDING + eddy.cell.x * selection_offset, eddy.cell.y * row,
+                    eddy.cell.x * selection_offset, eddy.cell.y * row,
                     width * eddy.cell.x, eddy.cell.y + 5,
                     palettes[PALETTE_DARK][PI_SELECTION]);
             }
@@ -910,7 +913,7 @@ void editor_draw(Editor *editor)
             if (frame == 0) {
                 printf("[%zu %.*s]", ix, SV_ARG(text));
             }
-            widget_render_text(editor, PADDING + eddy.cell.x * start_col, eddy.cell.y * row,
+            widget_render_text(editor, eddy.cell.x * start_col, eddy.cell.y * row,
                 text, eddy.font, palettes[PALETTE_DARK][token->color]);
         }
         if (frame == 0) {
@@ -922,8 +925,14 @@ void editor_draw(Editor *editor)
     if (time - floor(time) < 0.5) {
         int x = view->cursor_pos.x - view->left_column;
         int y = view->cursor_pos.y - view->top_line;
-        widget_draw_rectangle(editor, 5.0f + x * eddy.cell.x, 5.0f + y * eddy.cell.y, 2, eddy.cell.y, palettes[PALETTE_DARK][PI_CURSOR]);
+        widget_draw_rectangle(editor, x * eddy.cell.x, y * eddy.cell.y, 2, eddy.cell.y, palettes[PALETTE_DARK][PI_CURSOR]);
     }
+    DrawLine(editor->viewport.x + 80*eddy.cell.x, editor->viewport.y,
+        editor->viewport.x + 80*eddy.cell.x, editor->viewport.y + editor->viewport.height,
+        RAYWHITE);
+    DrawLine(editor->viewport.x + 120*eddy.cell.x, editor->viewport.y,
+        editor->viewport.x + 120*eddy.cell.x, editor->viewport.y + editor->viewport.height,
+        RAYWHITE);
     ++frame;
 }
 

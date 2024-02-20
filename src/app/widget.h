@@ -62,12 +62,25 @@ typedef enum {
     SP_STRETCH,
 } SizePolicy;
 
+typedef enum {
+    ModalStatusDormant = 0,
+    ModalStatusActive,
+    ModalStatusSubmitted,
+    ModalStatusDismissed,
+} ModalStatus;
+
 typedef union {
     struct {
         float x;
         float y;
         float width;
         float height;
+    };
+    struct {
+        float left;
+        float top;
+        float right;
+        float bottom;
     };
     Rectangle r;
     float     coords[4];
@@ -150,6 +163,7 @@ typedef struct {
 typedef void (*CommandHandler)(CommandContext *);
 
 typedef struct {
+    Widget        *target;
     StringView     name;
     CommandHandler handler;
 } Command;
@@ -167,9 +181,11 @@ DA_WITH_NAME(CommandBinding, CommandBindings);
     char const     *classname;   \
     WidgetHandlers  handlers;    \
     Rect            viewport;    \
+    Rect            padding;     \
     Widget         *parent;      \
     SizePolicy      policy;      \
     float           policy_size; \
+    Color           background;  \
     Commands        commands;    \
     CommandBindings bindings;    \
     Widget         *memo;
@@ -210,17 +226,27 @@ typedef struct _widget {
         .init = (WidgetInit) prefix##_init, \
     }
 
-#define widget_new(c)                      \
-    ({                                     \
-        Widget *_w = (Widget *) MALLOC(c); \
-        _w->classname = #c;                \
-        _w->handlers = $##c##_handlers;    \
+#define widget_new(C)                      \
+    (C *) ({                               \
+        Widget *_w = (Widget *) MALLOC(C); \
+        _w->classname = #C;                \
+        _w->handlers = $##C##_handlers;    \
         _w->handlers.init(_w);             \
         _w;                                \
     })
 
+#define widget_with_init(C, I)              \
+    (C *) ({                                \
+        Widget *_w = (Widget *) MALLOC(C);  \
+        _w->classname = #C;                 \
+        _w->handlers = $##C##_handlers;     \
+        _w->handlers.init = (WidgetInit) I; \
+        I((C *) _w);                        \
+        _w;                                 \
+    })
+
 #define in_place_widget(C, W, P)        \
-    ({                                  \
+    (C *) ({                            \
         Widget *_w = (Widget *) (W);    \
         _w->classname = #C;             \
         _w->handlers = $##C##_handlers; \
@@ -229,26 +255,28 @@ typedef struct _widget {
         (W);                            \
     })
 
-#define widget_new_with_parent(c, p)       \
-    ({                                     \
-        Widget *_w = (Widget *) MALLOC(c); \
-        _w->classname = #c;                \
-        _w->handlers = $##c##_handlers;    \
-        _w->parent = (Widget *) (p);       \
+#define widget_new_with_parent(C, P)       \
+    (C *) ({                               \
+        Widget *_w = (Widget *) MALLOC(C); \
+        _w->classname = #C;                \
+        _w->handlers = $##C##_handlers;    \
+        _w->parent = (Widget *) (P);       \
         _w->handlers.init(_w);             \
         _w;                                \
     })
 
-#define widget_new_with_policy(c, p, s)    \
-    ({                                     \
-        Widget *_w = (Widget *) MALLOC(c); \
-        _w->classname = #c;                \
-        _w->handlers = $##c##_handlers;    \
+#define widget_new_with_policy(C, P, S)    \
+    (C *) ({                               \
+        Widget *_w = (Widget *) MALLOC(C); \
+        _w->classname = #C;                \
+        _w->handlers = $##C##_handlers;    \
         _w->handlers.init(_w);             \
-        _w->policy = (p);                  \
-        _w->policy_size = (s);             \
+        _w->policy = (P);                  \
+        _w->policy_size = (S);             \
         _w;                                \
     })
+
+#define DEFAULT_PADDING ((Rect) { .left = PADDING, .top = PADDING, .right = PADDING, .bottom = PADDING })
 
 #define _LAYOUT_FIELDS                \
     _WIDGET_FIELDS;                   \
@@ -303,19 +331,20 @@ typedef struct {
 
 WIDGET_CLASS(Label, label);
 
-#define _APP_FIELDS       \
-    _LAYOUT_FIELDS;       \
-    int     argc;         \
-    char  **argv;         \
-    int     monitor;      \
-    Font    font;         \
-    Widget *focus;        \
-    Vector2 cell;         \
-    char    last_key[64]; \
-    bool    quit;         \
-    double  time;         \
-    Widgets modals;       \
-    size_t  frame_count
+#define _APP_FIELDS            \
+    _LAYOUT_FIELDS;            \
+    int      argc;             \
+    char   **argv;             \
+    int      monitor;          \
+    Font     font;             \
+    Widget  *focus;            \
+    Vector2  cell;             \
+    char     last_key[64];     \
+    bool     quit;             \
+    double   time;             \
+    Widgets  modals;           \
+    Commands pending_commands; \
+    size_t   frame_count
 
 typedef struct {
     _APP_FIELDS;
@@ -347,17 +376,21 @@ extern int         iclamp(int v, int min, int max);
 extern int         imin(int i1, int i2);
 extern int         imax(int i1, int i2);
 extern bool        icontains(int f, int min, int max);
+extern float       fclamp(float v, float min, float max);
+extern bool        fcontains(float f, float min, float max);
 extern char const *rect_tostring(Rect r);
 extern bool        is_modifier_down(KeyboardModifier modifier);
 extern char const *modifier_string(KeyboardModifier modifier);
 extern bool        _is_key_pressed(int key, char const *keystr, ...);
+extern Rectangle   widget_normalize(void *w, float left, float top, float width, float height);
 extern void        widget_render_text(void *w, float x, float y, StringView text, Font font, Color color);
 extern void        widget_render_text_bitmap(void *w, float x, float y, StringView text, Color color);
 extern void        widget_draw_rectangle(void *w, float x, float y, float width, float height, Color color);
+extern void        widget_draw_outline(void *w, float x, float y, float width, float height, Color color);
 extern void        _widget_add_command(void *w, StringView cmd, CommandHandler handler, ...);
 extern bool        widget_contains(void *widget, Vector2 world_coordinates);
 extern Widget     *layout_find_by_draw_function(Layout *layout, WidgetDraw draw_fnc);
-extern void        layout_add_widget(Layout *layout, Widget *widget);
+extern void        layout_add_widget(Layout *layout, void *widget);
 extern void        layout_traverse(Layout *layout, void (*fnc)(Widget *));
 extern void        layout_dump(Layout *layout);
 extern void        app_initialize(App *app, AppCreate create, int argc, char **argv);

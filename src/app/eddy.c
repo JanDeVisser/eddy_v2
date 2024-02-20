@@ -15,6 +15,7 @@
 #include <fs.h>
 #include <io.h>
 #include <json.h>
+#include <listbox.h>
 #include <options.h>
 #include <palette.h>
 
@@ -109,7 +110,7 @@ void sb_fps_draw(Label *label)
 
 void sb_on_draw(StatusBar *sb)
 {
-    widget_draw_rectangle(sb, 0, 0, sb->viewport.width, sb->viewport.height, RAYWHITE);
+    widget_draw_rectangle(sb, 0, 0, 0, 0, RAYWHITE);
 }
 
 void sb_init(StatusBar *status_bar)
@@ -118,24 +119,24 @@ void sb_init(StatusBar *status_bar)
     status_bar->policy = SP_CHARACTERS;
     status_bar->policy_size = 1.0f;
     status_bar->handlers.on_draw = (WidgetOnDraw) sb_on_draw;
-    layout_add_widget((Layout *) status_bar, widget_new_with_policy(Spacer, SP_CHARACTERS, 1));
+    layout_add_widget((Layout *) status_bar, (Widget*) widget_new_with_policy(Spacer, SP_CHARACTERS, 1));
     Label *file_name = (Label *) widget_new(Label);
     file_name->policy_size = 64;
     file_name->color = DARKGRAY;
     file_name->handlers.draw = (WidgetDraw) sb_file_name_draw;
     layout_add_widget((Layout *) status_bar, (Widget *) file_name);
-    layout_add_widget((Layout *) status_bar, widget_new(Spacer));
-    Label *cursor = (Label *) widget_new(Label);
+    layout_add_widget((Layout *) status_bar, (Widget*) widget_new(Spacer));
+    Label *cursor = widget_new(Label);
     cursor->policy_size = 16;
     cursor->color = DARKGRAY;
     cursor->handlers.draw = (WidgetDraw) sb_cursor_draw;
     layout_add_widget((Layout *) status_bar, (Widget *) cursor);
-    Label *last_key = (Label *) widget_new(Label);
+    Label *last_key = widget_new(Label);
     last_key->policy_size = 16;
     last_key->color = DARKGRAY;
     last_key->handlers.draw = (WidgetDraw) sb_last_key_draw;
     layout_add_widget((Layout *) status_bar, (Widget *) last_key);
-    Label *fps = (Label *) widget_new(Label);
+    Label *fps = widget_new(Label);
     fps->policy_size = 4;
     fps->handlers.draw = (WidgetDraw) sb_fps_draw;
     layout_add_widget((Layout *) status_bar, (Widget *) fps);
@@ -147,10 +148,11 @@ void message_line_init(MessageLine *message_line)
 {
     message_line->policy = SP_CHARACTERS;
     message_line->policy_size = 1.0f;
+    message_line->padding = DEFAULT_PADDING;
     message_line->message = sv_null();
 }
 
-void message_line_resize(MessageLine *message_line)
+void message_line_resize(MessageLine *)
 {
 }
 
@@ -164,7 +166,7 @@ void message_line_draw(MessageLine *message_line)
 
 void message_line_process_input(MessageLine *message_line)
 {
-    if (sv_not_empty(message_line->message) && eddy.time - message_line->time > 1.0) {
+    if (sv_not_empty(message_line->message) && eddy.time - message_line->time > 2.0) {
         sv_free(message_line->message);
         message_line->message = sv_null();
     }
@@ -188,6 +190,48 @@ void eddy_cmd_quit(CommandContext *ctx)
     eddy->quit = true;
 }
 
+void run_command_process_input(ListBox *listbox)
+{
+    listbox_process_input(listbox);
+    switch (listbox->status) {
+    case ModalStatusSubmitted:
+        da_append_Command(&eddy.pending_commands, *(Command*) listbox->entries.elements[listbox->selected_entry].payload);
+        eddy_set_message(&eddy, "Selected command '%.*s'", SV_ARG(listbox->matches.strings[listbox->selection]));
+        break;
+    default:
+        break;
+    }
+    if (listbox->status != ModalStatusActive) {
+        --eddy.modals.size;
+        da_free_ListBoxEntry(&listbox->entries);
+        da_free_StringView(&listbox->matches);
+        sv_free(listbox->search.view);
+        free(listbox);
+    }
+}
+
+void run_command_init(ListBox *listbox)
+{
+    listbox->handlers.process_input = (WidgetProcessInput) run_command_process_input;
+    listbox->prompt = sv_from("Select commmand");
+    listbox_init(listbox);
+}
+
+void eddy_cmd_run_command(CommandContext *ctx)
+{
+    Eddy     *eddy = (Eddy*) ctx->target;
+    ListBox  *list_box = widget_with_init(ListBox, run_command_init);
+    for (Widget *w = eddy->focus; w; w = w->parent) {
+        for (size_t cix = 0; cix < w->commands.size; ++cix) {
+            Command *command = w->commands.elements + cix;
+            da_append_ListBoxEntry(&list_box->entries, (ListBoxEntry) { command->name, command });
+        }
+    }
+    da_append_Widget(&eddy->modals, (Widget*) list_box);
+    listbox_filter(list_box);
+    list_box->status = ModalStatusActive;
+}
+
 Eddy *eddy_create()
 {
     app_state_read(&state);
@@ -205,8 +249,8 @@ void eddy_init(Eddy *eddy)
 
     Layout *main_area = layout_new(CO_VERTICAL);
     main_area->policy = SP_STRETCH;
-    layout_add_widget(main_area, (Widget *) editor_pane);
-    Widget *sb = widget_new(StatusBar);
+    layout_add_widget(main_area, editor_pane);
+    StatusBar *sb = widget_new(StatusBar);
     layout_add_widget(main_area, widget_new(StatusBar));
     layout_add_widget(main_area, widget_new(MessageLine));
 
@@ -241,8 +285,10 @@ void eddy_init(Eddy *eddy)
     }
     editor_select_buffer(eddy->editor, 0);
 
-    widget_add_command(eddy, sv_from("eddy_quit"), eddy_cmd_quit,
+    widget_add_command(eddy, sv_from("eddy-quit"), eddy_cmd_quit,
         (KeyCombo) { KEY_Q, KMOD_CONTROL });
+    widget_add_command(eddy, sv_from("eddy-run-command"), eddy_cmd_run_command,
+        (KeyCombo) { KEY_X, KMOD_SUPER });
 
     eddy->viewport.width = WINDOW_WIDTH;
     eddy->viewport.height = WINDOW_HEIGHT;
