@@ -63,6 +63,7 @@ typedef enum {
     SemanticTokenTypesRegexp,
     SemanticTokenTypesOperator,
     SemanticTokenTypesDecorator,
+    SemanticTokenTypesUnknown,
 } SemanticTokenTypes;
 
 DA_WITH_NAME(SemanticTokenTypes, SemanticTokenTypess);
@@ -84,6 +85,7 @@ typedef enum {
     SemanticTokenModifiersModification,
     SemanticTokenModifiersDocumentation,
     SemanticTokenModifiersDefaultLibrary,
+    SemanticTokenModifiersUnknown,
 } SemanticTokenModifiers;
 
 extern StringView SemanticTokenModifiers_to_string(SemanticTokenModifiers value);

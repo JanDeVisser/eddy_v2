@@ -5,8 +5,8 @@
  *
  * THIS IS GENERATED CODE. DO NOT MODIFY.
  */
-
-// clang-format off
+ 
+// clang-format off 
 
 #include <lsp/initialize.h>
 
@@ -103,6 +103,7 @@ StringView SemanticTokenTypes_to_string(SemanticTokenTypes value)
     case SemanticTokenTypesRegexp: return sv_from("regexp");
     case SemanticTokenTypesOperator: return sv_from("operator");
     case SemanticTokenTypesDecorator: return sv_from("decorator");
+    case SemanticTokenTypesUnknown: return sv_from("unknown");
     default: UNREACHABLE();
     }
 }
@@ -132,7 +133,8 @@ SemanticTokenTypes SemanticTokenTypes_parse(StringView s)
     if (sv_eq_cstr(s, "regexp")) return SemanticTokenTypesRegexp;
     if (sv_eq_cstr(s, "operator")) return SemanticTokenTypesOperator;
     if (sv_eq_cstr(s, "decorator")) return SemanticTokenTypesDecorator;
-    if (sv_eq_cstr(s, "unknown")) return SemanticTokenTypesString; // FIXME
+    if (sv_eq_cstr(s, "unknown")) return SemanticTokenTypesUnknown;
+    UNREACHABLE();
 }
 
 SemanticTokenTypes SemanticTokenTypes_decode(OptionalJSONValue json)
@@ -161,6 +163,7 @@ StringView SemanticTokenModifiers_to_string(SemanticTokenModifiers value)
     case SemanticTokenModifiersModification: return sv_from("modification");
     case SemanticTokenModifiersDocumentation: return sv_from("documentation");
     case SemanticTokenModifiersDefaultLibrary: return sv_from("defaultLibrary");
+    case SemanticTokenModifiersUnknown: return sv_from("unknown");
     default: UNREACHABLE();
     }
 }
@@ -177,6 +180,7 @@ SemanticTokenModifiers SemanticTokenModifiers_parse(StringView s)
     if (sv_eq_cstr(s, "modification")) return SemanticTokenModifiersModification;
     if (sv_eq_cstr(s, "documentation")) return SemanticTokenModifiersDocumentation;
     if (sv_eq_cstr(s, "defaultLibrary")) return SemanticTokenModifiersDefaultLibrary;
+    if (sv_eq_cstr(s, "unknown")) return SemanticTokenModifiersUnknown;
     UNREACHABLE();
 }
 
@@ -498,3 +502,4 @@ InitializeResult InitializeResult_decode(OptionalJSONValue v4)
 }
 
 // clang-format on
+

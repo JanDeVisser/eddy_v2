@@ -45,7 +45,8 @@
         {"name": "Number", "value": "number"},
         {"name": "Regexp", "value": "regexp"},
         {"name": "Operator", "value": "operator"},
-        {"name": "Decorator", "value": "decorator"}
+        {"name": "Decorator", "value": "decorator"},
+        {"name": "Unknown", "value": "unknown"}
       ]
     },
     {
@@ -61,7 +62,8 @@
         {"name": "Async", "value": "async"},
         {"name": "Modification", "value": "modification"},
         {"name": "Documentation", "value": "documentation"},
-        {"name": "DefaultLibrary", "value": "defaultLibrary"}
+        {"name": "DefaultLibrary", "value": "defaultLibrary"},
+        {"name": "Unknown", "value": "unknown"}
       ]
     },
     {
