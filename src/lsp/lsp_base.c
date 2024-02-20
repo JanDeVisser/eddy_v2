@@ -25,16 +25,14 @@ OptionalJSONValue UInts_encode(UInts value)
 
 UInts UInts_decode(OptionalJSONValue json)
 {
-    if (!(json.has_value)) { _fatal("%s:%d: " "%s:%d: assert('%s') FAILED", "_file_name_short_", 15, "_file_name_short_", 15, "json.has_value"); };
-    if (!(json.value.type == JSON_TYPE_ARRAY)) { _fatal("%s:%d: " "%s:%d: assert('%s') FAILED", "_file_name_short_", 15, "_file_name_short_", 15, "json.value.type == JSON_TYPE_ARRAY"); };
+    assert(json.has_value);
+    assert(json.value.type == JSON_TYPE_ARRAY);
     UInts ret = { 0 };
     for (size_t ix = 0; ix < json_len(&json.value); ++ix) {
         OptionalJSONValue elem = json_at(&json.value, ix);
-        da_append_uint32_t(&ret, ( {
-            if (!(elem.has_value)) { _fatal("%s:%d: " "%s:%d: assert('%s') FAILED", "_file_name_short_", 15, "_file_name_short_", 15, "elem.has_value"); };
-            if (!(elem.value.type == JSON_TYPE_INT)) { _fatal("%s:%d: " "%s:%d: assert('%s') FAILED", "_file_name_short_", 15, "_file_name_short_", 15, "elem.value.type == JSON_TYPE_INT"); };
-            (uint32_t) json_int_value(elem.value);
-        }));
+        assert(elem.has_value);
+        assert(elem.value.type == JSON_TYPE_INT);
+        da_append_uint32_t(&ret, json_int_value(elem.value));
     }
     return ret;
 }
