@@ -50,6 +50,7 @@ void json_encode_to_builder(JSONValue *value, JSONEncoder *encoder)
     case JSON_TYPE_STRING:
         encoder->escaped.view.length = 0;
         encoder->escaped = sb_copy_sv(value->string);
+        sb_replace_all(&encoder->escaped, sv_from("\\"), sv_from("\\\\"));
         sb_replace_all(&encoder->escaped, sv_from("\n"), sv_from("\\n"));
         sb_replace_all(&encoder->escaped, sv_from("\r"), sv_from("\\r"));
         sb_replace_all(&encoder->escaped, sv_from("\t"), sv_from("\\t"));
