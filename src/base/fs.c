@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <dirent.h>
 #include <errno.h>
 #include <pwd.h>
 #include <sys/stat.h>
@@ -11,6 +12,8 @@
 
 #include <fs.h>
 #include <sys/syslimits.h>
+
+DA_IMPL(DirEntry);
 
 size_t fs_file_size(StringView file_name)
 {
@@ -134,7 +137,7 @@ StringView fs_canonical(StringView name)
     StringList name_components = sv_split(name_stripped, sv_from("/"));
     sl_extend(&path, &name_components);
 
-    StringBuilder sb = {0};
+    StringBuilder sb = { 0 };
     StringList    canonical_path = { 0 };
     sl_push(&canonical_path, sv_null());
     for (StringView comp = sl_pop_front(&path); !sv_empty(comp); comp = sl_pop_front(&path)) {
@@ -192,4 +195,68 @@ StringView fs_relative(StringView name, StringView base)
     }
     StringList tail = sl_split(&path, base_path.size);
     return sl_join(&tail, sv_from("/"));
+}
+
+ErrorOrDirListing fs_directory(StringView name, uint8_t options)
+{
+    char ch = name.ptr[name.length];
+    ((char *) name.ptr)[name.length] = 0;
+    DIR *dir = opendir(name.ptr);
+    ((char *) name.ptr)[name.length] = ch;
+    if (dir == NULL) {
+        ERROR(DirListing, IOError, errno, "Could not open directory '%.*s': %s", SV_ARG(name), strerror(errno));
+    }
+
+    DirListing ret = { 0 };
+    ret.directory = sv_copy(name);
+    struct dirent *dp;
+    while ((dp = readdir(dir)) != NULL) {
+        FileType type = 0;
+        if (dp->d_type == DT_DIR) {
+            if (!(options & DirOptionDirectories)) {
+                continue;
+            }
+            type = FileTypeDirectory;
+        } else if (dp->d_type == DT_REG) {
+            if (!(options & DirOptionFiles)) {
+                continue;
+            }
+            type = FileTypeRegularFile;
+        } else if (dp->d_type == DT_LNK) {
+            if (!(options & DirOptionFiles)) {
+                continue;
+            }
+            type = FileTypeSymlink;
+        } else if (dp->d_type == DT_SOCK) {
+            if (!(options & DirOptionFiles)) {
+                continue;
+            }
+            type = FileTypeSocket;
+        } else {
+            continue;
+        }
+        if (dp->d_name[0] == '.' && type == FileTypeRegularFile && !(options & DirOptionHiddenFiles)) {
+            continue;
+        }
+
+        StringView entry_name = { 0 };
+#ifdef HAVE_DIRENT_D_NAMLEN
+        entry_name = sv_copy((StringView) { dp->d_name, dp->d_namlen });
+#else
+        entry_name = sv_copy_cstr(dp->d_name);
+#endif
+        da_append_DirEntry(&ret.entries, (DirEntry) { .name = entry_name, .type = type });
+    }
+    closedir(dir);
+    RETURN(DirListing, ret);
+}
+
+void dl_free(DirListing dir)
+{
+    for (size_t ix = 0; ix < dir.entries.size; ++ix) {
+        DirEntry *entry = da_element_DirEntry(&dir.entries, ix);
+        sv_free(entry->name);
+    }
+    da_free_DirEntry(&dir.entries);
+    sv_free(dir.directory);
 }
