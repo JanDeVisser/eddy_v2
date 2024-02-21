@@ -217,8 +217,10 @@ Token lexer_peek_next(Lexer *lexer)
     case '"':
     case '`': {
         size_t ix = 1;
-        for (; buffer[ix] && (buffer[ix] != buffer[0] || buffer[ix - 1] == '\\'); ++ix)
-            ;
+        while (buffer[ix] && buffer[ix] != buffer[0]) {
+            if (buffer[ix] == '\\') ++ix;
+            if (buffer[ix]) ++ix;
+        }
         TokenCode code;
         switch (buffer[0]) {
         case '"':
