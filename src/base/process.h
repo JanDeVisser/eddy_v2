@@ -40,6 +40,8 @@ typedef struct process {
     WritePipe  in;
     ReadPipe   out;
     ReadPipe   err;
+    StringView stdout_file;
+    StringView stderr_file;
 } Process;
 
 extern ErrorOrReadPipe   read_pipe_init(ReadPipe *pipe);

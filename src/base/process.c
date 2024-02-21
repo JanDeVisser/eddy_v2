@@ -263,11 +263,6 @@ Process *_process_create(StringView cmd, ...)
     return ret;
 }
 
-void dump_stderr(ReadPipe *pipe)
-{
-    fprintf(stderr, "%.*s\n", SV_ARG(read_pipe_current(pipe)));
-}
-
 void sigchld(int)
 {
     trace(CAT_PROCESS, "SIGCHLD caught");
@@ -289,14 +284,8 @@ ErrorOrInt process_start(Process *p)
 
     // signal(SIGCHLD, SIG_IGN);
     TRY_TO(WritePipe, Int, write_pipe_init(&p->in));
-    p->out.debug = true;
     TRY_TO(ReadPipe, Int, read_pipe_init(&p->out));
-    // p->err.on_read = dump_stderr;
     TRY_TO(ReadPipe, Int, read_pipe_init(&p->err));
-    // char buf[256];
-    // snprintf(buf, 255, "/tmp/%.*s.err", SV_ARG(p->command));
-    // int err = open(buf, O_WRONLY | O_CREAT, 0777);
-    // assert(err > 0);
 
     pid_t pid = fork();
     if (pid == -1) {
@@ -305,8 +294,22 @@ ErrorOrInt process_start(Process *p)
     p->pid = pid;
     if (pid == 0) {
         write_pipe_connect_child(&p->in, STDIN_FILENO);
-        read_pipe_connect_child(&p->out, STDOUT_FILENO);
-        read_pipe_connect_child(&p->err, STDERR_FILENO);
+        if (sv_empty(p->stdout_file)) {
+            read_pipe_connect_child(&p->out, STDOUT_FILENO);
+        } else {
+            int fd = open(sv_cstr(p->stdout_file), O_WRONLY | O_CREAT | O_TRUNC, 0777);
+            assert_msg(fd, "Couldn not open stdout stream '%.*s' for '%.*s': %s",
+                SV_ARG(p->stdout_file), SV_ARG(p->command), strerror(errno));
+            while (dup2(fd, STDOUT_FILENO) == -1 && (errno == EINTR)) { }
+        }
+        if (sv_empty(p->stderr_file)) {
+            read_pipe_connect_child(&p->err, STDERR_FILENO);
+        } else {
+            int fd = open(sv_cstr(p->stderr_file), O_WRONLY | O_CREAT | O_TRUNC, 0777);
+            assert_msg(fd, "Couldn not open stderr stream '%.*s' for '%.*s': %s",
+                SV_ARG(p->stderr_file), SV_ARG(p->command), strerror(errno));
+            while (dup2(fd, STDERR_FILENO) == -1 && (errno == EINTR)) { }
+        }
         execvp(argv[0], argv);
         fatal("execvp(%.*s) failed: %s", SV_ARG(p->command), errorcode_to_string(errno));
     }
