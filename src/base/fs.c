@@ -199,31 +199,30 @@ StringView fs_relative(StringView name, StringView base)
 
 ErrorOrDirListing fs_directory(StringView name, uint8_t options)
 {
-    char ch = name.ptr[name.length];
-    ((char *) name.ptr)[name.length] = 0;
-    DIR *dir = opendir(name.ptr);
-    ((char *) name.ptr)[name.length] = ch;
+    DirListing ret = { 0 };
+    ret.directory = sv_copy(name);
+
+    DIR *dir = opendir(ret.directory.ptr);
     if (dir == NULL) {
+        sv_free(ret.directory);
         ERROR(DirListing, IOError, errno, "Could not open directory '%.*s': %s", SV_ARG(name), strerror(errno));
     }
 
-    DirListing ret = { 0 };
-    ret.directory = sv_copy(name);
     struct dirent *dp;
     while ((dp = readdir(dir)) != NULL) {
         FileType type = 0;
         if (dp->d_type == DT_DIR) {
-            if (!(options & DirOptionDirectories)) {
+            if (!(options | DirOptionDirectories)) {
                 continue;
             }
             type = FileTypeDirectory;
         } else if (dp->d_type == DT_REG) {
-            if (!(options & DirOptionFiles)) {
+            if (!(options | DirOptionFiles)) {
                 continue;
             }
             type = FileTypeRegularFile;
         } else if (dp->d_type == DT_LNK) {
-            if (!(options & DirOptionFiles)) {
+            if (!(options | DirOptionFiles)) {
                 continue;
             }
             type = FileTypeSymlink;
@@ -235,7 +234,7 @@ ErrorOrDirListing fs_directory(StringView name, uint8_t options)
         } else {
             continue;
         }
-        if (dp->d_name[0] == '.' && type == FileTypeRegularFile && !(options & DirOptionHiddenFiles)) {
+        if (!(options & DirOptionHiddenFiles) && dp->d_name[0] == '.' && strcmp(dp->d_name, ".") && strcmp(dp->d_name, "..")) {
             continue;
         }
 

@@ -18,8 +18,8 @@ typedef enum : uint8_t {
 } DirOption;
 
 typedef enum {
-    FileTypeRegularFile = 0x01,
-    FileTypeDirectory = 0x02,
+    FileTypeDirectory = 0x01,
+    FileTypeRegularFile = 0x02,
     FileTypeSocket = 0x04,
     FileTypeSymlink = 0x08,
 } FileType;
