@@ -242,13 +242,22 @@ char const *sv_cstr(StringView sv)
 
 int sv_cmp(StringView s1, StringView s2)
 {
-    if (s1.length != s2.length) {
-        return ((int) s1.length) - ((int) s2.length);
+    for (size_t ix = 0; ix < s1.length && ix < s2.length; ++ix) {
+        if (s1.ptr[ix] != s2.ptr[ix]) {
+            return s1.ptr[ix] - s2.ptr[ix];
+        }
     }
-    if (s1.length == 0 && s2.length == 0) {
-        return 0;
+    return (int) s1.length - (int) s2.length;
+}
+
+int sv_icmp(StringView s1, StringView s2)
+{
+    for (size_t ix = 0; ix < s1.length && ix < s2.length; ++ix) {
+        if (toupper(s1.ptr[ix]) != toupper(s2.ptr[ix])) {
+            return toupper(s1.ptr[ix]) - toupper(s2.ptr[ix]);
+        }
     }
-    return memcmp(s1.ptr, s2.ptr, s1.length);
+    return (int) s1.length - (int) s2.length;
 }
 
 bool sv_eq(StringView s1, StringView s2)
