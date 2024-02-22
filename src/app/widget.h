@@ -398,6 +398,7 @@ extern void        widget_render_text(void *w, float x, float y, StringView text
 extern void        widget_render_text_bitmap(void *w, float x, float y, StringView text, Color color);
 extern void        widget_draw_rectangle(void *w, float x, float y, float width, float height, Color color);
 extern void        widget_draw_outline(void *w, float x, float y, float width, float height, Color color);
+extern void        widget_draw_line(void *w, float x0, float y0, float x1, float y1, Color color);
 extern void        _widget_add_command(void *w, StringView cmd, CommandHandler handler, ...);
 extern bool        widget_contains(void *widget, Vector2 world_coordinates);
 extern Widget     *layout_find_by_draw_function(Layout *layout, WidgetDraw draw_fnc);

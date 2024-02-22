@@ -169,7 +169,9 @@ void widget_render_text_bitmap(void *w, float x, float y, StringView text, Color
 {
     Widget *widget = (Widget *) w;
     char    ch = text.ptr[text.length];
-    ((char *) text.ptr)[text.length] = 0;
+    if (ch != 0) {
+        ((char *) text.ptr)[text.length] = 0;
+    }
     if (x < 0) {
         int text_width = MeasureText(text.ptr, 20);
         x = widget->viewport.width - text_width + x;
@@ -178,7 +180,34 @@ void widget_render_text_bitmap(void *w, float x, float y, StringView text, Color
         y = widget->viewport.height - 20 + y;
     }
     DrawText(text.ptr, widget->viewport.x + PADDING + x, widget->viewport.y + PADDING + y, 20, color);
-    ((char *) text.ptr)[text.length] = ch;
+    if (ch != 0) {
+        ((char *) text.ptr)[text.length] = ch;
+    }
+}
+
+void widget_draw_line(void *w, float x0, float y0, float x1, float y1, Color color)
+{
+    Widget *widget = (Widget *) w;
+    if (x0 < 0) {
+        x0 = widget->viewport.width + x0;
+    }
+    if (y0 < 0) {
+        y0 = widget->viewport.height + y0;
+    }
+    if (x1 <= 0) {
+        x1 = widget->viewport.width + x1;
+    }
+    if (y1 <= 0) {
+        y1 = widget->viewport.height + y1;
+    }
+    x0 = fclamp(x0, 0, widget->viewport.width);
+    y0 = fclamp(y0, 0, widget->viewport.height);
+    x1 = fclamp(x1, 0, widget->viewport.width - 1);
+    y1 = fclamp(y1, 0, widget->viewport.height - 1);
+    DrawLine(widget->viewport.x + x0, widget->viewport.y + y0,
+        widget->viewport.x + x1, widget->viewport.y + y1,
+        color);
+
 }
 
 void widget_draw_rectangle(void *w, float x, float y, float width, float height, Color color)
