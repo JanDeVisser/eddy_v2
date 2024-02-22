@@ -119,13 +119,13 @@ void sb_init(StatusBar *status_bar)
     status_bar->policy = SP_CHARACTERS;
     status_bar->policy_size = 1.0f;
     status_bar->handlers.on_draw = (WidgetOnDraw) sb_on_draw;
-    layout_add_widget((Layout *) status_bar, (Widget*) widget_new_with_policy(Spacer, SP_CHARACTERS, 1));
+    layout_add_widget((Layout *) status_bar, (Widget *) widget_new_with_policy(Spacer, SP_CHARACTERS, 1));
     Label *file_name = (Label *) widget_new(Label);
     file_name->policy_size = 64;
     file_name->color = DARKGRAY;
     file_name->handlers.draw = (WidgetDraw) sb_file_name_draw;
     layout_add_widget((Layout *) status_bar, (Widget *) file_name);
-    layout_add_widget((Layout *) status_bar, (Widget*) widget_new(Spacer));
+    layout_add_widget((Layout *) status_bar, (Widget *) widget_new(Spacer));
     Label *cursor = widget_new(Label);
     cursor->policy_size = 16;
     cursor->color = DARKGRAY;
@@ -174,9 +174,8 @@ void message_line_process_input(MessageLine *message_line)
 
 APP_CLASS_DEF(Eddy, eddy);
 
-void eddy_cmd_quit(CommandContext *ctx)
+void eddy_quit(Eddy *eddy)
 {
-    Eddy     *eddy = (Eddy*) ctx->target;
     JSONValue state = json_object();
     JSONValue files = json_array();
     for (size_t ix = 0; ix < eddy->buffers.size; ++ix) {
@@ -190,46 +189,74 @@ void eddy_cmd_quit(CommandContext *ctx)
     eddy->quit = true;
 }
 
-void run_command_process_input(ListBox *listbox)
+void eddy_are_you_sure_handler(ListBox *are_you_sure, QueryOption selection)
 {
-    listbox_process_input(listbox);
-    switch (listbox->status) {
-    case ModalStatusSubmitted:
-        da_append_Command(&eddy.pending_commands, *(Command*) listbox->entries.elements[listbox->selected_entry].payload);
-        eddy_set_message(&eddy, "Selected command '%.*s'", SV_ARG(listbox->matches.strings[listbox->selection]));
-        break;
-    default:
-        break;
-    }
-    if (listbox->status != ModalStatusActive) {
-        --eddy.modals.size;
-        da_free_ListBoxEntry(&listbox->entries);
-        da_free_StringView(&listbox->matches);
-        sv_free(listbox->search.view);
-        free(listbox);
+    if (selection == QueryOptionYes) {
+        eddy_quit(&eddy);
     }
 }
 
-void run_command_init(ListBox *listbox)
+void eddy_cmd_quit(CommandContext *ctx)
 {
-    listbox->handlers.process_input = (WidgetProcessInput) run_command_process_input;
-    listbox->prompt = sv_from("Select commmand");
-    listbox_init(listbox);
+    Eddy    *eddy = (Eddy *) ctx->target;
+    bool has_modified_buffers = false;
+    for (size_t ix = 0; ix < eddy->buffers.size; ++ix) {
+        Buffer *buffer = da_element_Buffer(&eddy->buffers, ix);
+        if (buffer->saved_version < buffer->version) {
+            has_modified_buffers = true;
+            break;
+        }
+    }
+    StringView prompt = sv_from("Are you sure you want to quit?");
+    if (has_modified_buffers) {
+        prompt = sv_from("There are modified files. Are you sure you want to quit?");
+    }
+    ListBox *are_you_sure = listbox_create_query(prompt, eddy_are_you_sure_handler, QueryOptionYesNo);
+    listbox_show(are_you_sure);
+}
+
+void run_command_submit(ListBox *listbox, ListBoxEntry selection)
+{
+    Command *cmd = (Command *) selection.payload;
+    da_append_Command(&eddy.pending_commands, *cmd);
+    eddy_set_message(&eddy, "Selected command '%.*s'", SV_ARG(cmd->name));
 }
 
 void eddy_cmd_run_command(CommandContext *ctx)
 {
-    Eddy     *eddy = (Eddy*) ctx->target;
-    ListBox  *list_box = widget_with_init(ListBox, run_command_init);
+    Eddy    *eddy = (Eddy *) ctx->target;
+    ListBox *listbox = widget_new(ListBox);
+    listbox->prompt = sv_from("Select commmand");
+    listbox->submit = run_command_submit;
     for (Widget *w = eddy->focus; w; w = w->parent) {
         for (size_t cix = 0; cix < w->commands.size; ++cix) {
             Command *command = w->commands.elements + cix;
-            da_append_ListBoxEntry(&list_box->entries, (ListBoxEntry) { command->name, command });
+            da_append_ListBoxEntry(&listbox->entries, (ListBoxEntry) { command->name, command });
         }
     }
-    da_append_Widget(&eddy->modals, (Widget*) list_box);
-    listbox_filter(list_box);
-    list_box->status = ModalStatusActive;
+    listbox_show(listbox);
+}
+
+void eddy_open_fs_handler(ListBox *listbox, DirEntry entry)
+{
+    FileSelectorStatus *status = listbox->memo;
+    DirListing *dir = (DirListing *) listbox->memo;
+    StringView  filename = sv_printf("%.*s/%.*s", SV_ARG(dir->directory), SV_ARG(entry.name));
+    StringView  canonical = fs_canonical(filename);
+    sv_free(filename);
+    ErrorOrBuffer buffer_maybe = eddy_open_buffer(&eddy, canonical);
+    if (ErrorOrBuffer_is_error(buffer_maybe)) {
+        eddy_set_message(&eddy, "Could not open '%.*': %s", SV_ARG(canonical), Error_to_string(buffer_maybe.error));
+    } else {
+        editor_select_buffer(eddy.editor, buffer_maybe.value->buffer_ix);
+    }
+    sv_free(canonical);
+}
+
+void eddy_cmd_open_file(CommandContext *ctx)
+{
+    ListBox *listbox = file_selector_create(sv_from("Select file"), eddy_open_fs_handler, FSFile);
+    listbox_show(listbox);
 }
 
 Eddy *eddy_create()
@@ -250,7 +277,6 @@ void eddy_init(Eddy *eddy)
     Layout *main_area = layout_new(CO_VERTICAL);
     main_area->policy = SP_STRETCH;
     layout_add_widget(main_area, editor_pane);
-    StatusBar *sb = widget_new(StatusBar);
     layout_add_widget(main_area, widget_new(StatusBar));
     layout_add_widget(main_area, widget_new(MessageLine));
 
@@ -289,6 +315,8 @@ void eddy_init(Eddy *eddy)
         (KeyCombo) { KEY_Q, KMOD_CONTROL });
     widget_add_command(eddy, sv_from("eddy-run-command"), eddy_cmd_run_command,
         (KeyCombo) { KEY_X, KMOD_SUPER });
+    widget_add_command(eddy, sv_from("eddy-open-file"), eddy_cmd_open_file,
+        (KeyCombo) { KEY_O, KMOD_CONTROL });
 
     eddy->viewport.width = WINDOW_WIDTH;
     eddy->viewport.height = WINDOW_HEIGHT;
@@ -384,7 +412,7 @@ Buffer *eddy_new_buffer(Eddy *eddy)
             return b;
         }
     }
-    Buffer *b = da_append_Buffer(&eddy->buffers, (Buffer) {0 });
+    Buffer *b = da_append_Buffer(&eddy->buffers, (Buffer) { 0 });
     b->buffer_ix = eddy->buffers.size - 1;
     buffer_build_indices(b);
     return b;

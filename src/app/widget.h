@@ -188,7 +188,7 @@ DA_WITH_NAME(CommandBinding, CommandBindings);
     Color           background;  \
     Commands        commands;    \
     CommandBindings bindings;    \
-    Widget         *memo;
+    void           *memo;
 
 typedef struct _widget {
     _WIDGET_FIELDS
@@ -253,6 +253,17 @@ typedef struct _widget {
         _w->parent = (Widget *) (P);    \
         _w->handlers.init(_w);          \
         (W);                            \
+    })
+
+#define in_place_widget_with_init(C, W, P, I) \
+    (C *) ({                                  \
+        Widget *_w = (Widget *) (W);          \
+        _w->classname = #C;                   \
+        _w->handlers = $##C##_handlers;       \
+        _w->handlers.init = (WidgetInit) I;   \
+        _w->parent = (Widget *) (P);          \
+        I((C *) _w);                          \
+        (W);                                  \
     })
 
 #define widget_new_with_parent(C, P)       \

@@ -14,7 +14,7 @@
 #include <eddy.h>
 #include <editor.h>
 #include <fs.h>
-#include <json.h>
+#include <listbox.h>
 #include <palette.h>
 #include <process.h>
 
@@ -125,18 +125,15 @@ void editor_select_buffer(Editor *editor, int buffer_num)
     }
     in_place_widget(BufferView, view, editor);
     if (sv_endswith(buffer->name, sv_from(".c")) || sv_endswith(buffer->name, sv_from(".h"))) {
-        view->mode = (Widget*) widget_new_with_parent(CMode, view);
+        view->mode = (Widget *) widget_new_with_parent(CMode, view);
     }
     editor_select_view(editor, view_ix);
 }
 
 bool editor_has_prev(Editor *editor)
 {
-    int prev = editor->current_buffer-1;
-    while (prev >= 0) {
-        if (editor->buffers.elements[prev].buffer_num == -1) {
-            break;
-        }
+    int prev = editor->current_buffer - 1;
+    while (prev >= 0 && editor->buffers.elements[prev].buffer_num == -1) {
         --prev;
     }
     return prev >= 0;
@@ -144,11 +141,8 @@ bool editor_has_prev(Editor *editor)
 
 bool editor_has_next(Editor *editor)
 {
-    int next = editor->current_buffer+1;
-    while (next < editor->buffers.size) {
-        if (editor->buffers.elements[next].buffer_num == -1) {
-            break;
-        }
+    int next = editor->current_buffer + 1;
+    while (next < editor->buffers.size && editor->buffers.elements[next].buffer_num == -1) {
         ++next;
     }
     return next < editor->buffers.size;
@@ -159,11 +153,8 @@ void editor_select_prev(Editor *editor)
     if (!editor_has_prev(editor)) {
         return;
     }
-    int prev = editor->current_buffer-1;
-    while (prev >= 0) {
-        if (editor->buffers.elements[prev].buffer_num == -1) {
-            break;
-        }
+    int prev = editor->current_buffer - 1;
+    while (prev >= 0 && editor->buffers.elements[prev].buffer_num == -1) {
         --prev;
     }
     if (prev >= 0) {
@@ -173,11 +164,8 @@ void editor_select_prev(Editor *editor)
 
 void editor_select_next(Editor *editor)
 {
-    int next = editor->current_buffer+1;
-    while (next < editor->buffers.size) {
-        if (editor->buffers.elements[next].buffer_num == -1) {
-            break;
-        }
+    int next = editor->current_buffer + 1;
+    while (next < editor->buffers.size && editor->buffers.elements[next].buffer_num == -1) {
         ++next;
     }
     if (next < editor->buffers.size) {
@@ -188,7 +176,7 @@ void editor_select_next(Editor *editor)
 void editor_close_view(Editor *editor)
 {
     BufferView *view = editor->buffers.elements + editor->current_buffer;
-    Widget *mode = view->mode;
+    Widget     *mode = view->mode;
     if (mode && mode->handlers.on_terminate) {
         mode->handlers.on_terminate(mode);
     }
@@ -211,7 +199,7 @@ void editor_close_view(Editor *editor)
 void editor_close_buffer(Editor *editor)
 {
     BufferView *view = editor->buffers.elements + editor->current_buffer;
-    int buffer_num = view->buffer_num;
+    int         buffer_num = view->buffer_num;
     editor_close_view(editor);
     eddy_close_buffer(&eddy, buffer_num);
 }
@@ -750,6 +738,10 @@ void editor_cmd_save(CommandContext *ctx)
     Editor     *editor = (Editor *) ctx->target;
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
+    if (sv_empty(buffer->name)) {
+        eddy_set_message(&eddy, "Can't save-as yet!");
+        return;
+    }
     buffer_save(buffer);
     eddy_set_message(&eddy, "Buffer saved");
 }
@@ -770,15 +762,73 @@ void editor_cmd_redo(CommandContext *ctx)
     buffer_redo(buffer);
 }
 
+void switch_buffer_submit(ListBox *listbox, ListBoxEntry selection)
+{
+    size_t buffer_ix = (size_t) selection.payload;
+    editor_select_buffer(eddy.editor, buffer_ix);
+}
+
+void editor_cmd_switch_buffer(CommandContext *ctx)
+{
+    Editor  *editor = (Editor *) ctx->target;
+    ListBox *listbox = widget_new(ListBox);
+    listbox->submit = (ListBoxSubmit) switch_buffer_submit;
+    listbox->prompt = sv_from("Select buffer");
+    for (size_t ix = 0; ix < editor->buffers.size; ++ix) {
+        BufferView *view = editor->buffers.elements + ix;
+        Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
+        StringView  text;
+        if (buffer->saved_version < buffer->version) {
+            text = sv_printf("%.*s *", SV_ARG(buffer->name));
+        } else {
+            text = buffer->name;
+        }
+        da_append_ListBoxEntry(&listbox->entries, (ListBoxEntry) { text, (void *) (size_t) view->buffer_num });
+    }
+    listbox_show(listbox);
+}
+
+void editor_are_you_sure_handler(ListBox *are_you_sure, QueryOption selection)
+{
+    switch (selection) {
+    case QueryOptionYes: {
+        BufferView *view = eddy.editor->buffers.elements + eddy.editor->current_buffer;
+        Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
+        buffer_save(buffer);
+    } // Fall through:
+    case QueryOptionNo:
+        editor_close_buffer(eddy.editor);
+        break;
+    default:
+        // do nothing
+        break;
+    }
+}
+
 void editor_cmd_close_buffer(CommandContext *ctx)
 {
     Editor     *editor = (Editor *) ctx->target;
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
+
+    StringView prompt = sv_null();
+    if (sv_empty(buffer->name) && sv_not_empty(buffer->text.view)) {
+        prompt = sv_printf("File is modified. Do you want to save it before closing?");
+    }
+    if (buffer->saved_version < buffer->version) {
+        prompt = sv_printf("File '%.*s' is modified. Do you want to save it before closing?", SV_ARG(buffer->name));
+    }
+    if (sv_not_empty(prompt)) {
+        ListBox   *are_you_sure = listbox_create_query(prompt, editor_are_you_sure_handler, QueryOptionYesNoCancel);
+        listbox_show(are_you_sure);
+        return;
+    }
     editor_close_buffer(editor);
 }
 
 void editor_cmd_close_view(CommandContext *ctx)
 {
-    Editor     *editor = (Editor *) ctx->target;
+    Editor *editor = (Editor *) ctx->target;
     editor_close_view(editor);
 }
 
@@ -842,9 +892,11 @@ void editor_init(Editor *editor)
     widget_add_command(editor, sv_from("editor-undo"), editor_cmd_undo,
         (KeyCombo) { KEY_Z, KMOD_CONTROL });
     widget_add_command(editor, sv_from("editor-redo"), editor_cmd_redo,
-        (KeyCombo) { KEY_Z, KMOD_CONTROL | KMOD_SHIFT});
+        (KeyCombo) { KEY_Z, KMOD_CONTROL | KMOD_SHIFT });
+    widget_add_command(editor, sv_from("editor-switch-buffer"), editor_cmd_switch_buffer,
+        (KeyCombo) { KEY_B, KMOD_SUPER });
     widget_add_command(editor, sv_from("editor-close-buffer"), editor_cmd_close_buffer,
-        (KeyCombo) { KEY_W, KMOD_CONTROL});
+        (KeyCombo) { KEY_W, KMOD_CONTROL });
     widget_add_command(editor, sv_from("editor-close-view"), editor_cmd_close_view,
         (KeyCombo) { KEY_W, KMOD_CONTROL | KMOD_SHIFT });
 }
@@ -900,7 +952,7 @@ void editor_draw(Editor *editor)
         }
         for (size_t ix = line.first_token; ix < line.first_token + line.num_tokens; ++ix) {
             DisplayToken *token = buffer->tokens.elements + ix;
-            int start_col = (int) token->index - (int) line.index_of;
+            int           start_col = (int) token->index - (int) line.index_of;
             if (start_col + (int) token->length <= (int) view->left_column) {
                 continue;
             }
@@ -908,7 +960,7 @@ void editor_draw(Editor *editor)
                 break;
             }
             start_col = iclamp(start_col, view->left_column, start_col);
-            int length = iclamp((int) token->length, 0, editor->columns - start_col);
+            int        length = iclamp((int) token->length, 0, editor->columns - start_col);
             StringView text = (StringView) { line.line.ptr + start_col, length };
             if (frame == 0) {
                 printf("[%zu %.*s]", ix, SV_ARG(text));
@@ -927,11 +979,11 @@ void editor_draw(Editor *editor)
         int y = view->cursor_pos.y - view->top_line;
         widget_draw_rectangle(editor, x * eddy.cell.x, y * eddy.cell.y, 2, eddy.cell.y, palettes[PALETTE_DARK][PI_CURSOR]);
     }
-    DrawLine(editor->viewport.x + 80*eddy.cell.x, editor->viewport.y,
-        editor->viewport.x + 80*eddy.cell.x, editor->viewport.y + editor->viewport.height,
+    DrawLine(editor->viewport.x + 80 * eddy.cell.x, editor->viewport.y,
+        editor->viewport.x + 80 * eddy.cell.x, editor->viewport.y + editor->viewport.height,
         RAYWHITE);
-    DrawLine(editor->viewport.x + 120*eddy.cell.x, editor->viewport.y,
-        editor->viewport.x + 120*eddy.cell.x, editor->viewport.y + editor->viewport.height,
+    DrawLine(editor->viewport.x + 120 * eddy.cell.x, editor->viewport.y,
+        editor->viewport.x + 120 * eddy.cell.x, editor->viewport.y + editor->viewport.height,
         RAYWHITE);
     ++frame;
 }
