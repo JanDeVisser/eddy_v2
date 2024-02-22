@@ -27,28 +27,28 @@ void listbox_resize(ListBox *listbox)
     listbox->viewport.y = eddy.viewport.height / 4;
     listbox->viewport.width = eddy.viewport.width / 2;
     listbox->viewport.height = eddy.viewport.height / 2;
-    listbox->lines = (listbox->viewport.height - 15 + eddy.cell.y) / (eddy.cell.y + 2);
+    listbox->lines = (listbox->viewport.height - 19 + eddy.cell.y) / (eddy.cell.y + 2);
     if (listbox->shrink && listbox->no_search && listbox->entries.size < listbox->lines) {
         listbox->lines = listbox->entries.size;
     }
-    listbox->viewport.height = 15 + eddy.cell.y + listbox->lines * (eddy.cell.y + 2);
+    listbox->viewport.height = 19 + eddy.cell.y + listbox->lines * (eddy.cell.y + 2);
 }
 
 void listbox_draw(ListBox *listbox)
 {
     widget_draw_rectangle(listbox, 0.0, 0.0, 0.0, 0.0, DARKGRAY);
-    widget_draw_outline(listbox, 2, 2, -4.0, -4.0, RAYWHITE);
+    widget_draw_outline(listbox, 2, 2, -2.0, -2.0, RAYWHITE);
     widget_render_text(listbox, 8, 8, listbox->prompt, eddy.font, RAYWHITE);
     widget_render_text(listbox, -8, 8, listbox->search.view, eddy.font, RAYWHITE);
-    size_t y = eddy.cell.y + 10;
+    widget_draw_line(listbox, 2, eddy.cell.y + 10, -2, eddy.cell.y + 10, RAYWHITE);
+    size_t y = eddy.cell.y + 14;
 
     ToStringView    to_string_view = listbox->to_string_view;
     size_t          maxlen = listbox->viewport.width / eddy.cell.x;
     ListBoxEntries *entries = (listbox->no_search || sv_empty(listbox->search.view)) ? &listbox->entries : &listbox->matches;
     for (size_t ix = listbox->top_line; ix < entries->size && ix < listbox->top_line + listbox->lines; ++ix) {
         if (ix == listbox->selection) {
-            widget_draw_rectangle(listbox, 4, y - 1, -4, eddy.cell.y + 1, palettes[PALETTE_DARK][PI_CURRENT_LINE_FILL]);
-            widget_draw_outline(listbox, 4, y - 1, -4, eddy.cell.y + 1, palettes[PALETTE_DARK][PI_CURRENT_LINE_EDGE]);
+            widget_draw_rectangle(listbox, 8, y - 1, -8, eddy.cell.y + 1, palettes[PALETTE_DARK][PI_SELECTION]);
         }
         StringView sv = entries->elements[ix].text;
         if (to_string_view) {
@@ -182,7 +182,7 @@ void listbox_refresh(ListBox *listbox)
     listbox_sort(listbox);
     listbox_filter(listbox);
     if (listbox->shrink && listbox->no_search && listbox->entries.size < listbox->lines) {
-        listbox->viewport.height = 15 + eddy.cell.y + listbox->entries.size * (eddy.cell.y + 2);
+        listbox->viewport.height = 19 + eddy.cell.y + listbox->entries.size * (eddy.cell.y + 2);
         listbox->lines = listbox->entries.size;
     }
     listbox->selection = 0;
@@ -273,9 +273,8 @@ void file_selector_submit(ListBox *listbox, ListBoxEntry selection)
     switch (entry.type) {
     case FileTypeDirectory: {
         if (!(status->options & FSDirectory)) {
-            StringView filename = sv_printf("%.*s/%.*s", SV_ARG(dir->directory), SV_ARG(entry.name));
+            StringView filename = sv_from(TextFormat("%.*s/%.*s", SV_ARG(dir->directory), SV_ARG(entry.name)));
             file_selector_populate(listbox, filename);
-            sv_free(filename);
             break;
         }
     } // Fall through:
@@ -287,9 +286,8 @@ void file_selector_submit(ListBox *listbox, ListBoxEntry selection)
     } break;
     default:
         free(status);
-        StringView filename = sv_printf("%.*s/%.*s", SV_ARG(dir->directory), SV_ARG(entry.name));
+        StringView filename = sv_from(TextFormat("%.*s/%.*s", SV_ARG(dir->directory), SV_ARG(entry.name)));
         StringView canonical = fs_canonical(filename);
-        sv_free(filename);
         eddy_set_message(&eddy, "Cannot open non-regular file '%.*'", SV_ARG(canonical));
         sv_free(canonical);
     }
@@ -330,17 +328,16 @@ void file_selector_process_input(ListBox *listbox)
     DirListing         *dir = (DirListing *) listbox->memo;
     StringView filename = {0};
     if (IsKeyPressed(KEY_LEFT)) {
-        filename = sv_printf("%.*s/..", SV_ARG(dir->directory));
+        filename = sv_from(TextFormat("%.*s/..", SV_ARG(dir->directory)));
     }
     if (IsKeyPressed(KEY_RIGHT)) {
         DirEntry entry = *(DirEntry *) listbox->entries.elements[listbox->selection].payload;
         if (entry.type == FileTypeDirectory) {
-            filename = sv_printf("%.*s/%.*s", SV_ARG(dir->directory), SV_ARG(entry.name));
+            filename = sv_from(TextFormat("%.*s/%.*s", SV_ARG(dir->directory), SV_ARG(entry.name)));
         }
     }
     if (sv_not_empty(filename)) {
         file_selector_populate(listbox, filename);
-        sv_free(filename);
         return;
     }
     listbox_process_input(listbox);
