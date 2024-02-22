@@ -111,6 +111,7 @@ void lsp_initialize()
         return;
     }
     lsp = process_create(sv_from("clangd"));
+    lsp->stderr_file = sv_from("/tmp/clangd.log");
     process_background(lsp);
 
     InitializeParams params = { 0 };
@@ -187,6 +188,7 @@ void lsp_initialize()
                 case SemanticTokenTypesRegexp: colors[i] = PI_STRING; break;
                 case SemanticTokenTypesOperator: colors[i] = PI_DEFAULT; break;
                 case SemanticTokenTypesDecorator: colors[i] = PI_KNOWN_IDENTIFIER; break;
+                default: colors[i] = PI_STRING;
             }
         }
     }
@@ -235,12 +237,14 @@ void lsp_semantic_tokens(int buffer_num)
         for (size_t ix = 0; ix < result._0.data.size; ix += 5) {
             if (data.elements[ix] > 0) {
                 lineno += data.elements[ix];
+                assert(lineno < buffer->lines.size);
                 line = buffer->lines.elements + lineno;
                 offset = 0;
             }
             offset += data.elements[ix+1];
             size_t length = data.elements[ix+2];
             for (size_t token_ix = 0; token_ix < line->num_tokens; ++token_ix) {
+                assert(line->first_token + token_ix < buffer->tokens.size);
                 DisplayToken *t = buffer->tokens.elements + line->first_token + token_ix;
                 if (t->index == line->index_of + offset && t->length == length) {
                     t->color = colors[data.elements[ix+3]];
