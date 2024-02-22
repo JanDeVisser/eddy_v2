@@ -83,6 +83,7 @@ StringView SemanticTokenTypes_to_string(SemanticTokenTypes value)
     case SemanticTokenTypesNamespace: return sv_from("namespace");
     case SemanticTokenTypesType: return sv_from("type");
     case SemanticTokenTypesClass: return sv_from("class");
+    case SemanticTokenTypesConcept: return sv_from("concept");
     case SemanticTokenTypesEnum: return sv_from("enum");
     case SemanticTokenTypesInterface: return sv_from("interface");
     case SemanticTokenTypesStruct: return sv_from("struct");
@@ -113,6 +114,7 @@ SemanticTokenTypes SemanticTokenTypes_parse(StringView s)
     if (sv_eq_cstr(s, "namespace")) return SemanticTokenTypesNamespace;
     if (sv_eq_cstr(s, "type")) return SemanticTokenTypesType;
     if (sv_eq_cstr(s, "class")) return SemanticTokenTypesClass;
+    if (sv_eq_cstr(s, "concept")) return SemanticTokenTypesConcept;
     if (sv_eq_cstr(s, "enum")) return SemanticTokenTypesEnum;
     if (sv_eq_cstr(s, "interface")) return SemanticTokenTypesInterface;
     if (sv_eq_cstr(s, "struct")) return SemanticTokenTypesStruct;

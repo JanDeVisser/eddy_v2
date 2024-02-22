@@ -26,6 +26,7 @@
         {"name": "Namespace", "value": "namespace"},
         {"name": "Type", "value": "type"},
         {"name": "Class", "value": "class"},
+        {"name": "Concept", "value": "concept"},
         {"name": "Enum", "value": "enum"},
         {"name": "Interface", "value": "interface"},
         {"name": "Struct", "value": "struct"},

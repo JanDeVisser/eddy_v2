@@ -43,6 +43,7 @@ typedef enum {
     SemanticTokenTypesNamespace,
     SemanticTokenTypesType,
     SemanticTokenTypesClass,
+    SemanticTokenTypesConcept,
     SemanticTokenTypesEnum,
     SemanticTokenTypesInterface,
     SemanticTokenTypesStruct,
