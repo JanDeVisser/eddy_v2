@@ -7,6 +7,9 @@
 #ifndef __OPTIONAL_H__
 #define __OPTIONAL_H__
 
+#include <da.h>
+#include <error_or.h>
+
 #define OPTIONAL_ALIAS(T, alias)                                        \
     typedef struct optional_##alias {                                   \
         bool has_value;                                                 \
@@ -33,6 +36,15 @@
         T##_maybe.value;                                                \
     })
 
+#define TRY_OPTIONAL(T, expr, E, CAT, MSG, ...)               \
+    ({                                                        \
+        Optional##T T##_maybe = (expr);                       \
+        if (!T##_maybe.has_value) {                           \
+            ERROR(E, CAT, 0, MSG __VA_OPT__(, ) __VA_ARGS__); \
+        }                                                     \
+        T##_maybe.value;                                      \
+    })
+
 #define RETURN_VALUE(T, exp) \
     return (Optional##T) { .has_value = true, .value = (exp) }
 #define RETURN_EMPTY(T) \
@@ -45,12 +57,14 @@ OPTIONAL_ALIAS(int64_t, Int64)
 OPTIONAL_ALIAS(bool, Bool)
 typedef OptionalUInt32 OptionalUInt;
 
-#define PAIR_WITH_NAME(T1, T2, N) \
-    typedef struct {              \
-        T1 key;                   \
-        T2 value;                 \
-    } pair_##N;
+#define PAIR_WITH_NAME_AND_PLURAL(T1, T2, N, N_PLURAL) \
+    typedef struct {                                   \
+        T1 key;                                        \
+        T2 value;                                      \
+    } N;                                               \
+    DA_WITH_NAME(N, N_PLURAL)
 
-#define PAIR(T1, T2) PAIR_WITH_NAME(T1, T2, T1##_##T2)
+#define PAIR_WITH_NAME(T1, T2, N) PAIR_WITH_NAME_AND_PLURAL(T1, T2, N, N##s)
+#define PAIR(T1, T2) PAIR_WITH_NAME(T1, T2, T1##_##T2##_pair)
 
 #endif /* __OPTIONAL_H__ */
