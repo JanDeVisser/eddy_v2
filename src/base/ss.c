@@ -135,7 +135,8 @@ bool ss_expect_sv(StringScanner *ss, StringView sv)
     if (ss->point + sv.length > ss->string.length) {
         return false;
     }
-    if (!sv_eq(sv_substring(ss->string, ss->point, sv.length), sv)) {
+    StringView s = sv_substring(ss->string, ss->point, sv.length);
+    if (!sv_eq(s, sv)) {
         return false;
     }
     ss->point += sv.length;

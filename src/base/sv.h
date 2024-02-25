@@ -48,6 +48,10 @@ typedef struct {
     size_t length;
 } StringRef;
 
+OPTIONAL(StringRef);
+ERROR_OR(StringRef);
+DA_WITH_NAME(StringRef, StringRefs);
+
 #define INTEGER_SIZES(S) S(8) S(16) S(32) S(64)
 
 typedef struct integer_parse_result {

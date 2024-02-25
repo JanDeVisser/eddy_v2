@@ -11,6 +11,7 @@
 DECLARE_SHARED_ALLOCATOR(sv)
 
 DA_IMPL_ELEMENTS(StringView, strings)
+DA_IMPL(StringRef)
 
 StringList sl_create()
 {
