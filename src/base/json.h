@@ -65,14 +65,20 @@ extern void              json_optional_set(JSONValue *value, char const *attr, O
 extern void              json_set_string(JSONValue *value, char const *attr, StringView sv);
 extern void              json_set_cstr(JSONValue *value, char const *attr, char const *s);
 extern void              json_set_int(JSONValue *value, char const *attr, int i);
+extern void              json_set_int_sv(JSONValue *value, StringView attr, int i);
 extern void              json_set_sv(JSONValue *value, StringView attr, JSONValue elem);
 extern OptionalJSONValue json_get(JSONValue *value, char const *attr);
+extern OptionalJSONValue json_get_sv(JSONValue *value, StringView attr);
 extern JSONValue         json_get_default(JSONValue *value, char const *attr, JSONValue default_);
 extern bool              json_get_bool(JSONValue *value, char const *attr, bool default_);
 extern int               json_get_int(JSONValue *value, char const *attr, int default_);
 extern StringView        json_get_string(JSONValue *value, char const *attr, StringView default_);
 extern bool              json_has(JSONValue *value, char const *attr);
+extern bool              json_has_sv(JSONValue *value, StringView attr);
+extern void              json_delete(JSONValue *value, char const *attr);
+extern void              json_delete_sv(JSONValue *value, StringView attr);
 extern void              json_merge(JSONValue *value, JSONValue sub);
+extern StringView        json_to_string(JSONValue value);
 extern StringView        json_encode(JSONValue value);
 extern ErrorOrJSONValue  json_decode(StringView json_text);
 

@@ -74,6 +74,33 @@ void json_encode_to_builder(JSONValue *value, JSONEncoder *encoder)
     }
 }
 
+StringView json_to_string(JSONValue value)
+{
+    switch (value.type) {
+    case JSON_TYPE_OBJECT:
+    case JSON_TYPE_ARRAY: {
+        return json_encode(value);
+    } break;
+    case JSON_TYPE_STRING:
+        return value.string;
+    case JSON_TYPE_DOUBLE:
+        return sv_printf("%f", value.double_number);
+        break;
+    case JSON_TYPE_INT:
+        return sv_render_integer(value.int_number);
+        break;
+    case JSON_TYPE_BOOLEAN:
+        if (value.boolean) {
+            return sv_from("true");
+        }
+        return sv_from("false");
+    case JSON_TYPE_NULL:
+        return sv_from("null");
+    default:
+        UNREACHABLE();
+    }
+}
+
 JSONValue json_object(void)
 {
     JSONValue result = { 0 };
@@ -205,15 +232,15 @@ size_t json_len(JSONValue *array)
 static void _json_add_nvp(JSONValue *obj, StringView attr, JSONValue value)
 {
     assert(obj->type == JSON_TYPE_OBJECT);
-    JSONNVPair pair = { .name = sv_copy(attr), .value = value };
     for (size_t ix = 0; ix < obj->object.size; ++ix) {
         JSONNVPair *p = da_element_JSONNVPair(&obj->object, ix);
-        if (sv_eq(pair.name, p->name)) {
+        if (sv_eq(attr, p->name)) {
             json_free(p->value);
-            p->value = pair.value;
+            p->value = value;
             return;
         }
     }
+    JSONNVPair pair = { .name = sv_copy(attr), .value = value };
     da_append_JSONNVPair(&obj->object, pair);
 }
 
@@ -249,24 +276,59 @@ void json_set_int(JSONValue *value, char const *attr, int i)
     _json_add_nvp(value, sv_from(attr), json_int(i));
 }
 
+void json_set_int_sv(JSONValue *value, StringView attr, int i)
+{
+    _json_add_nvp(value, attr, json_int(i));
+}
+
 bool json_has(JSONValue *value, char const *attr)
+{
+    return json_has_sv(value, sv_from(attr));
+}
+
+bool json_has_sv(JSONValue *value, StringView attr)
 {
     assert(value->type == JSON_TYPE_OBJECT);
     for (size_t ix = 0; ix < value->object.size; ++ix) {
         JSONNVPair const *pair = da_element_JSONNVPair(&value->object, ix);
-        if (sv_eq_cstr(pair->name, attr)) {
+        if (sv_eq(pair->name, attr)) {
             return true;
         }
     }
     return false;
 }
 
+void json_delete(JSONValue *value, char const *attr)
+{
+    json_delete_sv(value, sv_from(attr));
+}
+
+void json_delete_sv(JSONValue *value, StringView attr)
+{
+    assert(value->type == JSON_TYPE_OBJECT);
+    for (size_t ix = 0; ix < value->object.size; ++ix) {
+        JSONNVPair *pair = da_element_JSONNVPair(&value->object, ix);
+        if (sv_eq(pair->name, attr)) {
+            if (ix < value->object.size - 1) {
+                memmove(pair, da_element_JSONNVPair(&value->object, ix+1), sizeof(JSONNVPair));
+            }
+            --value->object.size;
+            return;
+        }
+    }
+}
+
 OptionalJSONValue json_get(JSONValue *value, char const *attr)
+{
+    return json_get_sv(value, sv_from(attr));
+}
+
+OptionalJSONValue json_get_sv(JSONValue *value, StringView attr)
 {
     assert(value->type == JSON_TYPE_OBJECT);
     for (size_t ix = 0; ix < value->object.size; ++ix) {
         JSONNVPair const *pair = da_element_JSONNVPair(&value->object, ix);
-        if (sv_eq_cstr(pair->name, attr)) {
+        if (sv_eq(pair->name, attr)) {
             RETURN_VALUE(JSONValue, pair->value);
         }
     }
