@@ -1,5 +1,7 @@
-And the message is
+And the \@ message is @= 4 + 5 =@ *
+*
+	@= $.message =@ *
+*
+Have a nice day! *
 
-	@= message =@
-
-Have a nice day!
+@% for x $.range %@ Hello @= x =@ @% endfor %@
