@@ -29,7 +29,8 @@
     S(HTTP)                \
     S(IPC)                 \
     S(LSP)                 \
-    S(XML)
+    S(XML)                 \
+    S(TEMPLATE)
 
 typedef enum trace_category {
 #undef TRACECATEGORY

@@ -28,6 +28,8 @@ add_library(
         threadonce.h
         token.c
         xml.c
+        template.c
+        template.h
 )
 
 add_executable(
@@ -77,6 +79,14 @@ add_executable(
 
 target_link_libraries(xml_format base)
 target_compile_definitions(xml_format PUBLIC XML_FORMAT)
+
+add_executable(
+        render
+        template.c
+)
+
+target_link_libraries(render base)
+target_compile_definitions(render PUBLIC TEMPLATE_RENDER)
 
 add_subdirectory("test")
 

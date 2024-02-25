@@ -27,7 +27,8 @@
     S(RuntimeError, 9)     \
     S(HttpError, 10)       \
     S(JSONError, 11)       \
-    S(XMLError, 12)
+    S(XMLError, 12)        \
+    S(TemplateError, 13)
 
 typedef enum {
 #undef ERRORCATEGORY_ENUM
