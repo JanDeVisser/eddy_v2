@@ -153,126 +153,118 @@ StringBuilder sb_copy_cstr(char const *s)
     if (s == NULL) {
         return (StringBuilder) { 0 };
     }
-    return sb_copy_chars(s, strlen(s) + 1);
+    return sb_copy_chars(s, strlen(s));
 }
 
-void sb_append_chars(StringBuilder *sb, char const *ptr, size_t len)
+StringRef sb_append_chars(StringBuilder *sb, char const *ptr, size_t len)
 {
     if (ptr == NULL || len == 0) {
-        return;
+        return (StringRef) {0};
     }
     sb_reallocate(sb, sb->view.length + len + 1);
     char *p = (char *) sb->view.ptr;
     memcpy(p + sb->view.length, ptr, len);
+    size_t index = sb->view.length;
     sb->view.length += len;
     p[sb->view.length] = '\0';
     trace(CAT_SV, "SBAPC:0x%08llx:%5zu:%.60s", (uint64_t) sb->view.ptr, buffer_capacity(sb->view.ptr), sb->view.ptr);
+    return (StringRef) { index, len };
 }
 
-void sb_append_sv(StringBuilder *sb, StringView sv)
+StringRef sb_append_sv(StringBuilder *sb, StringView sv)
 {
-    sb_append_chars(sb, sv.ptr, sv.length);
+    return sb_append_chars(sb, sv.ptr, sv.length);
 }
 
-void sb_append_cstr(StringBuilder *sb, char const *s)
+StringRef sb_append_cstr(StringBuilder *sb, char const *s)
 {
     if (s == NULL) {
-        return;
+        return (StringRef) { 0 };
     }
-    sb_append_chars(sb, s, strlen(s));
+    return sb_append_chars(sb, s, strlen(s));
 }
 
-void sb_append_char(StringBuilder *sb, char ch)
+StringRef sb_append_char(StringBuilder *sb, char ch)
 {
-    sb_append_chars(sb, &ch, 1);
+    return sb_append_chars(sb, &ch, 1);
 }
 
-void sb_append_integer(StringBuilder *sb, Integer integer)
+StringRef sb_append_integer(StringBuilder *sb, Integer integer)
 {
     StringView ret;
     switch (integer.type) {
     case U8:
-        sb_printf(sb, "%u", integer.u8);
-        break;
+        return sb_printf(sb, "%u", integer.u8);
     case U16:
-        sb_printf(sb, "%u", integer.u16);
-        break;
+        return sb_printf(sb, "%u", integer.u16);
     case U32:
-        sb_printf(sb, "%u", integer.u32);
-        break;
+        return sb_printf(sb, "%u", integer.u32);
     case U64:
-        sb_printf(sb, "%llu", integer.u64);
-        break;
+        return sb_printf(sb, "%llu", integer.u64);
     case I8:
-        sb_printf(sb, "%d", integer.i8);
-        break;
+        return sb_printf(sb, "%d", integer.i8);
     case I16:
-        sb_printf(sb, "%d", integer.i16);
-        break;
+        return sb_printf(sb, "%d", integer.i16);
     case I32:
-        sb_printf(sb, "%d", integer.i32);
-        break;
+        return sb_printf(sb, "%d", integer.i32);
     case I64:
-        sb_printf(sb, "%lld", integer.i64);
-        break;
+        return sb_printf(sb, "%lld", integer.i64);
     default:
         UNREACHABLE();
     }
 }
 
-void sb_append_hex_integer(StringBuilder *sb, Integer integer)
+StringRef sb_append_hex_integer(StringBuilder *sb, Integer integer)
 {
     switch (integer.type) {
     case U8:
-        sb_printf(sb, "%1x", integer.u8);
-        break;
+        return sb_printf(sb, "%1x", integer.u8);
     case U16:
-        sb_printf(sb, "%02x", integer.u16);
-        break;
+        return sb_printf(sb, "%02x", integer.u16);
     case U32:
-        sb_printf(sb, "%04x", integer.u32);
-        break;
+        return sb_printf(sb, "%04x", integer.u32);
     case U64:
-        sb_printf(sb, "%08llx", integer.u64);
-        break;
+        return sb_printf(sb, "%08llx", integer.u64);
     default:
         UNREACHABLE();
     }
 }
 
-void sb_vprintf(StringBuilder *sb, char const *fmt, va_list args)
+StringRef sb_vprintf(StringBuilder *sb, char const *fmt, va_list args)
 {
     va_list args2;
     va_copy(args2, args);
     size_t len = vsnprintf(NULL, 0, fmt, args2);
     va_end(args2);
     sb_reallocate(sb, sb->view.length + len + 1);
+    size_t index = sb->view.length;
     vsnprintf((char *) sb->view.ptr + sb->view.length, len + 1, fmt, args);
     sb->view.length += len;
     trace(CAT_SV, "SBVPF:0x%08llx:%5zu:%.60s", (uint64_t) sb->view.ptr, buffer_capacity(sb->view.ptr), sb->view.ptr);
+    return (StringRef) { index, len };
 }
 
-void sb_printf(StringBuilder *sb, char const *fmt, ...)
+StringRef sb_printf(StringBuilder *sb, char const *fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
-    sb_vprintf(sb, fmt, args);
+    StringRef ret = sb_vprintf(sb, fmt, args);
+    va_end(args);
+    return ret;
 }
 
-void sb_insert_sv(StringBuilder *sb, StringView sv, size_t at)
+StringRef sb_insert_sv(StringBuilder *sb, StringView sv, size_t at)
 {
     if (at >= sb->view.length) {
-        sb_append_sv(sb, sv);
-        return;
+        return sb_append_sv(sb, sv);
     }
-    sb_insert_chars(sb, sv.ptr, sv.length, at);
+    return sb_insert_chars(sb, sv.ptr, sv.length, at);
 }
 
-void sb_insert_chars(StringBuilder *sb, char const *ptr, size_t len, size_t at)
+StringRef sb_insert_chars(StringBuilder *sb, char const *ptr, size_t len, size_t at)
 {
     if (at >= sb->view.length) {
-        sb_append_chars(sb, ptr, len);
-        return;
+        return sb_append_chars(sb, ptr, len);
     }
     sb_reallocate(sb, sb->view.length + len + 1);
     char *p = (char *) sb->view.ptr;
@@ -281,15 +273,15 @@ void sb_insert_chars(StringBuilder *sb, char const *ptr, size_t len, size_t at)
     sb->view.length += len;
     p[sb->view.length] = '\0';
     trace(CAT_SV, "SBAPC:0x%08llx:%5zu:%.60s", (uint64_t) sb->view.ptr, buffer_capacity(sb->view.ptr), sb->view.ptr);
+    return (StringRef) {at, len};
 }
 
-void sb_insert_cstr(StringBuilder *sb, char const *str, size_t at)
+StringRef sb_insert_cstr(StringBuilder *sb, char const *str, size_t at)
 {
     if (at >= sb->view.length) {
-        sb_append_cstr(sb, str);
-        return;
+        return sb_append_cstr(sb, str);
     }
-    sb_insert_chars(sb, str, strlen(str), at);
+    return sb_insert_chars(sb, str, strlen(str), at);
 }
 
 void sb_remove(StringBuilder *sb, size_t at, size_t num)
@@ -309,14 +301,16 @@ void sb_remove(StringBuilder *sb, size_t at, size_t num)
     p[sb->view.length] = 0;
 }
 
-void sb_append_list(StringBuilder *sb, StringList *sl, StringView sep)
+StringRef sb_append_list(StringBuilder *sb, StringList *sl, StringView sep)
 {
+    size_t index = sb->view.length;
     for (size_t ix = 0; ix < sl->size; ++ix) {
         if (ix > 0) {
             sb_append_sv(sb, sep);
         }
         sb_append_sv(sb, sl->strings[ix]);
     }
+    return (StringRef) { index, sb->view.length - index };
 }
 
 int sb_replace_one(StringBuilder *sb, StringView pat, StringView repl)
@@ -343,4 +337,9 @@ int sb_replace_all(StringBuilder *sb, StringView pat, StringView repl)
 StringView sb_view(StringBuilder *sb)
 {
     return sb->view;
+}
+
+StringView sv(StringBuilder *sb, StringRef ref)
+{
+    return (StringView) { sb->view.ptr + ref.index, ref.length };
 }

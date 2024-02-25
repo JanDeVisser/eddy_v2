@@ -22,11 +22,6 @@ typedef enum {
 } BufferEventType;
 
 typedef struct {
-    size_t index;
-    size_t length;
-} StringRef;
-
-typedef struct {
     IntVector2 start;
     IntVector2 end;
 } EventRange;

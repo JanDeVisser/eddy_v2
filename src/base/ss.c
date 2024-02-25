@@ -109,6 +109,13 @@ void ss_skip_whitespace(StringScanner *ss)
     }
 }
 
+void ss_skip_until(StringScanner *ss, int ch)
+{
+    while (ss_peek(ss) && ss_peek(ss) != ch) {
+        ss_skip_one(ss);
+    }
+}
+
 bool ss_expect_with_offset(StringScanner *ss, char ch, size_t offset)
 {
     if (ss_peek_with_offset(ss, offset) != ch) {

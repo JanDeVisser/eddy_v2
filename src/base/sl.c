@@ -24,6 +24,7 @@ void sl_free(StringList *sl)
     for (size_t ix = 0; ix < sl->size; ++ix) {
         sv_free(sl->strings[ix]);
     }
+    free(sl->strings);
 }
 
 StringList sl_copy(StringList *sl)
