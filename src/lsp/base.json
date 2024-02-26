@@ -46,6 +46,14 @@
       "fields": [
         {"name": "version", "type": "int"}
       ]
+    },
+    {
+      "name": "TextDocumentPositionParams", "encode": true, "decode": false,
+      "optional": true, "array": true, "optional-array": true,
+      "fields": [
+        {"name": "textDocument", "type": "TextDocumentIdentifier"},
+        {"name": "position", "type": "Position"}
+      ]
     }
   ]
 }
