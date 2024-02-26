@@ -341,5 +341,8 @@ StringView sb_view(StringBuilder *sb)
 
 StringView sv(StringBuilder *sb, StringRef ref)
 {
+    if (ref.length == 0) {
+        return sv_null();
+    }
     return (StringView) { sb->view.ptr + ref.index, ref.length };
 }
