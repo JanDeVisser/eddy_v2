@@ -15,6 +15,8 @@ typedef enum {
     TNKExpr,
     TNKForLoop,
     TNKIfStatement,
+    TNKMacroCall,
+    TNKMacroDef,
     TNKSetVariable,
 } TemplateNodeKind;
 
@@ -69,6 +71,9 @@ typedef struct template_expression {
 } TemplateExpression;
 
 ERROR_OR_ALIAS(TemplateExpression, TemplateExpression *)
+DA_STRUCT_WITH_NAME(TemplateExpression, TemplateExpression *, TemplateExpressions);
+
+PAIR_WITH_NAME(StringRef, JSONType, Parameter);
 
 typedef struct template_node {
     TemplateNodeKind kind;
@@ -87,19 +92,31 @@ typedef struct template_node {
             struct template_node *false_branch;
         } if_statement;
         struct {
-            StringRef             variable;
-            TemplateExpression   *value;
+            StringRef             macro;
+            TemplateExpressions   arguments;
+            struct template_node *contents;
+        } macro_call;
+        struct {
+            StringRef             name;
+            Parameters            parameters;
+            struct template_node *contents;
+        } macro_def;
+        struct {
+            StringRef           variable;
+            TemplateExpression *value;
         } set_statement;
     };
     struct template_node *next;
 } TemplateNode;
 
 ERROR_OR_ALIAS(TemplateNode, TemplateNode *)
+PAIR_WITH_NAME(StringRef, TemplateNode *, Macro);
 
 typedef struct {
     StringBuilder sb;
     StringView    text;
     TemplateNode *node;
+    Macros        macros;
 } Template;
 
 ERROR_OR(Template);

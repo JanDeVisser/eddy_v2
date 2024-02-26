@@ -8,3 +8,6 @@ Have a nice day! *
 @% for x, y $.obj %@G'day @= x =@--@= y =@ @% end %@
 
 @% if $.v1 < $.v2 %@ GREATER @% else %@ SMALLER @% end %@
+
+@% macro foo x: int %@Hello x is @= x =@.@% end %@
+@% call foo 42 %@@% end %@

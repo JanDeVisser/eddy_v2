@@ -93,6 +93,10 @@ static ErrorOrTemplateExpression      parse_primary_expression(TemplateParserCon
 static ErrorOrTemplateExpression      parse_expression(TemplateParserContext *ctx);
 static ErrorOrTemplateExpression      parse_expression_1(TemplateParserContext *ctx, TemplateExpression *lhs, int min_precedence);
 
+DA_IMPL(Macro);
+DA_IMPL(Parameter);
+DA_IMPL_TYPE(TemplateExpression, TemplateExpression *);
+
 #define IS_IDENTIFIER_START(ch) (isalpha(ch) || ch == '$' || ch == '_')
 #define IS_IDENTIFIER_CHAR(ch) (isalpha(ch) || isdigit(ch) || ch == '$' || ch == '_' || ch == '.')
 
@@ -154,6 +158,12 @@ ErrorOrTemplateExpressionToken expression_parser_next(TemplateParserContext *ctx
             if ((ch == '=' || ch == '%') && ss_peek_with_offset(ss, 1) == '@') {
                 ss_skip(ss, 2);
                 trace(CAT_TEMPLATE, "Parsed end-of-expression token");
+                ctx->token = token;
+                RETURN(TemplateExpressionToken, token);
+            }
+            if (ch == ',') {
+                ss_skip_one(ss);
+                trace(CAT_TEMPLATE, "Parsed comma end-of-expression marker");
                 ctx->token = token;
                 RETURN(TemplateExpressionToken, token);
             }
@@ -309,7 +319,52 @@ ErrorOrInt skip_comment(TemplateParserContext *ctx)
     RETURN(Int, 0);
 }
 
+TemplateNode * find_macro(Template *template, StringRef name)
+{
+    StringView n = sv(&template->sb, name);
+    for (size_t ix = 0; ix < template->macros.size; ++ix) {
+        Macro *macro = da_element_Macro(&template->macros, ix);
+        StringView m = sv(&template->sb, macro->key);
+        if (sv_eq(m, n)) {
+            return macro->value;
+        }
+    }
+    return NULL;
+}
+
 ErrorOrInt parse(TemplateParserContext *ctx, StringView terminator);
+
+ErrorOrInt parse_call(TemplateParserContext *ctx)
+{
+    StringScanner *ss = &ctx->ss;
+    StringBuilder *sb = &ctx->sb;
+
+    StringRef name = TRY_TO(StringRef, Int, template_parser_identifier(ctx));
+    ss_skip_whitespace(ss);
+    TemplateNode *macro = find_macro(&ctx->template, name);
+    if (macro == NULL) {
+        ERROR(Int, TemplateError, 0, "Undefined macro '%.*s' called", SV_ARG(sv(sb, name)));
+    }
+
+    TemplateNode *node = MALLOC(TemplateNode);
+    node->kind = TNKMacroCall;
+    node->macro_call.macro = name;
+    for (size_t ix = 0; ix < macro->macro_def.parameters.size; ++ix) {
+        ss_skip_whitespace(ss);
+        TemplateExpression *arg = TRY_TO(TemplateExpression, Int, parse_expression(ctx));
+        if (arg == NULL) {
+            ERROR(Int, TemplateError, 0, "Insufficient number of arguments in call of macro '%.*s'", SV_ARG(sv(sb, name)));
+        }
+        da_append_TemplateExpression(&node->macro_call.arguments, arg);
+    }
+    *(ctx->current) = node;
+    ctx->current = &node->macro_call.contents;
+    TRY(Int, parse(ctx, sv_from("end")));
+
+    ctx->current = &node->next;
+    trace(CAT_TEMPLATE, "Created call node");
+    RETURN(Int, 0);
+}
 
 ErrorOrInt parse_for(TemplateParserContext *ctx)
 {
@@ -359,6 +414,57 @@ ErrorOrInt parse_if(TemplateParserContext *ctx)
 
     ctx->current = &node->next;
     trace(CAT_TEMPLATE, "Created if node");
+    RETURN(Int, 0);
+}
+
+ErrorOrInt parse_macro(TemplateParserContext *ctx)
+{
+    StringScanner *ss = &ctx->ss;
+    TemplateNode *node = MALLOC(TemplateNode);
+    node->kind = TNKMacroDef;
+
+    node->macro_def.name = TRY_TO(StringRef, Int, template_parser_identifier(ctx));
+    ss_skip_whitespace(ss);
+    if (!ss_expect_sv(ss, sv_from("=@"))) {
+        while (true) {
+            Parameter p = { TRY_TO(StringRef, Int, template_parser_identifier(ctx)), JSON_TYPE_NULL };
+            StringView param = sv(&ctx->sb, p.key);
+            ss_skip_whitespace(ss);
+            if (!ss_expect(ss, ':')) {
+                ERROR(Int, TemplateError, 0, "Expected ':' trailing macro parameter '%.*s'", SV_ARG(param));
+            }
+            StringView type = sv(&ctx->sb, TRY_TO(StringRef, Int, template_parser_identifier(ctx)));
+            if (sv_eq_cstr(type, "int")) {
+                p.value = JSON_TYPE_INT;
+            } else if (sv_eq_cstr(type, "string")) {
+                p.value = JSON_TYPE_STRING;
+            } else if (sv_eq_cstr(type, "bool")) {
+                p.value = JSON_TYPE_BOOLEAN;
+            } else if (sv_eq_cstr(type, "object")) {
+                p.value = JSON_TYPE_OBJECT;
+            } else if (sv_eq_cstr(type, "array")) {
+                p.value = JSON_TYPE_ARRAY;
+            } else {
+                ERROR(Int, TemplateError, 0, "Unknown type '%.*s' for macro parameter '%.*s'", SV_ARG(type), SV_ARG(param));
+            }
+            da_append_Parameter(&node->macro_def.parameters, p);
+            ss_skip_whitespace(ss);
+            if (!ss_expect(ss, ',')) {
+                break;
+            }
+        }
+        ss_skip_whitespace(ss);
+    }
+    ss_expect_sv(ss, sv_from("%@"));
+    *(ctx->current) = node;
+    ctx->current = &node->macro_def.contents;
+    TRY(Int, parse(ctx, sv_from("end")));
+    ctx->current = &node->next;
+
+    Macro macro = {node->macro_def.name, node};
+    da_append_Macro(&ctx->template.macros, macro);
+
+    trace(CAT_TEMPLATE, "Created macro definition");
     RETURN(Int, 0);
 }
 
@@ -415,10 +521,14 @@ ErrorOrInt parse(TemplateParserContext *ctx, StringView terminator)
                     }
                     RETURN(Int, 0);
                 }
-                if (sv_eq_cstr(stmt, "for")) {
+                if (sv_eq_cstr(stmt, "call")) {
+                    TRY(Int, parse_call(ctx));
+                } else if (sv_eq_cstr(stmt, "for")) {
                     TRY(Int, parse_for(ctx));
                 } else if (sv_eq_cstr(stmt, "if")) {
                     TRY(Int, parse_if(ctx));
+                } else if (sv_eq_cstr(stmt, "macro")) {
+                    TRY(Int, parse_macro(ctx));
                 } else if (sv_eq_cstr(stmt, "set")) {
                     TRY(Int, parse_set(ctx));
                 } else {
@@ -434,13 +544,19 @@ ErrorOrInt parse(TemplateParserContext *ctx, StringView terminator)
         }
         default: {
             size_t index = sb->length;
+            bool first = true;
             while (ss_peek(ss) && (ss_peek(ss) != '@' || ss_peek_with_offset(ss, 1) == '@')) {
                 if (ss_expect_sv(ss, sv_from("@@"))) {
                     sb_append_char(sb, '@');
+                    first = false;
                     continue;
                 }
-                sb_append_char(sb, ss_peek(ss));
+                int ch = ss_peek(ss);
+                if (!first || ch != '\n') {
+                    sb_append_char(sb, ss_peek(ss));
+                }
                 ss_skip_one(ss);
+                first = false;
             }
 
             *(ctx->current) = MALLOC(TemplateNode);
@@ -621,6 +737,47 @@ ErrorOrJSONValue evaluate_expression(TemplateRenderContext *ctx, TemplateExpress
     RETURN(JSONValue, json_null());
 }
 
+ErrorOrInt render_node(TemplateRenderContext *ctx, TemplateNode *node);
+
+ErrorOrInt render_macro(TemplateRenderContext *ctx, TemplateNode *node)
+{
+    StringView name = sv(&ctx->sb, node->macro_call.macro);
+    TemplateNode *macro = find_macro(&ctx->template, node->macro_call.macro);
+    assert(macro != NULL);
+
+    JSONNVPairs args = {0};
+    TemplateRenderScope call_scope = { json_object(), ctx->scope };
+    JSONValue varargs = {0};
+    StringView param_name = {0};
+    for (size_t ix = 0; ix < macro->macro_def.parameters.size; ++ix) {
+        Parameter *param = da_element_Parameter(&macro->macro_def.parameters, ix);
+        param_name = sv(&ctx->sb, param->key);
+        JSONValue value = TRY_TO(JSONValue, Int, evaluate_expression(ctx, node->macro_call.arguments.elements[ix]));
+        if (ix == macro->macro_def.parameters.size - 1 && param->value == JSON_TYPE_ARRAY && value.type != JSON_TYPE_ARRAY) {
+            varargs = json_array();
+            json_append(&varargs, value);
+        } else {
+            if (value.type != param->value) {
+                ERROR(Int, TemplateError, 0, "Type mismatch for parameter '%.*s' of macro '%.*s'", SV_ARG(param_name) ,SV_ARG(name));
+            }
+            json_set_sv(&call_scope.scope, param_name, value);
+        }
+    }
+    if (varargs.type == JSON_TYPE_ARRAY) {
+        for (size_t ix = macro->macro_def.parameters.size; ix < node->macro_call.arguments.size; ++ix) {
+            JSONValue value = TRY_TO(JSONValue, Int, evaluate_expression(ctx, node->macro_call.arguments.elements[ix]));
+            json_append(&varargs, value);
+        }
+        json_set_sv(&call_scope.scope, param_name, varargs);
+    }
+
+
+    ctx->scope = &call_scope;
+    TRY(Int, render_node(ctx, macro->macro_def.contents));
+    ctx->scope = call_scope.up;
+    RETURN(Int, 0);
+}
+
 ErrorOrInt render_node(TemplateRenderContext *ctx, TemplateNode *node)
 {
     while (node) {
@@ -675,7 +832,13 @@ ErrorOrInt render_node(TemplateRenderContext *ctx, TemplateNode *node)
             ctx->scope = &block_scope;
             TemplateNode *branch = condition.boolean ? node->if_statement.true_branch : node->if_statement.false_branch;
             TRY(Int, render_node(ctx, branch));
+            ctx->scope = block_scope.up;
         } break;
+        case TNKMacroCall: {
+            render_macro(ctx, node);
+        } break;
+        case TNKMacroDef:
+            break;
         case TNKSetVariable: {
             trace(CAT_TEMPLATE, "Rendering for loop");
             JSONValue  value = TRY_TO(JSONValue, Int, evaluate_expression(ctx, node->set_statement.value));
