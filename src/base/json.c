@@ -225,8 +225,11 @@ OptionalJSONValue json_at(JSONValue *array, size_t index)
 
 size_t json_len(JSONValue *array)
 {
-    assert(array->type == JSON_TYPE_ARRAY);
-    return array->array.size;
+    assert(array->type == JSON_TYPE_ARRAY || array->type == JSON_TYPE_OBJECT);
+    if (array->type == JSON_TYPE_ARRAY) {
+        return array->array.size;
+    }
+    return array->object.size;
 }
 
 static void _json_add_nvp(JSONValue *obj, StringView attr, JSONValue value)
@@ -316,6 +319,19 @@ void json_delete_sv(JSONValue *value, StringView attr)
             return;
         }
     }
+}
+
+OptionalJSONValue json_entry_at(JSONValue *value, int ix)
+{
+    assert(value->type == JSON_TYPE_OBJECT);
+    if (ix < value->array.size) {
+        JSONNVPair *pair = da_element_JSONNVPair(&value->object, ix);
+        JSONValue ret = json_array();
+        json_append(&ret, json_string(pair->name));
+        json_append(&ret, pair->value);
+        RETURN_VALUE(JSONValue, ret);
+    }
+    RETURN_EMPTY(JSONValue);
 }
 
 OptionalJSONValue json_get(JSONValue *value, char const *attr)
