@@ -12,13 +12,15 @@
 #include <template.h>
 
 typedef enum {
-    TETTEndOfText = 0,
+    TETTNoType = 0,
+    TETTEndOfText,
     TETTIdentifier,
     TETTNumber,
     TETTOperator,
     TETTString,
     TETTTrue,
     TETTFalse,
+    TETTNull,
 } TemplateExpressionTokenType;
 
 typedef struct {
@@ -37,9 +39,15 @@ typedef struct {
             TemplateNode *node;
         };
     };
-    StringScanner  ss;
-    TemplateNode **current;
+    TemplateExpressionToken token;
+    StringScanner           ss;
+    TemplateNode          **current;
 } TemplateParserContext;
+
+typedef struct template_render_scope {
+    JSONValue                     scope;
+    struct template_render_scope *up;
+} TemplateRenderScope;
 
 typedef struct {
     union {
@@ -50,8 +58,8 @@ typedef struct {
             TemplateNode *node;
         };
     };
-    StringBuilder output;
-    JSONValue     variables;
+    StringBuilder        output;
+    TemplateRenderScope *scope;
 } TemplateRenderContext;
 
 typedef struct {
@@ -70,6 +78,12 @@ static TemplateOperatorMapping s_operator_mapping[] = {
     { BTOMultiply, 12, "-" },
     { BTODivide, 12, "/" },
     { BTOModulo, 12, "%" },
+    { BTOGreater, 9, ">" },
+    { BTOGreaterEquals, 9, ">=" },
+    { BTOLess, 9, "<" },
+    { BTOLessEquals, 9, "<=" },
+    { BTOEquals, 8, "==" },
+    { BTONotEquals, 8, "!=" },
     { BTOCount, -1, NULL },
 };
 
@@ -79,7 +93,8 @@ static ErrorOrTemplateExpression      parse_primary_expression(TemplateParserCon
 static ErrorOrTemplateExpression      parse_expression(TemplateParserContext *ctx);
 static ErrorOrTemplateExpression      parse_expression_1(TemplateParserContext *ctx, TemplateExpression *lhs, int min_precedence);
 
-#define IS_IDENTIFIER_CHAR(ch) (isalpha(ch) || ch == '$' || ch == '_' || ch == '.')
+#define IS_IDENTIFIER_START(ch) (isalpha(ch) || ch == '$' || ch == '_')
+#define IS_IDENTIFIER_CHAR(ch) (isalpha(ch) || isdigit(ch) || ch == '$' || ch == '_' || ch == '.')
 
 ErrorOrStringRef template_parser_identifier(TemplateParserContext *ctx)
 {
@@ -96,22 +111,36 @@ ErrorOrStringRef template_parser_identifier(TemplateParserContext *ctx)
         sb_append_char(&ctx->sb, ch);
         ss_skip_one(ss);
     }
+    StringView s = { ctx->sb.ptr + ix, ctx->sb.length - ix };
+    trace(CAT_TEMPLATE, "Parsed word '%.*s'", SV_ARG(s));
     RETURN(StringRef, ((StringRef) { ix, ctx->sb.length - ix }));
 }
 
 ErrorOrTemplateExpressionToken expression_parser_next(TemplateParserContext *ctx)
 {
+    if (ctx->token.type != TETTNoType) {
+        RETURN(TemplateExpressionToken, ctx->token);
+    }
     StringScanner *ss = &ctx->ss;
     ss_skip_whitespace(ss);
+    ss_reset(ss);
     char                        ch = ss_peek(ss);
     size_t                      ix = ctx->sb.length;
     TemplateExpressionTokenType type;
     TemplateExpressionToken     token = { TETTEndOfText, (StringRef) { 0 } };
-    if (IS_IDENTIFIER_CHAR(ch)) {
+    if (IS_IDENTIFIER_START(ch)) {
         type = TETTIdentifier;
         for (ch = ss_peek(ss); IS_IDENTIFIER_CHAR(ch); ch = ss_peek(ss)) {
             sb_append_char(&ctx->sb, ch);
             ss_skip_one(ss);
+        }
+        StringView s = (StringView) { ctx->sb.ptr + ix, ctx->sb.length - ix };
+        if (sv_eq_cstr(s, "true")) {
+            type = TETTTrue;
+        } else if (sv_eq_cstr(s, "false")) {
+            type = TETTFalse;
+        } else if (sv_eq_cstr(s, "null")) {
+            type = TETTNull;
         }
     } else if (isdigit(ch)) {
         type = TETTNumber;
@@ -124,6 +153,8 @@ ErrorOrTemplateExpressionToken expression_parser_next(TemplateParserContext *ctx
         for (ch = ss_peek(ss); ch && !IS_IDENTIFIER_CHAR(ch) && !isspace(ch); ch = ss_peek(ss)) {
             if ((ch == '=' || ch == '%') && ss_peek_with_offset(ss, 1) == '@') {
                 ss_skip(ss, 2);
+                trace(CAT_TEMPLATE, "Parsed end-of-expression token");
+                ctx->token = token;
                 RETURN(TemplateExpressionToken, token);
             }
             sb_append_char(&ctx->sb, ch);
@@ -131,6 +162,9 @@ ErrorOrTemplateExpressionToken expression_parser_next(TemplateParserContext *ctx
         }
     }
     token = (TemplateExpressionToken) { type, (StringRef) { ix, ctx->sb.length - ix } };
+    StringView s = { ctx->sb.ptr + ix, ctx->sb.length - ix };
+    trace(CAT_TEMPLATE, "Parsed expression token '%.*s'", SV_ARG(s));
+    ctx->token = token;
     RETURN(TemplateExpressionToken, token);
 }
 
@@ -167,18 +201,24 @@ TemplateOperatorMapping operator_for_token(TemplateParserContext *ctx, TemplateE
  */
 ErrorOrTemplateExpression parse_expression(TemplateParserContext *ctx)
 {
+    trace(CAT_TEMPLATE, "parse_expression");
+    ctx->token = (TemplateExpressionToken) {0};
     TemplateExpression *primary = TRY(TemplateExpression, parse_primary_expression(ctx));
     if (!primary) {
+        trace(CAT_TEMPLATE, "No primary expression");
         RETURN(TemplateExpression, NULL);
     }
+    trace(CAT_TEMPLATE, "Primary expression parsed; attempt to parse binary expr");
     return parse_expression_1(ctx, primary, 0);
 }
 
 ErrorOrTemplateExpression parse_expression_1(TemplateParserContext *ctx, TemplateExpression *lhs, int min_precedence)
 {
+    trace(CAT_TEMPLATE, "parse_expression_1");
     TemplateExpressionToken lookahead = TRY_TO(TemplateExpressionToken, TemplateExpression, expression_parser_next(ctx));
     TemplateOperatorMapping op = operator_for_token(ctx, lookahead, true);
     while (/*op.binary && */ op.precedence >= min_precedence) {
+        ctx->token = (TemplateExpressionToken) {0};
         TemplateExpression *rhs = NULL;
         int                 prec = op.precedence;
         rhs = TRY(TemplateExpression, parse_primary_expression(ctx));
@@ -209,12 +249,14 @@ ErrorOrTemplateExpression parse_primary_expression(TemplateParserContext *ctx)
     TemplateExpressionToken token = TRY_TO(TemplateExpressionToken, TemplateExpression, expression_parser_next(ctx));
     switch (token.type) {
     case TETTIdentifier: {
+        ctx->token = (TemplateExpressionToken) {0};
         TemplateExpression *var = MALLOC(TemplateExpression);
         var->type = TETVariableReference;
         var->text = token.text;
         RETURN(TemplateExpression, var);
     }
     case TETTNumber: {
+        ctx->token = (TemplateExpressionToken) {0};
         TemplateExpression *ret = MALLOC(TemplateExpression);
         ret->type = TETNumber;
         IntegerParseResult parse_result = sv_parse_i64(sv(&ctx->sb, token.text));
@@ -223,6 +265,7 @@ ErrorOrTemplateExpression parse_primary_expression(TemplateParserContext *ctx)
         RETURN(TemplateExpression, ret);
     }
     case TETTString: {
+        ctx->token = (TemplateExpressionToken) {0};
         TemplateExpression *ret = MALLOC(TemplateExpression);
         ret->type = TETString;
         ret->text = (StringRef) { token.text.index + 1, token.text.length - 2 };
@@ -230,9 +273,16 @@ ErrorOrTemplateExpression parse_primary_expression(TemplateParserContext *ctx)
     }
     case TETTTrue:
     case TETTFalse: {
+        ctx->token = (TemplateExpressionToken) {0};
         TemplateExpression *ret = MALLOC(TemplateExpression);
         ret->type = TETBoolean;
         ret->boolean = token.type == TETTTrue;
+        RETURN(TemplateExpression, ret);
+    }
+    case TETTNull: {
+        ctx->token = (TemplateExpressionToken) {0};
+        TemplateExpression *ret = MALLOC(TemplateExpression);
+        ret->type = TETNull;
         RETURN(TemplateExpression, ret);
     }
     default:
@@ -267,24 +317,65 @@ ErrorOrInt parse_for(TemplateParserContext *ctx)
     StringBuilder *sb = &ctx->sb;
     ss_skip_whitespace(ss);
     StringRef variable = TRY_TO(StringRef, Int, template_parser_identifier(ctx));
+    StringRef variable2 = { 0 };
+    ss_skip_whitespace(ss);
+    if (ss_expect(ss, ',')) {
+        ss_skip_whitespace(ss);
+        variable2 = TRY_TO(StringRef, Int, template_parser_identifier(ctx));
+    }
     TemplateExpression *range = TRY_TO(TemplateExpression, Int, parse_expression(ctx));
-    // ss_skip_whitespace(ss);
-    // if (!ss_expect_sv(ss, sv_from("%@"))) {
-    //     ERROR(Int, TemplateError, 0, "Expected %@ to close 'for' statement");
-    // }
 
     TemplateNode *node = MALLOC(TemplateNode);
     node->kind = TNKForLoop;
     node->for_statement.variable = variable;
+    node->for_statement.variable2 = variable2;
     node->for_statement.range = range;
 
-    TemplateNode **current = ctx->current;
+    *(ctx->current) = node;
     ctx->current = &node->for_statement.contents;
-    TRY(Int, parse(ctx, sv_from("endfor")));
+    TRY(Int, parse(ctx, sv_from("end")));
 
-    *current = node;
     ctx->current = &node->next;
     trace(CAT_TEMPLATE, "Created for node");
+    RETURN(Int, 0);
+}
+
+ErrorOrInt parse_if(TemplateParserContext *ctx)
+{
+    StringScanner *ss = &ctx->ss;
+    StringBuilder *sb = &ctx->sb;
+    ss_skip_whitespace(ss);
+    TemplateExpression *condition = TRY_TO(TemplateExpression, Int, parse_expression(ctx));
+
+    TemplateNode *node = MALLOC(TemplateNode);
+    node->kind = TNKIfStatement;
+    node->if_statement.condition = condition;
+
+    *(ctx->current) = node;
+    ctx->current = &node->if_statement.true_branch;
+    TRY(Int, parse(ctx, sv_from("else")));
+    ctx->current = &node->if_statement.false_branch;
+    TRY(Int, parse(ctx, sv_from("end")));
+
+    ctx->current = &node->next;
+    trace(CAT_TEMPLATE, "Created if node");
+    RETURN(Int, 0);
+}
+
+ErrorOrInt parse_set(TemplateParserContext *ctx)
+{
+    StringScanner *ss = &ctx->ss;
+    ss_skip_whitespace(ss);
+    StringRef           variable = TRY_TO(StringRef, Int, template_parser_identifier(ctx));
+    TemplateExpression *value = TRY_TO(TemplateExpression, Int, parse_expression(ctx));
+
+    TemplateNode *node = MALLOC(TemplateNode);
+    node->kind = TNKSetVariable;
+    node->set_statement.variable = variable;
+    node->set_statement.value = value;
+
+    ctx->current = &node->next;
+    trace(CAT_TEMPLATE, "Created set node");
     RETURN(Int, 0);
 }
 
@@ -325,10 +416,15 @@ ErrorOrInt parse(TemplateParserContext *ctx, StringView terminator)
                     RETURN(Int, 0);
                 }
                 if (sv_eq_cstr(stmt, "for")) {
-                    return parse_for(ctx);
+                    TRY(Int, parse_for(ctx));
+                } else if (sv_eq_cstr(stmt, "if")) {
+                    TRY(Int, parse_if(ctx));
+                } else if (sv_eq_cstr(stmt, "set")) {
+                    TRY(Int, parse_set(ctx));
+                } else {
+                    ERROR(Int, TemplateError, 0, "Unknown statement '%.*s'", SV_ARG(stmt));
                 }
-                ERROR(Int, TemplateError, 0, "Unknown statement '%.*s'", stmt);
-            }
+            } break;
             case '#':
                 TRY(Int, skip_comment(ctx));
                 break;
@@ -338,9 +434,10 @@ ErrorOrInt parse(TemplateParserContext *ctx, StringView terminator)
         }
         default: {
             size_t index = sb->length;
-            while (ss_peek(ss) && ss_peek(ss) != '@') {
-                if (ss_peek(ss) == '\\') {
-                    ss_skip_one(ss);
+            while (ss_peek(ss) && (ss_peek(ss) != '@' || ss_peek_with_offset(ss, 1) == '@')) {
+                if (ss_expect_sv(ss, sv_from("@@"))) {
+                    sb_append_char(sb, '@');
+                    continue;
                 }
                 sb_append_char(sb, ss_peek(ss));
                 ss_skip_one(ss);
@@ -408,12 +505,85 @@ ErrorOrJSONValue evaluate_expression(TemplateRenderContext *ctx, TemplateExpress
             int ret = json_int_value(lhs) % json_int_value(rhs);
             RETURN(JSONValue, json_int(ret));
         }
+        case BTOEquals: {
+            bool ret;
+            if (lhs.type == JSON_TYPE_INT || rhs.type == JSON_TYPE_INT) {
+                ret = json_int_value(lhs) == json_int_value(rhs);
+            } else if (lhs.type == JSON_TYPE_STRING || rhs.type == JSON_TYPE_STRING) {
+                ret = sv_eq(lhs.string, rhs.string);
+            } else if (lhs.type == JSON_TYPE_BOOLEAN || rhs.type == JSON_TYPE_BOOLEAN) {
+                ret = lhs.boolean == rhs.boolean;
+            } else {
+                ERROR(JSONValue, TemplateError, 0, "Can't compare your values yet");
+            }
+            RETURN(JSONValue, json_bool(ret));
+        }
+        case BTONotEquals: {
+            bool ret;
+            if (lhs.type == JSON_TYPE_INT || rhs.type == JSON_TYPE_INT) {
+                ret = json_int_value(lhs) != json_int_value(rhs);
+            } else if (lhs.type == JSON_TYPE_STRING || rhs.type == JSON_TYPE_STRING) {
+                ret = !sv_eq(lhs.string, rhs.string);
+            } else if (lhs.type == JSON_TYPE_BOOLEAN || rhs.type == JSON_TYPE_BOOLEAN) {
+                ret = lhs.boolean != rhs.boolean;
+            } else {
+                ERROR(JSONValue, TemplateError, 0, "Can't compare your values yet");
+            }
+            RETURN(JSONValue, json_bool(ret));
+        }
+        case BTOGreater: {
+            bool ret;
+            if (lhs.type == JSON_TYPE_INT || rhs.type == JSON_TYPE_INT) {
+                ret = json_int_value(lhs) > json_int_value(rhs);
+            } else if (lhs.type == JSON_TYPE_STRING || rhs.type == JSON_TYPE_STRING) {
+                ret = sv_cmp(lhs.string, rhs.string) > 0;
+            } else {
+                ERROR(JSONValue, TemplateError, 0, "Can't compare your values yet");
+            }
+            RETURN(JSONValue, json_bool(ret));
+        }
+        case BTOGreaterEquals: {
+            bool ret;
+            if (lhs.type == JSON_TYPE_INT || rhs.type == JSON_TYPE_INT) {
+                ret = json_int_value(lhs) >= json_int_value(rhs);
+            } else if (lhs.type == JSON_TYPE_STRING || rhs.type == JSON_TYPE_STRING) {
+                ret = sv_cmp(lhs.string, rhs.string) >= 0;
+            } else {
+                ERROR(JSONValue, TemplateError, 0, "Can't compare your values yet");
+            }
+            RETURN(JSONValue, json_bool(ret));
+        }
+        case BTOLess: {
+            bool ret;
+            if (lhs.type == JSON_TYPE_INT || rhs.type == JSON_TYPE_INT) {
+                ret = json_int_value(lhs) < json_int_value(rhs);
+            } else if (lhs.type == JSON_TYPE_STRING || rhs.type == JSON_TYPE_STRING) {
+                ret = sv_cmp(lhs.string, rhs.string) < 0;
+            } else {
+                ERROR(JSONValue, TemplateError, 0, "Can't compare your values yet");
+            }
+            RETURN(JSONValue, json_bool(ret));
+        }
+        case BTOLessEquals: {
+            bool ret;
+            if (lhs.type == JSON_TYPE_INT || rhs.type == JSON_TYPE_INT) {
+                ret = json_int_value(lhs) <= json_int_value(rhs);
+            } else if (lhs.type == JSON_TYPE_STRING || rhs.type == JSON_TYPE_STRING) {
+                ret = sv_cmp(lhs.string, rhs.string) <= 0;
+            } else {
+                ERROR(JSONValue, TemplateError, 0, "Can't compare your values yet");
+            }
+            RETURN(JSONValue, json_bool(ret));
+        }
         default:
             UNREACHABLE();
         }
     }
     case TETBoolean: {
         RETURN(JSONValue, json_bool(expr->boolean));
+    }
+    case TETNull: {
+        RETURN(JSONValue, json_null());
     }
     case TETNumber: {
         RETURN(JSONValue, json_int(expr->number));
@@ -424,9 +594,22 @@ ErrorOrJSONValue evaluate_expression(TemplateRenderContext *ctx, TemplateExpress
     case TETVariableReference: {
         StringList as_list = sv_split(sv(&ctx->sb, expr->text), sv_from("."));
         assert(as_list.size > 0);
-        JSONValue current_var = ctx->variables;
+        StringView           var_name = sl_pop_front(&as_list);
+        TemplateRenderScope *scope = ctx->scope;
+        OptionalJSONValue    current_var_maybe = { 0 };
+        while (scope) {
+            current_var_maybe = json_get_sv(&scope->scope, var_name);
+            if (current_var_maybe.has_value) {
+                break;
+            }
+            scope = scope->up;
+        }
+        if (!current_var_maybe.has_value) {
+            ERROR(JSONValue, TemplateError, 0, "Variable '%.*s' not there", SV_ARG(var_name));
+        }
+        JSONValue current_var = current_var_maybe.value;
         while (!sl_empty(&as_list)) {
-            StringView var_name = sl_pop_front(&as_list);
+            var_name = sl_pop_front(&as_list);
             current_var = TRY_OPTIONAL(JSONValue, json_get_sv(&current_var, var_name),
                 JSONValue, TemplateError, "Variable '%.*s' not there", SV_ARG(var_name));
         }
@@ -456,19 +639,48 @@ ErrorOrInt render_node(TemplateRenderContext *ctx, TemplateNode *node)
         case TNKForLoop: {
             trace(CAT_TEMPLATE, "Rendering for loop");
             JSONValue value = TRY_TO(JSONValue, Int, evaluate_expression(ctx, node->for_statement.range));
-            if (value.type != JSON_TYPE_ARRAY) {
+            if (node->for_statement.variable2.length == 0 && value.type != JSON_TYPE_ARRAY) {
                 ERROR(Int, TemplateError, 0, "Can only iterate over arrays");
             }
+            if (node->for_statement.variable2.length > 0 && value.type != JSON_TYPE_OBJECT) {
+                ERROR(Int, TemplateError, 0, "Can only iterate over objects");
+            }
             StringView var = sv(&ctx->sb, node->for_statement.variable);
-            if (json_has_sv(&ctx->variables, var)) {
-                ERROR(Int, TemplateError, 0, "Loop variable '%.*s' shadows existing variable", SV_ARG(var));
-            }
+            StringView var2 = sv(&ctx->sb, node->for_statement.variable2);
             for (int ix = 0; ix < json_len(&value); ++ix) {
-                JSONValue loop_val = MUST_OPTIONAL(JSONValue, json_at(&value, ix));
-                json_set_sv(&ctx->variables, var, loop_val);
+                TemplateRenderScope loop_scope = { json_object(), ctx->scope };
+                ctx->scope = &loop_scope;
+                if (var2.length == 0) {
+                    JSONValue loop_val = MUST_OPTIONAL(JSONValue, json_at(&value, ix));
+                    json_set_sv(&loop_scope.scope, var, loop_val);
+                } else {
+                    JSONValue loop_vals = MUST_OPTIONAL(JSONValue, json_entry_at(&value, ix));
+                    json_set_sv(&loop_scope.scope, var, MUST_OPTIONAL(JSONValue, json_at(&loop_vals, 0)));
+                    json_set_sv(&loop_scope.scope, var2, MUST_OPTIONAL(JSONValue, json_at(&loop_vals, 1)));
+                }
+                TemplateRenderScope inner_scope = { json_object(), &loop_scope };
+                ctx->scope = &inner_scope;
                 TRY(Int, render_node(ctx, node->for_statement.contents));
+                ctx->scope = ctx->scope->up->up;
             }
-            json_delete_sv(&ctx->variables, var);
+        } break;
+        case TNKIfStatement: {
+            trace(CAT_TEMPLATE, "Rendering if statement");
+            JSONValue condition = TRY_TO(JSONValue, Int, evaluate_expression(ctx, node->if_statement.condition));
+            if (condition.type != JSON_TYPE_BOOLEAN) {
+                ERROR(Int, TemplateError, 0, "if condition must be boolean");
+            }
+
+            TemplateRenderScope block_scope = { json_object(), ctx->scope };
+            ctx->scope = &block_scope;
+            TemplateNode *branch = condition.boolean ? node->if_statement.true_branch : node->if_statement.false_branch;
+            TRY(Int, render_node(ctx, branch));
+        } break;
+        case TNKSetVariable: {
+            trace(CAT_TEMPLATE, "Rendering for loop");
+            JSONValue  value = TRY_TO(JSONValue, Int, evaluate_expression(ctx, node->set_statement.value));
+            StringView var = sv(&ctx->sb, node->for_statement.variable);
+            json_set_sv(&ctx->scope->scope, var, value);
         } break;
         }
         node = node->next;
@@ -480,13 +692,13 @@ ErrorOrStringView template_render(Template template, JSONValue context)
 {
     TemplateRenderContext ctx = { 0 };
     ctx.template = template;
-    ctx.variables = json_object();
-    json_set(&ctx.variables, "$", context);
+    TemplateRenderScope scope = { json_object(), NULL };
+    ctx.scope = &scope;
+    json_set(&scope.scope, "$", context);
 
     TRY_TO(Int, StringView, render_node(&ctx, template.node));
     RETURN(StringView, ctx.output.view);
 }
-
 
 ErrorOrStringView render_template(StringView template_text, JSONValue context)
 {

@@ -1,7 +1,10 @@
-And the \@ message is @= 4 + 5 =@ *
+And the @@ message is @= 4 + 5 =@ *
 *
 	@= $.message =@ *
 *
 Have a nice day! *
 
-@% for x $.range %@ Hello @= x =@ @% endfor %@
+@% for x $.range %@Hello @= x =@ @% end %@
+@% for x, y $.obj %@G'day @= x =@--@= y =@ @% end %@
+
+@% if $.v1 < $.v2 %@ GREATER @% else %@ SMALLER @% end %@

@@ -14,17 +14,9 @@ typedef enum {
     TNKText,
     TNKExpr,
     TNKForLoop,
+    TNKIfStatement,
+    TNKSetVariable,
 } TemplateNodeKind;
-
-typedef enum {
-    BTOInvalid,
-    BTOAdd,
-    BTOSubtract,
-    BTOMultiply,
-    BTODivide,
-    BTOModulo,
-    BTOCount,
-} BinaryTemplateOperator;
 
 typedef enum {
     UTOIdentity,
@@ -36,10 +28,27 @@ typedef enum {
     TETVariableReference,
     TETBinaryExpression,
     TETUnaryExpression,
+    TETNull,
     TETNumber,
     TETBoolean,
     TETString,
 } TemplateExpressionType;
+
+typedef enum {
+    BTOInvalid,
+    BTOAdd,
+    BTOSubtract,
+    BTOMultiply,
+    BTODivide,
+    BTOModulo,
+    BTOEquals,
+    BTONotEquals,
+    BTOGreater,
+    BTOGreaterEquals,
+    BTOLess,
+    BTOLessEquals,
+    BTOCount,
+} BinaryTemplateOperator;
 
 typedef struct template_expression {
     TemplateExpressionType type;
@@ -68,9 +77,19 @@ typedef struct template_node {
         TemplateExpression *expr;
         struct {
             StringRef             variable;
+            StringRef             variable2;
             TemplateExpression   *range;
             struct template_node *contents;
         } for_statement;
+        struct {
+            TemplateExpression   *condition;
+            struct template_node *true_branch;
+            struct template_node *false_branch;
+        } if_statement;
+        struct {
+            StringRef             variable;
+            TemplateExpression   *value;
+        } set_statement;
     };
     struct template_node *next;
 } TemplateNode;
