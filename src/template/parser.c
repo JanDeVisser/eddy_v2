@@ -112,6 +112,7 @@ static TemplateOperatorMapping        operator_for_token(TemplateParserContext *
 static ErrorOrTemplateExpression      parse_primary_expression(TemplateParserContext *ctx, OptionalStringView termination);
 static ErrorOrTemplateExpression      parse_expression(TemplateParserContext *ctx, OptionalStringView termination);
 static ErrorOrTemplateExpression      parse_expression_1(TemplateParserContext *ctx, TemplateExpression *lhs, int min_precedence, OptionalStringView terminator);
+static ErrorOrInt                     parse(TemplateParserContext *ctx, StringView terminator);
 
 DA_IMPL(Macro);
 DA_IMPL(Parameter);
@@ -288,9 +289,35 @@ ErrorOrTemplateExpressionToken expression_parser_next(TemplateParserContext *ctx
         }
     } else if (isdigit(ch)) {
         type = TETTNumber;
-        for (ch = ss_peek(ss); isdigit(ch); ch = ss_peek(ss)) {
+        for (ch = ss_peek(ss); ch && isdigit(ch); ch = ss_peek(ss)) {
             sb_append_char(&ctx->sb, ch);
             ss_skip_one(ss);
+        }
+        if (!ch) {
+            token.type = TETTEndOfStatement;
+            ctx->token = token;
+            RETURN(TemplateExpressionToken, token);
+        }
+    } else if (strchr("\"'`", ch)) {
+        type = TETTString;
+        int quote = ch;
+        ss_skip_one(ss);
+        for (ch = ss_peek(ss); ch && ch != quote; ch = ss_peek(ss)) {
+            if (ch == '\\') {
+                ss_skip_one(ss);
+                ch = ss_peek(ss);
+                if (!ch) {
+                    break;
+                }
+            }
+            sb_append_char(&ctx->sb, ch);
+            ss_skip_one(ss);
+        }
+        ss_skip_one(ss);
+        if (!ch) {
+            token.type = TETTEndOfStatement;
+            ctx->token = token;
+            RETURN(TemplateExpressionToken, token);
         }
     } else {
         if ((ch == '=' || ch == '%') && ss_peek_with_offset(ss, 1) == '@') {
@@ -453,7 +480,6 @@ ErrorOrTemplateExpression parse_expression_1(TemplateParserContext *ctx, Templat
         expr->binary.rhs = rhs;
         expr->binary.op = op.binary_op;
         lhs = expr;
-        op_maybe = TRY_TO(OptionalTemplateOperatorMapping, TemplateExpression, next_operator(ctx, terminator));
     }
     RETURN(TemplateExpression, lhs);
 }
@@ -482,7 +508,7 @@ ErrorOrTemplateExpression parse_primary_expression(TemplateParserContext *ctx, O
         expression_parser_consume(ctx);
         TemplateExpression *ret = MALLOC(TemplateExpression);
         ret->type = TETString;
-        ret->text = (StringRef) { token.text.index + 1, token.text.length - 2 };
+        ret->text = token.text;
         RETURN(TemplateExpression, ret);
     }
     case TETTTrue:
@@ -539,8 +565,6 @@ ErrorOrInt skip_comment(TemplateParserContext *ctx)
     ss_skip_one(ss);
     RETURN(Int, 0);
 }
-
-ErrorOrInt parse(TemplateParserContext *ctx, StringView terminator);
 
 ErrorOrInt parse_call(TemplateParserContext *ctx)
 {
