@@ -168,7 +168,7 @@ DA_IMPL(Namespace);
 DA_IMPL(TypeDef);
 DA_IMPL(Module);
 
-static TypeDef *get_type(StringView name);
+static TypeDef *get_typedef(StringView name);
 char const     *basic_type_name(BasicType basic_type);
 StringView      constant_to_string(ConstantType constant);
 StringView      property_to_string(Property property);
@@ -177,6 +177,9 @@ StringView      namespace_to_string(Namespace namespace);
 StringView      type_to_string(Type type);
 StringView      typedef_to_string(TypeDef type_def);
 StringView      interface_to_string(Interface interface);
+JSONValue interface_serialize(Interface interface);
+JSONValue typedef_serialize(TypeDef type_def);
+JSONValue module_serialize(Module module);
 
 static void parse_struct(Lexer *lexer, Properties *s);
 static Type parse_type(Lexer *lexer);
@@ -188,7 +191,7 @@ static Namespaces namespaces = { 0 };
 static TypeDefs   typedefs = { 0 };
 static Modules    modules = {0};
 
-TypeDef *get_type(StringView name)
+TypeDef *get_typedef(StringView name)
 {
     for (size_t ix = 0; ix < typedefs.size; ++ix) {
         if (sv_eq(name, typedefs.elements[ix].name)) {
@@ -352,6 +355,167 @@ StringView typedef_to_string(TypeDef type_def)
         UNREACHABLE();
     }
     return ret.view;
+}
+
+JSONValue constant_serialize(ConstantType constant)
+{
+    JSONValue ret = json_object();
+    json_set_cstr(&ret, "type", basic_type_name(constant.type));
+    switch (constant.type) {
+    case BasicTypeString:
+        json_set_string(&ret, basic_type_name(constant.type), constant.string_value);
+        break;
+    case BasicTypeInt:
+    case BasicTypeUnsigned:
+        json_set_int(&ret, basic_type_name(constant.type), constant.int_value);
+        break;
+    case BasicTypeBool:
+        json_set(&ret, basic_type_name(constant.type), json_bool(constant.bool_value));
+        break;
+    case BasicTypeNull:
+        break;
+    default:
+        fatal("Cannot serialize constants with basic type %s", basic_type_name(constant.type));
+    }
+    return ret;
+}
+
+JSONValue type_serialize(Type type)
+{
+    JSONValue ret = json_object();
+    switch (type.kind) {
+    case TypeKindBasic:
+        json_set_cstr(&ret, "kind", "basic_type");
+        json_set_cstr(&ret, "basic_type", basic_type_name(type.basic_type));
+        break;
+    case TypeKindType:
+        json_set_cstr(&ret, "kind", "typeref");
+        json_set_string(&ret, "typeref", type.name);
+        break;
+    case TypeKindConstant: {
+        json_set_cstr(&ret, "kind", "constant");
+        json_set(&ret, "constant", constant_serialize(type.constant));
+    } break;
+    case TypeKindAnonymousVariant: {
+        json_set_cstr(&ret, "kind", "variant");
+        JSONValue options = json_array();
+        for (size_t ix = 0; ix < type.anon_variant->options.size; ++ix) {
+            json_append(&options, type_serialize(type.anon_variant->options.elements[ix]));
+        }
+        json_set(&ret, "options", options);
+    } break;
+    case TypeKindAnonymousStruct: {
+        json_set_cstr(&ret, "kind", "struct");
+        JSONValue properties = json_array();
+        for (size_t ix = 0; ix < type.anon_struct->size; ++ix) {
+            JSONValue prop = json_object();
+            Property *p = type.anon_struct->elements + ix;
+            json_set(&prop, "name", json_string(p->name));
+            json_set(&prop, "optional", json_bool(p->optional));
+            json_set(&prop, "type", type_serialize(p->type));
+            json_append(&properties, prop);
+        }
+        json_set(&ret, "properties", properties);
+    } break;
+    default:
+        UNREACHABLE();
+    }
+    json_set(&ret, "array", json_bool(type.array));
+    return ret;
+}
+
+void add_properties(JSONValue *properties, Interface interface)
+{
+    for (size_t ix = 0; ix < interface.extends.size; ++ix) {
+        TypeDef *type_def = get_typedef(interface.extends.strings[ix]);
+        assert(type_def != NULL);
+        assert(type_def->kind == TypeDefKindInterface);
+        Interface base = type_def->interface;
+        add_properties(properties, base);
+    }
+    for (size_t ix = 0; ix < interface.properties.size; ++ix) {
+        JSONValue prop = json_object();
+        Property *p = interface.properties.elements + ix;
+        json_set(&prop, "name", json_string(p->name));
+        json_set(&prop, "optional", json_bool(p->optional));
+        json_set(&prop, "type", type_serialize(p->type));
+        json_append(properties, prop);
+    }
+}
+
+JSONValue interface_serialize(Interface interface)
+{
+    JSONValue ret = json_object();
+    JSONValue extends = json_array();
+    for (size_t ix = 0; ix < interface.extends.size; ++ix) {
+        json_append(&extends, json_string(interface.extends.strings[ix]));
+    }
+    json_set(&ret, "extends", extends);
+    JSONValue properties = json_array();
+    add_properties(&properties, interface);
+    json_set(&ret, "properties", properties);
+    return ret;
+}
+
+JSONValue namespace_serialize(Namespace namespace)
+{
+    JSONValue ret = json_object();
+    json_set_string(&ret, "name", namespace.name);
+    JSONValue values = json_array();
+    for (size_t ix = 0; ix < namespace.values.size; ++ix) {
+        NamespaceValue *value = namespace.values.elements + ix;
+        JSONValue val = json_object();
+        json_set_string(&val, "name", value->name);
+        json_set_cstr(&val, "type", basic_type_name(namespace.value_type));
+        switch (namespace.value_type) {
+        case BasicTypeInt:
+        case BasicTypeUnsigned:
+            json_set_int(&val, basic_type_name(namespace.value_type), value->int_value);
+            break;
+        case BasicTypeString:
+            json_set_string(&val, basic_type_name(namespace.value_type), value->string_value);
+            break;
+        default:
+            UNREACHABLE();
+        }
+    }
+    return ret;
+}
+
+JSONValue typedef_serialize(TypeDef type_def)
+{
+    JSONValue ret = json_object();
+    json_set_string(&ret, "name", type_def.name);
+    switch (type_def.kind) {
+    case TypeDefKindAlias: {
+        json_set_cstr(&ret, "kind", "alias");
+        JSONValue alias_for = type_serialize(type_def.alias_for);
+        json_set(&ret, "alias_for", alias_for);
+    } break;
+    case TypeDefKindInterface: {
+        json_set_cstr(&ret, "kind", "interface");
+        JSONValue interface = interface_serialize(type_def.interface);
+        json_set(&ret, "interface", interface);
+    } break;
+    default:
+        UNREACHABLE();
+    }
+    return ret;
+}
+
+JSONValue module_serialize(Module module)
+{
+    JSONValue ret = json_object();
+    json_set_string(&ret, "name", module.name);
+    JSONValue types_array = json_array();
+    for (size_t ix = 0; ix < module.types.size; ++ix) {
+        StringView name = module.types.strings[ix];
+        TypeDef *type_def = get_typedef(name);
+        assert(type_def != NULL);
+        json_append(&types_array, typedef_serialize(*type_def));
+    }
+    json_set(&ret, "types", types_array);
+    return ret;
 }
 
 Type parse_type(Lexer *lexer)
@@ -561,7 +725,7 @@ void parse_namespace(Lexer *lexer)
             value->int_value = parse_result.integer.i32;
         } break;
         case TK_IDENTIFIER: {
-            TypeDef *type = get_type(token.text);
+            TypeDef *type = get_typedef(token.text);
             if (type == NULL) {
                 fatal("Unexpected identifier '%.*s' in type specification of enumeration value '%.*s::%.*s'",
                     SV_ARG(token.text), SV_ARG(namespace.name), SV_ARG(value->name));
@@ -656,7 +820,7 @@ void parse_typedef(Lexer *lexer)
     }
 }
 
-void parse(StringView fname)
+Module parse(StringView fname)
 {
     StringView buffer = MUST(StringView, read_file_by_name(fname));
     Lexer      lexer = lexer_for_language(&ts_language);
@@ -679,12 +843,15 @@ void parse(StringView fname)
             lexer_lex(&lexer);
         }
     }
+    return modules.elements[modules.size - 1];
 }
 
 int main(int argc, char **argv)
 {
     for (int arg = 1; arg < argc; ++arg) {
-        parse(sv_from(argv[arg]));
+        Module module = parse(sv_from(argv[arg]));
+        JSONValue json = module_serialize(module);
+        printf("%.*s\n", SV_ARG(json_encode(json)));
     }
     return 0;
 }

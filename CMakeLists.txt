@@ -62,6 +62,7 @@ configure_file(
 )
 
 add_subdirectory(src/base)
+add_subdirectory(src/template)
 add_subdirectory(src/lang)
 add_subdirectory(src/lsp)
 add_subdirectory(src/app)
