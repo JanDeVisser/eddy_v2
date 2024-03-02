@@ -10,14 +10,20 @@
 #include <integer.h>
 #include <sv.h>
 
+#define JSONTYPES(S) \
+    S(NULL) \
+    S(OBJECT) \
+    S(ARRAY) \
+    S(STRING) \
+    S(INT) \
+    S(DOUBLE) \
+    S(BOOLEAN)
+
 typedef enum {
-    JSON_TYPE_NULL = 0,
-    JSON_TYPE_OBJECT,
-    JSON_TYPE_ARRAY,
-    JSON_TYPE_STRING,
-    JSON_TYPE_INT,
-    JSON_TYPE_DOUBLE,
-    JSON_TYPE_BOOLEAN,
+#undef S
+#define S(T) JSON_TYPE_##T,
+    JSONTYPES(S)
+#undef S
 } JSONType;
 
 DA_VOID_WITH_NAME(JSONValue, JSONValues);
@@ -45,6 +51,7 @@ DA_FUNCTIONS(JSONNVPair)
 OPTIONAL(JSONValue)
 ERROR_OR(JSONValue)
 
+extern const char *      JSONType_name(JSONType type);
 extern JSONValue         json_object(void);
 extern JSONValue         json_array(void);
 extern JSONValue         json_null(void);

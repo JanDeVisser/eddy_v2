@@ -16,6 +16,20 @@ typedef struct {
     int           indent;
 } JSONEncoder;
 
+char const *JSONType_name(JSONType type)
+{
+    switch (type) {
+#undef S
+#define S(T)            \
+    case JSON_TYPE_##T: \
+        return #T;
+        JSONTYPES(S)
+#undef S
+    default:
+        UNREACHABLE();
+    }
+}
+
 void json_encode_to_builder(JSONValue *value, JSONEncoder *encoder)
 {
     switch (value->type) {
@@ -313,7 +327,7 @@ void json_delete_sv(JSONValue *value, StringView attr)
         JSONNVPair *pair = da_element_JSONNVPair(&value->object, ix);
         if (sv_eq(pair->name, attr)) {
             if (ix < value->object.size - 1) {
-                memmove(pair, da_element_JSONNVPair(&value->object, ix+1), sizeof(JSONNVPair));
+                memmove(pair, da_element_JSONNVPair(&value->object, ix + 1), sizeof(JSONNVPair));
             }
             --value->object.size;
             return;
@@ -326,7 +340,7 @@ OptionalJSONValue json_entry_at(JSONValue *value, int ix)
     assert(value->type == JSON_TYPE_OBJECT);
     if (ix < value->array.size) {
         JSONNVPair *pair = da_element_JSONNVPair(&value->object, ix);
-        JSONValue ret = json_array();
+        JSONValue   ret = json_array();
         json_append(&ret, json_string(pair->name));
         json_append(&ret, pair->value);
         RETURN_VALUE(JSONValue, ret);
@@ -394,7 +408,7 @@ void json_merge(JSONValue *value, JSONValue sub)
 
 StringView json_encode(JSONValue value)
 {
-    JSONEncoder encoder = {0};
+    JSONEncoder encoder = { 0 };
     json_encode_to_builder(&value, &encoder);
     sv_free(encoder.escaped.view);
     return encoder.sb.view;
