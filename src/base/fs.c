@@ -90,9 +90,8 @@ ErrorOrStringView fs_follow(StringView file_name)
     if (len < 0) {
         ERROR(StringView, IOError, 0, "fs_follow('%.*s'): Error reading symlink: %s", SV_ARG(file_name), strerror(errno));
     }
-    assert(len <= PATH_MAX)
-        followed[len]
-        = '\0';
+    assert(len <= PATH_MAX);
+    followed[len] = '\0';
     RETURN(StringView, sv_copy((StringView) { followed, len }));
 }
 
