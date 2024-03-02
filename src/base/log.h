@@ -54,13 +54,17 @@ noreturn extern                   void vfatal(char const *msg, va_list args);
 #define OUT_OF_MEMORY(msg, ...)   fatal("Out of memory in %s: " msg, __func__ __VA_OPT(, ) __VA_ARGS__)
 // clang-format on
 
-#define assert(cond)                                                         \
-    if (!(cond)) {                                                           \
-        fatal("%s:%d: assert('%s') FAILED", __FILE_NAME__, __LINE__, #cond); \
-    }
-#define assert_msg(cond, msg, ...)                                                                     \
-    if (!(cond)) {                                                                                     \
-        fatal("%s:%d: assert('%s'): " msg, __FILE_NAME__, __LINE__, #cond __VA_OPT__(, ) __VA_ARGS__); \
-    }
+#define assert(cond)                                                             \
+    do {                                                                         \
+        if (!(cond)) {                                                           \
+            fatal("%s:%d: assert('%s') FAILED", __FILE_NAME__, __LINE__, #cond); \
+        }                                                                        \
+    } while (0)
+#define assert_msg(cond, msg, ...)                                                                         \
+    do {                                                                                                   \
+        if (!(cond)) {                                                                                     \
+            fatal("%s:%d: assert('%s'): " msg, __FILE_NAME__, __LINE__, #cond __VA_OPT__(, ) __VA_ARGS__); \
+        }                                                                                                  \
+    } while (0)
 
 #endif // __LOG_H__
