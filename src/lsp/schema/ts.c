@@ -6,6 +6,7 @@
 
 #include <io.h>
 #include <lexer.h>
+#include <template/template.h>
 #include <ts.h>
 
 typedef enum {
@@ -169,6 +170,7 @@ DA_IMPL(TypeDef);
 DA_IMPL(Module);
 
 static TypeDef *get_typedef(StringView name);
+static TypeDef *get_interface(StringView name);
 char const     *basic_type_name(BasicType basic_type);
 StringView      constant_to_string(ConstantType constant);
 StringView      property_to_string(Property property);
@@ -177,9 +179,9 @@ StringView      namespace_to_string(Namespace namespace);
 StringView      type_to_string(Type type);
 StringView      typedef_to_string(TypeDef type_def);
 StringView      interface_to_string(Interface interface);
-JSONValue interface_serialize(Interface interface);
-JSONValue typedef_serialize(TypeDef type_def);
-JSONValue module_serialize(Module module);
+JSONValue       interface_serialize(Interface interface);
+JSONValue       typedef_serialize(TypeDef type_def);
+JSONValue       module_serialize(Module module);
 
 static void parse_struct(Lexer *lexer, Properties *s);
 static Type parse_type(Lexer *lexer);
@@ -189,7 +191,7 @@ void        parse_typedef(Lexer *lexer);
 
 static Namespaces namespaces = { 0 };
 static TypeDefs   typedefs = { 0 };
-static Modules    modules = {0};
+static Modules    modules = { 0 };
 
 TypeDef *get_typedef(StringView name)
 {
@@ -464,7 +466,7 @@ JSONValue namespace_serialize(Namespace namespace)
     JSONValue values = json_array();
     for (size_t ix = 0; ix < namespace.values.size; ++ix) {
         NamespaceValue *value = namespace.values.elements + ix;
-        JSONValue val = json_object();
+        JSONValue       val = json_object();
         json_set_string(&val, "name", value->name);
         json_set_cstr(&val, "type", basic_type_name(namespace.value_type));
         switch (namespace.value_type) {
@@ -510,7 +512,7 @@ JSONValue module_serialize(Module module)
     JSONValue types_array = json_array();
     for (size_t ix = 0; ix < module.types.size; ++ix) {
         StringView name = module.types.strings[ix];
-        TypeDef *type_def = get_typedef(name);
+        TypeDef   *type_def = get_typedef(name);
         assert(type_def != NULL);
         json_append(&types_array, typedef_serialize(*type_def));
     }
@@ -660,11 +662,8 @@ void parse_interface(Lexer *lexer)
     }
     parse_struct(lexer, &type_def.interface.properties);
     da_append_TypeDef(&typedefs, type_def);
-    Module *module = da_element_Module(&modules, modules.size-1);
+    Module *module = da_element_Module(&modules, modules.size - 1);
     sl_push(&module->types, type_def.name);
-    StringView type = typedef_to_string(type_def);
-    printf("%.*s\n", SV_ARG(type));
-    sv_free(type);
 }
 
 BasicType get_basic_type_for(Type *type)
@@ -774,9 +773,6 @@ void parse_namespace(Lexer *lexer)
     }
     lexer_lex(lexer);
     da_append_Namespace(&namespaces, namespace);
-    StringView type = namespace_to_string(namespace);
-    printf("%.*s\n", SV_ARG(type));
-    sv_free(type);
 }
 
 void parse_typedef(Lexer *lexer)
@@ -809,18 +805,18 @@ void parse_typedef(Lexer *lexer)
     type_def.kind = TypeDefKindAlias;
     type_def.alias_for = parse_type(lexer);
 
-    StringView type = typedef_to_string(type_def);
-    printf("%.*s\n", SV_ARG(type));
-    sv_free(type);
+    // StringView type = typedef_to_string(type_def);
+    // printf("%.*s\n", SV_ARG(type));
+    // sv_free(type);
 
     if (!is_basic_type) {
         da_append_TypeDef(&typedefs, type_def);
-        Module *module = da_element_Module(&modules, modules.size-1);
+        Module *module = da_element_Module(&modules, modules.size - 1);
         sl_push(&module->types, type_def.name);
     }
 }
 
-Module parse(StringView fname)
+Module ts_parse(StringView fname)
 {
     StringView buffer = MUST(StringView, read_file_by_name(fname));
     Lexer      lexer = lexer_for_language(&ts_language);
@@ -848,10 +844,16 @@ Module parse(StringView fname)
 
 int main(int argc, char **argv)
 {
-    for (int arg = 1; arg < argc; ++arg) {
-        Module module = parse(sv_from(argv[arg]));
-        JSONValue json = module_serialize(module);
-        printf("%.*s\n", SV_ARG(json_encode(json)));
-    }
+    log_init();
+    Module module = ts_parse(sv_from(argv[1]));
+
+    TypeDef *t = get_typedef(sv_from(argv[2]));
+    assert(t != NULL);
+    JSONValue ctx = typedef_serialize(*t);
+    json_set(&ctx, "plural", json_string(sv_printf("%.*ss", SV_ARG(t->name))));
+
+    StringView template = MUST(StringView, read_file_by_name(sv_from("interface.h.in")));
+    StringView rendered = MUST(StringView, render_template(template, ctx));
+    printf("%.*s\n", SV_ARG(rendered));
     return 0;
 }

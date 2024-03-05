@@ -13,3 +13,4 @@ add_library(
 )
 
 target_include_directories(lsp PRIVATE ${raylib_INCLUDE_DIRS})
+add_subdirectory(schema)
