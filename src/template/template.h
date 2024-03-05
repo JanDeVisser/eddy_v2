@@ -12,6 +12,74 @@
 #include <optional.h>
 #include <sv.h>
 
+#define TEMPLATEEXPRESSIONTOKENTYPES(S) \
+    S(Unknown)                          \
+    S(EndOfText)                        \
+    S(EndOfExpression)                  \
+    S(EndOfStatement)                   \
+    S(EndOfStatementBlock)              \
+    S(StartOfStatement)                 \
+    S(StartOfExpression)                \
+    S(Whitespace)                       \
+    S(Comment)                          \
+    S(Symbol)                           \
+    S(Identifier)                       \
+    S(Number)                           \
+    S(Operator)                         \
+    S(String)                           \
+    S(True)                             \
+    S(False)                            \
+    S(Null)
+
+typedef enum {
+#undef S
+#define S(T) TETT##T,
+    TEMPLATEEXPRESSIONTOKENTYPES(S)
+#undef S
+} TemplateExpressionTokenType;
+#define TEMPLATEOPERATORTOKENS(S)                                    \
+    S(Asterisk, "*", BTOMultiply, 12, InvalidOperator, -1)           \
+    S(Equals, "==", BTOEquals, 8, InvalidOperator, -1)               \
+    S(ExclamationPoint, "!", InvalidOperator, -1, UTOInvert, 14)     \
+    S(Greater, ">", BTOGreater, 9, InvalidOperator, -1)              \
+    S(GreaterEquals, ">=", BTOGreaterEquals, 9, InvalidOperator, -1) \
+    S(Less, "<", BTOLess, 9, InvalidOperator, -1)                    \
+    S(LessEquals, "<=", BTOLessEquals, 9, InvalidOperator, -1)       \
+    S(Minus, "-", BTOSubtract, 11, UTONegate, 14)                    \
+    S(OpenCurly, "{", InvalidOperator, -1, UTODereference, 15)       \
+    S(OpenParen, "(", BTOCall, 15, InvalidOperator, -1)              \
+    S(Percent, "%", BTOModulo, 12, InvalidOperator, -1)              \
+    S(Period, ".", BTOSubscript, 15, InvalidOperator, -1)            \
+    S(Plus, "+", BTOAdd, 11, UTOIdentity, 14)                        \
+    S(Slash, "/", BTODivide, 12, InvalidOperator, -1)                \
+    S(Unequal, "!=", BTONotEquals, 8, InvalidOperator, -1)
+
+typedef enum {
+#undef S
+#define S(TOKEN, STR, BINOP, BINPREC, UNOP, UNPREC) TOT##TOKEN,
+    TEMPLATEOPERATORTOKENS(S)
+#undef S
+        TOTCount,
+} TemplateOperatorToken;
+
+OPTIONAL(TemplateOperatorToken)
+ERROR_OR(TemplateOperatorToken)
+ERROR_OR(OptionalTemplateOperatorToken)
+
+typedef struct {
+    TemplateExpressionTokenType type;
+    StringView                  raw_text;
+    union {
+        StringRef             text;
+        int                   ch;
+        TemplateOperatorToken op;
+    };
+} TemplateExpressionToken;
+
+OPTIONAL(TemplateExpressionToken)
+ERROR_OR(TemplateExpressionToken)
+ERROR_OR(OptionalTemplateExpressionToken)
+
 #define TEMPLATENODEKINDS(S) \
     S(Text)                  \
     S(Expr)                  \
@@ -71,10 +139,24 @@ typedef enum {
 ERROR_OR(TemplateOperator);
 DA_STRUCT_WITH_NAME(TemplateExpression, struct template_expression *, TemplateExpressions);
 
+typedef struct {
+    TemplateOperatorToken token;
+    char const           *string;
+    TemplateOperator      binary_op;
+    int                   binary_precedence;
+    TemplateOperator      unary_op;
+    int                   unary_precedence;
+} TemplateOperatorMapping;
+
+OPTIONAL(TemplateOperatorMapping)
+ERROR_OR(TemplateOperatorMapping)
+ERROR_OR(OptionalTemplateOperatorMapping)
+
 typedef struct template_expression {
     TemplateExpressionType type;
     union {
-        StringRef text;
+        StringView raw_text;
+        StringRef  text;
         struct {
             struct template_expression *lhs;
             TemplateOperator            op;
@@ -96,18 +178,19 @@ typedef struct template_expression {
 
 ERROR_OR_ALIAS(TemplateExpression, TemplateExpression *)
 
-PAIR_WITH_NAME(StringRef, JSONType, Parameter);
+PAIR_WITH_NAME(StringView, JSONType, Parameter);
 
 typedef struct template_node {
-    TemplateNodeKind kind;
+    TemplateNodeKind      kind;
+    struct template_node *contents;
     union {
         StringRef           text;
         TemplateExpression *expr;
         struct {
-            StringRef             variable;
-            StringRef             variable2;
-            TemplateExpression   *range;
-            struct template_node *contents;
+            StringView          variable;
+            StringView          variable2;
+            TemplateExpression *range;
+            StringView          macro;
         } for_statement;
         struct {
             TemplateExpression   *condition;
@@ -115,17 +198,15 @@ typedef struct template_node {
             struct template_node *false_branch;
         } if_statement;
         struct {
-            StringRef             macro;
-            TemplateExpressions   arguments;
-            struct template_node *contents;
+            StringView          macro;
+            TemplateExpressions arguments;
         } macro_call;
         struct {
-            StringRef             name;
-            Parameters            parameters;
-            struct template_node *contents;
+            StringView name;
+            Parameters parameters;
         } macro_def;
         struct {
-            StringRef           variable;
+            StringView          variable;
             TemplateExpression *value;
         } set_statement;
     };
@@ -133,7 +214,7 @@ typedef struct template_node {
 } TemplateNode;
 
 ERROR_OR_ALIAS(TemplateNode, TemplateNode *)
-PAIR_WITH_NAME(StringRef, TemplateNode *, Macro);
+PAIR_WITH_NAME(StringView, TemplateNode *, Macro);
 
 typedef struct {
     StringBuilder sb;
@@ -144,14 +225,49 @@ typedef struct {
 
 ERROR_OR(Template);
 
-extern char const       *TemplateNodeKind_name(TemplateNodeKind kind);
-extern char const       *TemplateExpressionType_name(TemplateExpressionType type);
-extern char const       *TemplateOperator_name(TemplateOperator op);
-extern JSONValue         template_expression_serialize(Template tpl, TemplateExpression *expr);
-extern JSONValue         template_node_serialize(Template tpl, TemplateNode *node);
-extern ErrorOrTemplate   template_parse(StringView template);
-extern ErrorOrStringView template_render(Template template, JSONValue context);
-extern TemplateNode     *template_find_macro(Template template, StringRef name);
-extern ErrorOrStringView render_template(StringView template_text, JSONValue context);
+typedef struct {
+    union {
+        Template template;
+        struct {
+            StringBuilder sb;
+            StringView    text;
+            TemplateNode *node;
+            Macros        macros;
+        };
+    };
+    TemplateExpressionToken token;
+    StringScanner           ss;
+    TemplateNode          **current;
+} TemplateParserContext;
+
+extern char const                            *TemplateNodeKind_name(TemplateNodeKind kind);
+extern char const                            *TemplateExpressionType_name(TemplateExpressionType type);
+extern char const                            *TemplateOperator_name(TemplateOperator op);
+extern char const                            *TemplateExpressionTokenType_name(TemplateExpressionTokenType type);
+extern char const                            *TemplateOperatorToken_name(TemplateOperatorToken token);
+extern StringView                             template_token_to_string(TemplateParserContext *ctx, TemplateExpressionToken token);
+extern OptionalTemplateOperatorMapping        template_operator_mapping(TemplateOperatorToken token);
+extern void                                   template_lexer_consume(TemplateParserContext *ctx);
+extern ErrorOrTemplateExpressionToken         template_lexer_peek(TemplateParserContext *ctx);
+extern ErrorOrTemplateExpressionToken         template_lexer_next(TemplateParserContext *ctx);
+extern ErrorOrOptionalTemplateExpressionToken template_lexer_allow_type(TemplateParserContext *ctx, TemplateExpressionTokenType type);
+extern ErrorOrTemplateExpressionToken         template_lexer_require_type(TemplateParserContext *ctx, TemplateExpressionTokenType type);
+extern ErrorOrOptionalStringView              template_lexer_allow_identifier(TemplateParserContext *ctx);
+extern ErrorOrBool                            template_lexer_allow_sv(TemplateParserContext *ctx, StringView string);
+extern ErrorOrStringView                      template_lexer_require_identifier(TemplateParserContext *ctx);
+extern ErrorOrBool                            template_lexer_allow_symbol(TemplateParserContext *ctx, int symbol);
+extern ErrorOrBool                            template_lexer_require_symbol(TemplateParserContext *ctx, int symbol);
+extern ErrorOrTemplateExpressionToken         template_lexer_require_one_of(TemplateParserContext *ctx, char *symbols);
+extern JSONValue                              template_expression_serialize(Template tpl, TemplateExpression *expr);
+extern ErrorOrOptionalTemplateOperatorMapping template_lexer_operator(TemplateParserContext *ctx);
+extern ErrorOrTemplateExpression              template_ctx_parse_expression(TemplateParserContext *ctx);
+extern ErrorOrStringView                      template_ctx_parse_nodes(TemplateParserContext *ctx, ...);
+extern JSONValue                              template_node_serialize(Template tpl, TemplateNode *node);
+extern ErrorOrTemplate                        template_parse(StringView template);
+extern ErrorOrStringView                      template_render(Template template, JSONValue context);
+extern TemplateNode                          *template_find_macro(Template template, StringView name);
+extern ErrorOrStringView                      render_template(StringView template_text, JSONValue context);
+
+#define template_ctx_parse(CTX, ...) template_ctx_parse_nodes((CTX), __VA_ARGS__ __VA_OPT__(, ) NULL)
 
 #endif /* TEMPLATE_H */

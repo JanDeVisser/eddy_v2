@@ -3,9 +3,11 @@ include_directories(.)
 add_library(
         template
         STATIC
-        template.c
+        lexer.c
         parser.c
         render.c
+        serialize.c
+        template.c
 )
 
 target_link_libraries(template base)

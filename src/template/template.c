@@ -9,13 +9,11 @@
 #include <sv.h>
 #include <template.h>
 
-TemplateNode *template_find_macro(Template template, StringRef name)
+TemplateNode *template_find_macro(Template template, StringView name)
 {
-    StringView n = sv(&template.sb, name);
     for (size_t ix = 0; ix < template.macros.size; ++ix) {
         Macro     *macro = da_element_Macro(&template.macros, ix);
-        StringView m = sv(&template.sb, macro->key);
-        if (sv_eq(m, n)) {
+        if (sv_eq(macro->key, name)) {
             return macro->value;
         }
     }
@@ -25,8 +23,10 @@ TemplateNode *template_find_macro(Template template, StringRef name)
 ErrorOrStringView render_template(StringView template_text, JSONValue context)
 {
     Template template = TRY_TO(Template, StringView, template_parse(template_text));
-    StringView ast = json_encode(template_node_serialize(template, template.node));
-    printf("AST:\n%.*s\n\n",SV_ARG(ast));
+    if (log_category_on(CAT_TEMPLATE)) {
+        StringView ast = json_encode(template_node_serialize(template, template.node));
+        printf("AST:\n%.*s\n\n",SV_ARG(ast));
+    }
     return template_render(template, context);
 }
 

@@ -11,6 +11,7 @@
 typedef struct template_render_scope {
     JSONValue                     scope;
     struct template_render_scope *up;
+    StringView                    s;
 } TemplateRenderScope;
 
 typedef struct {
@@ -26,7 +27,7 @@ typedef struct {
     TemplateRenderScope *scope;
 } TemplateRenderContext;
 
-typedef ErrorOrJSONValue (*TemplateFunction)(JSONValue);
+typedef ErrorOrJSONValue (*TemplateFunction)(TemplateRenderContext *, JSONValue);
 
 typedef struct {
     char const      *name;
@@ -43,10 +44,14 @@ static ErrorOrInt       render_macro(TemplateRenderContext *ctx, TemplateNode *n
 static ErrorOrInt       render_expr_node(TemplateRenderContext *ctx, TemplateNode *node);
 static ErrorOrInt       render_for_loop(TemplateRenderContext *ctx, TemplateNode *node);
 static ErrorOrInt       render_if_statement(TemplateRenderContext *ctx, TemplateNode *node);
-static ErrorOrJSONValue template_function_toupper(JSONValue args);
+static ErrorOrJSONValue template_function_render(TemplateRenderContext *ctx, JSONValue args);
+static ErrorOrJSONValue template_function_toupper(TemplateRenderContext *ctx, JSONValue args);
+static ErrorOrJSONValue template_function_tolower(TemplateRenderContext *ctx, JSONValue args);
 
 TemplateFunctionDescription s_functions[] = {
+    { "render", template_function_render },
     { "toupper", template_function_toupper },
+    { "tolower", template_function_tolower },
 };
 
 ErrorOrJSONValue evaluate_unary_expression(TemplateRenderContext *ctx, TemplateExpression *expr)
@@ -58,12 +63,14 @@ ErrorOrJSONValue evaluate_unary_expression(TemplateRenderContext *ctx, TemplateE
         RETURN(JSONValue, value);
     case UTOInvert: {
         if (value.type != JSON_TYPE_BOOLEAN) {
+            json_free(value);
             ERROR(JSONValue, TemplateError, 0, "Can only invert boolean values");
         }
         RETURN(JSONValue, json_bool(!value.boolean));
     }
     case UTONegate: {
         if (value.type != JSON_TYPE_INT) {
+            json_free(value);
             ERROR(JSONValue, TemplateError, 0, "Can only negate integer values");
         }
         RETURN(JSONValue, json_int(-value.int_number.i32));
@@ -75,149 +82,188 @@ ErrorOrJSONValue evaluate_unary_expression(TemplateRenderContext *ctx, TemplateE
 
 ErrorOrJSONValue evaluate_binary_expression(TemplateRenderContext *ctx, TemplateExpression *expr)
 {
-    JSONValue lhs = TRY(JSONValue, evaluate_expression(ctx, expr->binary.lhs));
+    ErrorOrJSONValue ret = { 0 };
+    JSONValue        lhs = TRY(JSONValue, evaluate_expression(ctx, expr->binary.lhs));
+    trace(CAT_TEMPLATE, "Rendering binary expression %s", TemplateOperator_name(expr->binary.op));
     if (expr->binary.op == BTOSubscript) {
         if (lhs.type != JSON_TYPE_OBJECT) {
-            ERROR(JSONValue, TemplateError, 0, "Only objects can be subscripted");
+            ret = ErrorOrJSONValue_error(__FILE_NAME__, __LINE__, TemplateError, 0, "Only objects can be subscripted");
+            goto defer_lhs;
         }
+        trace(CAT_TEMPLATE, "lhs: %.*s", SV_ARG(json_to_string(lhs)));
         JSONValue rhs = { 0 };
         if (expr->binary.rhs->type != TETIdentifier) {
             rhs = TRY(JSONValue, evaluate_expression(ctx, expr->binary.rhs));
             if (rhs.type != JSON_TYPE_STRING) {
-                ERROR(JSONValue, TemplateError, 0, "Subscript must be identifier");
+                ret = ErrorOrJSONValue_error(__FILE_NAME__, __LINE__, TemplateError, 0, "Subscript must be identifier");
+                goto defer_rhs;
             }
         } else {
-            rhs = json_string(sv(&ctx->sb, expr->binary.rhs->text));
+            rhs = json_string(expr->binary.rhs->raw_text);
         }
-        JSONValue property = TRY_OPTIONAL(JSONValue, json_get_sv(&lhs, rhs.string),
-            JSONValue, TemplateError, "Property '%.*s' not there", SV_ARG(rhs.string));
-        RETURN(JSONValue, property);
+        OptionalJSONValue property_maybe = json_get_sv(&lhs, rhs.string);
+        if (!property_maybe.has_value) {
+            ret = ErrorOrJSONValue_error(__FILE_NAME__, __LINE__, TemplateError, 0, "Property '%.*s' not there", SV_ARG(rhs.string));
+            goto defer_rhs;
+        }
+        JSONValue property = json_copy(property_maybe.value);
+        trace(CAT_TEMPLATE, ".[%.*s] = '%.*s'", SV_ARG(rhs.string), SV_ARG(json_to_string(property)));
+        ret = (ErrorOrJSONValue) { .error = { 0 }, .value = json_copy(property) };
+        goto defer_rhs;
     }
 
     JSONValue rhs = TRY(JSONValue, evaluate_expression(ctx, expr->binary.rhs));
     switch (expr->binary.op) {
     case BTOAdd: {
         if (lhs.type != JSON_TYPE_INT || rhs.type != JSON_TYPE_INT) {
-            ERROR(JSONValue, TemplateError, 0, "Can only add integer values");
+            ret = ErrorOrJSONValue_error(__FILE_NAME__, __LINE__, TemplateError, 0, "Can only add integer values");
+            goto defer_rhs;
         }
-        int ret = json_int_value(lhs) + json_int_value(rhs);
-        RETURN(JSONValue, json_int(ret));
+        int retval = json_int_value(lhs) + json_int_value(rhs);
+        ret = (ErrorOrJSONValue) { .error = { 0 }, .value = json_int(retval) };
+        goto defer_rhs;
     }
     case BTOSubtract: {
         if (lhs.type != JSON_TYPE_INT || rhs.type != JSON_TYPE_INT) {
-            ERROR(JSONValue, TemplateError, 0, "Can only subtract integer values");
+            ret = ErrorOrJSONValue_error(__FILE_NAME__, __LINE__, TemplateError, 0, "Can only subtract integer values");
+            goto defer_rhs;
         }
-        int ret = json_int_value(lhs) - json_int_value(rhs);
-        RETURN(JSONValue, json_int(ret));
+        int retval = json_int_value(lhs) - json_int_value(rhs);
+        ret = (ErrorOrJSONValue) { .error = { 0 }, .value = json_int(retval) };
+        goto defer_rhs;
     }
     case BTOMultiply: {
         if (lhs.type != JSON_TYPE_INT || rhs.type != JSON_TYPE_INT) {
-            ERROR(JSONValue, TemplateError, 0, "Can only multiply integer values");
+            ret = ErrorOrJSONValue_error(__FILE_NAME__, __LINE__, TemplateError, 0, "Can only multiply integer values");
+            goto defer_rhs;
         }
-        int ret = json_int_value(lhs) * json_int_value(rhs);
-        RETURN(JSONValue, json_int(ret));
+        int retval = json_int_value(lhs) * json_int_value(rhs);
+        ret = (ErrorOrJSONValue) { .error = { 0 }, .value = json_int(retval) };
+        goto defer_rhs;
     }
     case BTODivide: {
         if (lhs.type != JSON_TYPE_INT || rhs.type != JSON_TYPE_INT) {
-            ERROR(JSONValue, TemplateError, 0, "Can only divide integer values");
+            ret = ErrorOrJSONValue_error(__FILE_NAME__, __LINE__, TemplateError, 0, "Can only divide integer values");
+            goto defer_rhs;
         }
-        int ret = json_int_value(lhs) / json_int_value(rhs);
-        RETURN(JSONValue, json_int(ret));
+        int retval = json_int_value(lhs) / json_int_value(rhs);
+        ret = (ErrorOrJSONValue) { .error = { 0 }, .value = json_int(retval) };
+        goto defer_rhs;
     }
     case BTOModulo: {
         if (lhs.type != JSON_TYPE_INT || rhs.type != JSON_TYPE_INT) {
-            ERROR(JSONValue, TemplateError, 0, "Can only take the modulus of integer values");
+            ret = ErrorOrJSONValue_error(__FILE_NAME__, __LINE__, TemplateError, 0, "Can only take the modulus of integer values");
+            goto defer_rhs;
         }
-        int ret = json_int_value(lhs) % json_int_value(rhs);
-        RETURN(JSONValue, json_int(ret));
+        int retval = json_int_value(lhs) % json_int_value(rhs);
+        ret = (ErrorOrJSONValue) { .error = { 0 }, .value = json_int(retval) };
+        goto defer_rhs;
     }
     case BTOEquals: {
-        bool ret;
+        bool retval;
         if (lhs.type == JSON_TYPE_INT || rhs.type == JSON_TYPE_INT) {
-            ret = json_int_value(lhs) == json_int_value(rhs);
+            retval = json_int_value(lhs) == json_int_value(rhs);
         } else if (lhs.type == JSON_TYPE_STRING || rhs.type == JSON_TYPE_STRING) {
-            ret = sv_eq(lhs.string, rhs.string);
+            retval = sv_eq(lhs.string, rhs.string);
         } else if (lhs.type == JSON_TYPE_BOOLEAN || rhs.type == JSON_TYPE_BOOLEAN) {
-            ret = lhs.boolean == rhs.boolean;
+            retval = lhs.boolean == rhs.boolean;
         } else {
-            ERROR(JSONValue, TemplateError, 0, "Can't compare your values yet");
+            ret = ErrorOrJSONValue_error(__FILE_NAME__, __LINE__, TemplateError, 0, "Can't compare your values yet");
+            goto defer_rhs;
         }
-        RETURN(JSONValue, json_bool(ret));
+        ret = (ErrorOrJSONValue) { .error = { 0 }, .value = json_bool(retval) };
+        goto defer_rhs;
     }
     case BTONotEquals: {
-        bool ret;
+        bool retval;
         if (lhs.type == JSON_TYPE_INT || rhs.type == JSON_TYPE_INT) {
-            ret = json_int_value(lhs) != json_int_value(rhs);
+            retval = json_int_value(lhs) != json_int_value(rhs);
         } else if (lhs.type == JSON_TYPE_STRING || rhs.type == JSON_TYPE_STRING) {
-            ret = !sv_eq(lhs.string, rhs.string);
+            retval = !sv_eq(lhs.string, rhs.string);
         } else if (lhs.type == JSON_TYPE_BOOLEAN || rhs.type == JSON_TYPE_BOOLEAN) {
-            ret = lhs.boolean != rhs.boolean;
+            retval = lhs.boolean != rhs.boolean;
         } else {
-            ERROR(JSONValue, TemplateError, 0, "Can't compare your values yet");
+            ret = ErrorOrJSONValue_error(__FILE_NAME__, __LINE__, TemplateError, 0, "Can't compare your values yet");
+            goto defer_rhs;
         }
-        RETURN(JSONValue, json_bool(ret));
+        ret = (ErrorOrJSONValue) { .error = { 0 }, .value = json_bool(retval) };
+        goto defer_rhs;
     }
     case BTOGreater: {
-        bool ret;
+        bool retval;
         if (lhs.type == JSON_TYPE_INT || rhs.type == JSON_TYPE_INT) {
-            ret = json_int_value(lhs) > json_int_value(rhs);
+            retval = json_int_value(lhs) > json_int_value(rhs);
         } else if (lhs.type == JSON_TYPE_STRING || rhs.type == JSON_TYPE_STRING) {
-            ret = sv_cmp(lhs.string, rhs.string) > 0;
+            retval = sv_cmp(lhs.string, rhs.string) > 0;
         } else {
-            ERROR(JSONValue, TemplateError, 0, "Can't compare your values yet");
+            ret = ErrorOrJSONValue_error(__FILE_NAME__, __LINE__, TemplateError, 0, "Can't compare your values yet");
+            goto defer_rhs;
         }
-        RETURN(JSONValue, json_bool(ret));
+        ret = (ErrorOrJSONValue) { .error = { 0 }, .value = json_bool(retval) };
+        goto defer_rhs;
     }
     case BTOGreaterEquals: {
-        bool ret;
+        bool retval;
         if (lhs.type == JSON_TYPE_INT || rhs.type == JSON_TYPE_INT) {
-            ret = json_int_value(lhs) >= json_int_value(rhs);
+            retval = json_int_value(lhs) >= json_int_value(rhs);
         } else if (lhs.type == JSON_TYPE_STRING || rhs.type == JSON_TYPE_STRING) {
-            ret = sv_cmp(lhs.string, rhs.string) >= 0;
+            retval = sv_cmp(lhs.string, rhs.string) >= 0;
         } else {
-            ERROR(JSONValue, TemplateError, 0, "Can't compare your values yet");
+            ret = ErrorOrJSONValue_error(__FILE_NAME__, __LINE__, TemplateError, 0, "Can't compare your values yet");
+            goto defer_rhs;
         }
-        RETURN(JSONValue, json_bool(ret));
+        ret = (ErrorOrJSONValue) { .error = { 0 }, .value = json_bool(retval) };
+        goto defer_rhs;
     }
     case BTOLess: {
-        bool ret;
+        bool retval;
         if (lhs.type == JSON_TYPE_INT || rhs.type == JSON_TYPE_INT) {
-            ret = json_int_value(lhs) < json_int_value(rhs);
+            retval = json_int_value(lhs) < json_int_value(rhs);
         } else if (lhs.type == JSON_TYPE_STRING || rhs.type == JSON_TYPE_STRING) {
-            ret = sv_cmp(lhs.string, rhs.string) < 0;
+            retval = sv_cmp(lhs.string, rhs.string) < 0;
         } else {
-            ERROR(JSONValue, TemplateError, 0, "Can't compare your values yet");
+            ret = ErrorOrJSONValue_error(__FILE_NAME__, __LINE__, TemplateError, 0, "Can't compare your values yet");
+            goto defer_rhs;
         }
-        RETURN(JSONValue, json_bool(ret));
+        ret = (ErrorOrJSONValue) { .error = { 0 }, .value = json_bool(retval) };
+        goto defer_rhs;
     }
     case BTOLessEquals: {
-        bool ret;
+        bool retval;
         if (lhs.type == JSON_TYPE_INT || rhs.type == JSON_TYPE_INT) {
-            ret = json_int_value(lhs) <= json_int_value(rhs);
+            retval = json_int_value(lhs) <= json_int_value(rhs);
         } else if (lhs.type == JSON_TYPE_STRING || rhs.type == JSON_TYPE_STRING) {
-            ret = sv_cmp(lhs.string, rhs.string) <= 0;
+            retval = sv_cmp(lhs.string, rhs.string) <= 0;
         } else {
-            ERROR(JSONValue, TemplateError, 0, "Can't compare your values yet");
+            ret = ErrorOrJSONValue_error(__FILE_NAME__, __LINE__, TemplateError, 0, "Can't compare your values yet");
+            goto defer_rhs;
         }
-        RETURN(JSONValue, json_bool(ret));
+        ret = (ErrorOrJSONValue) { .error = { 0 }, .value = json_bool(retval) };
+        goto defer_rhs;
     }
     default:
         UNREACHABLE();
     }
+defer_rhs:
+    json_free(rhs);
+defer_lhs:
+    json_free(lhs);
+    return ret;
 }
 
 ErrorOrJSONValue evaluate_function_call(TemplateRenderContext *ctx, TemplateExpression *expr)
 {
     JSONValue  args = json_array();
     StringView name;
-    if (expr->function_call.function->type != TETIdentifier) {
-        JSONValue name_value = TRY(JSONValue, evaluate_expression(ctx, expr->function_call.function));
+    JSONValue  name_value = { 0 };
+    if (expr->function_call.function->type == TETIdentifier) {
+        name = expr->function_call.function->raw_text;
+    } else {
+        name_value = TRY(JSONValue, evaluate_expression(ctx, expr->function_call.function));
         if (name_value.type != JSON_TYPE_STRING) {
             ERROR(JSONValue, TemplateError, 0, "Function name must evaluate to string");
         }
         name = name_value.string;
-    } else {
-        name = sv(&ctx->sb, expr->function_call.function->text);
     }
 
     for (size_t ix = 0; ix < expr->function_call.arguments.size; ++ix) {
@@ -226,28 +272,33 @@ ErrorOrJSONValue evaluate_function_call(TemplateRenderContext *ctx, TemplateExpr
     }
     for (size_t ix = 0; ix < sizeof(s_functions) / sizeof(TemplateFunctionDescription); ++ix) {
         if (sv_eq_cstr(name, s_functions[ix].name)) {
-            return s_functions[ix].function(args);
+            ErrorOrJSONValue ret = s_functions[ix].function(ctx, args);
+            json_free(args);
+            json_free(name_value);
+            return ret;
         }
     }
-    ERROR(JSONValue, TemplateError, 0, "Unknown function name '%.*s'", name);
+    json_free(args);
+    ErrorOrJSONValue ret = ErrorOrJSONValue_error(__FILE_NAME__, __LINE__, TemplateError, 0, "Unknown function name '%.*s'", name);
+    json_free(name_value);
+    return ret;
 }
 
 ErrorOrJSONValue evaluate_identifier(TemplateRenderContext *ctx, TemplateExpression *expr)
 {
-    StringView           var_name = sv(&ctx->sb, expr->text);
     TemplateRenderScope *scope = ctx->scope;
     OptionalJSONValue    var = { 0 };
     while (scope) {
-        var = json_get_sv(&scope->scope, var_name);
+        var = json_get_sv(&scope->scope, expr->raw_text);
         if (var.has_value) {
             break;
         }
         scope = scope->up;
     }
     if (!var.has_value) {
-        ERROR(JSONValue, TemplateError, 0, "Variable '%.*s' not there", SV_ARG(var_name));
+        ERROR(JSONValue, TemplateError, 0, "Variable '%.*s' not there", SV_ARG(expr->raw_text));
     }
-    RETURN(JSONValue, var.value);
+    RETURN(JSONValue, json_copy(var.value));
 }
 
 ErrorOrJSONValue evaluate_expression(TemplateRenderContext *ctx, TemplateExpression *expr)
@@ -274,27 +325,50 @@ ErrorOrJSONValue evaluate_expression(TemplateRenderContext *ctx, TemplateExpress
     }
 }
 
+ErrorOrInt call_macro(TemplateRenderContext *ctx, StringView name, JSONValue args, TemplateNode *contents)
+{
+    TemplateNode *macro = template_find_macro(ctx->template, name);
+    assert(macro != NULL);
+
+    for (size_t ix = 0; ix < macro->macro_def.parameters.size; ++ix) {
+        Parameter *param = da_element_Parameter(&macro->macro_def.parameters, ix);
+        StringView param_name = param->key;
+        OptionalJSONValue value_maybe = json_get_sv(&args, param_name);
+        if (!value_maybe.has_value) {
+            json_free(args);
+            ERROR(Int, TemplateError, 0, "Missing argument '%.*s' in call of macro '%.*s'", SV_ARG(param_name), SV_ARG(name));
+        }
+        if (value_maybe.value.type != param->value) {
+            json_free(args);
+            ERROR(Int, TemplateError, 0, "Type mismatch for parameter '%.*s' of macro '%.*s'", SV_ARG(param_name), SV_ARG(name));
+        }
+    }
+
+    TemplateRenderScope arg_scope = { args, ctx->scope };
+    TemplateRenderScope call_scope = { json_object(), &arg_scope };
+    json_set(&call_scope.scope, "$contents", json_integer((Integer) { U64, .u64 = (intptr_t) contents }));
+    ctx->scope = &call_scope;
+    TRY(Int, render_node(ctx, macro->contents));
+    ctx->scope = arg_scope.up;
+    json_free(call_scope.scope);
+    RETURN(Int, 0);
+}
+
 ErrorOrInt render_macro(TemplateRenderContext *ctx, TemplateNode *node)
 {
-    StringView    name = sv(&ctx->sb, node->macro_call.macro);
     TemplateNode *macro = template_find_macro(ctx->template, node->macro_call.macro);
     assert(macro != NULL);
 
-    TemplateRenderScope call_scope = { json_object(), ctx->scope };
-    JSONValue           varargs = { 0 };
-    StringView          param_name = { 0 };
+    JSONValue  args = json_object();
+    JSONValue  varargs = { 0 };
     for (size_t ix = 0; ix < macro->macro_def.parameters.size; ++ix) {
         Parameter *param = da_element_Parameter(&macro->macro_def.parameters, ix);
-        param_name = sv(&ctx->sb, param->key);
         JSONValue value = TRY_TO(JSONValue, Int, evaluate_expression(ctx, node->macro_call.arguments.elements[ix]));
         if (ix == macro->macro_def.parameters.size - 1 && param->value == JSON_TYPE_ARRAY && value.type != JSON_TYPE_ARRAY) {
             varargs = json_array();
             json_append(&varargs, value);
         } else {
-            if (value.type != param->value) {
-                ERROR(Int, TemplateError, 0, "Type mismatch for parameter '%.*s' of macro '%.*s'", SV_ARG(param_name), SV_ARG(name));
-            }
-            json_set_sv(&call_scope.scope, param_name, value);
+            json_set_sv(&args, param->key, value);
         }
     }
     if (varargs.type == JSON_TYPE_ARRAY) {
@@ -302,22 +376,19 @@ ErrorOrInt render_macro(TemplateRenderContext *ctx, TemplateNode *node)
             JSONValue value = TRY_TO(JSONValue, Int, evaluate_expression(ctx, node->macro_call.arguments.elements[ix]));
             json_append(&varargs, value);
         }
-        json_set_sv(&call_scope.scope, param_name, varargs);
+        json_set_sv(&args, macro->macro_def.parameters.elements[macro->macro_def.parameters.size-1].key, varargs);
     }
-
-    ctx->scope = &call_scope;
-    TRY(Int, render_node(ctx, macro->macro_def.contents));
-    ctx->scope = call_scope.up;
-    RETURN(Int, 0);
+    return call_macro(ctx, node->macro_call.macro, args, node->contents);
 }
 
 ErrorOrInt render_expr_node(TemplateRenderContext *ctx, TemplateNode *node)
 {
-    trace(CAT_TEMPLATE, "Rendering expression node");
     JSONValue  value = TRY_TO(JSONValue, Int, evaluate_expression(ctx, node->expr));
     StringView sv = json_to_string(value);
+    trace(CAT_TEMPLATE, "Rendering expression node '%.*s'", SV_ARG(sv));
     sb_append_sv(&ctx->output, sv);
     sv_free(sv);
+    json_free(value);
     RETURN(Int, 0);
 }
 
@@ -331,24 +402,34 @@ ErrorOrInt render_for_loop(TemplateRenderContext *ctx, TemplateNode *node)
     if (node->for_statement.variable2.length > 0 && value.type != JSON_TYPE_OBJECT) {
         ERROR(Int, TemplateError, 0, "Can only iterate over objects");
     }
-    StringView var = sv(&ctx->sb, node->for_statement.variable);
-    StringView var2 = sv(&ctx->sb, node->for_statement.variable2);
-    for (int ix = 0; ix < json_len(&value); ++ix) {
-        TemplateRenderScope loop_scope = { json_object(), ctx->scope };
+    StringView var = node->for_statement.variable;
+    StringView var2 = node->for_statement.variable2;
+    JSONValue loop_vars =  json_object();
+    TemplateRenderScope loop_scope = { loop_vars, ctx->scope };
+    if (node->for_statement.macro.length == 0) {
         ctx->scope = &loop_scope;
+    }
+    for (int ix = 0; ix < json_len(&value); ++ix) {
         if (var2.length == 0) {
             JSONValue loop_val = MUST_OPTIONAL(JSONValue, json_at(&value, ix));
-            json_set_sv(&loop_scope.scope, var, loop_val);
+            json_set_sv(&loop_vars, var, json_copy(loop_val));
         } else {
             JSONValue loop_vals = MUST_OPTIONAL(JSONValue, json_entry_at(&value, ix));
-            json_set_sv(&loop_scope.scope, var, MUST_OPTIONAL(JSONValue, json_at(&loop_vals, 0)));
-            json_set_sv(&loop_scope.scope, var2, MUST_OPTIONAL(JSONValue, json_at(&loop_vals, 1)));
+            json_set_sv(&loop_vars, var, json_copy(MUST_OPTIONAL(JSONValue, json_at(&loop_vals, 0))));
+            json_set_sv(&loop_vars, var2, json_copy(MUST_OPTIONAL(JSONValue, json_at(&loop_vals, 1))));
         }
-        TemplateRenderScope inner_scope = { json_object(), &loop_scope };
-        ctx->scope = &inner_scope;
-        TRY(Int, render_node(ctx, node->for_statement.contents));
-        ctx->scope = ctx->scope->up->up;
+
+        if (node->for_statement.macro.length == 0) {
+            TemplateRenderScope inner_scope = { json_object(), &loop_scope };
+            ctx->scope = &inner_scope;
+            TRY(Int, render_node(ctx, node->contents));
+            json_free(inner_scope.scope);
+            ctx->scope = &loop_scope;
+        } else {
+            TRY(Int, call_macro(ctx, node->for_statement.macro, loop_vars, node->contents));
+        }
     }
+    json_free(value);
     RETURN(Int, 0);
 }
 
@@ -364,6 +445,7 @@ ErrorOrInt render_if_statement(TemplateRenderContext *ctx, TemplateNode *node)
     ctx->scope = &block_scope;
     TemplateNode *branch = condition.boolean ? node->if_statement.true_branch : node->if_statement.false_branch;
     TRY(Int, render_node(ctx, branch));
+    json_free(block_scope.scope);
     ctx->scope = block_scope.up;
     RETURN(Int, 0);
 }
@@ -373,8 +455,9 @@ ErrorOrInt render_node(TemplateRenderContext *ctx, TemplateNode *node)
     while (node) {
         switch (node->kind) {
         case TNKText: {
-            trace(CAT_TEMPLATE, "Rendering text node");
-            sb_append_sv(&ctx->output, sv(&ctx->sb, node->text));
+            StringView s = sv(&ctx->sb, node->text);
+            trace(CAT_TEMPLATE, "Rendering text node '%.*s'", SV_ARG(s));
+            sb_append_sv(&ctx->output, s);
         } break;
         case TNKExpr:
             TRY(Int, render_expr_node(ctx, node));
@@ -392,9 +475,8 @@ ErrorOrInt render_node(TemplateRenderContext *ctx, TemplateNode *node)
             break;
         case TNKSetVariable: {
             JSONValue  value = TRY_TO(JSONValue, Int, evaluate_expression(ctx, node->set_statement.value));
-            StringView var = sv(&ctx->sb, node->for_statement.variable);
-            json_set_sv(&ctx->scope->scope, var, value);
-            trace(CAT_TEMPLATE, "Setting variable '%.*s' to '%.*s'", SV_ARG(var), SV_ARG(json_to_string(value)));
+            json_set_sv(&ctx->scope->scope, node->for_statement.variable, value);
+            trace(CAT_TEMPLATE, "Setting variable '%.*s' to '%.*s'", SV_ARG(node->for_statement.variable), SV_ARG(json_to_string(value)));
         } break;
         default:
             UNREACHABLE();
@@ -416,7 +498,44 @@ ErrorOrStringView template_render(Template template, JSONValue context)
     RETURN(StringView, ctx.output.view);
 }
 
-static ErrorOrJSONValue template_function_toupper(JSONValue args)
+static ErrorOrJSONValue template_function_render(TemplateRenderContext *ctx, JSONValue args)
+{
+    if (args.type != JSON_TYPE_ARRAY) {
+        ERROR(JSONValue, TemplateError, 0, "Arguments must be passed to template functions as arrays");
+    }
+    if (json_len(&args) != 1) {
+        ERROR(JSONValue, TemplateError, 0, "Template function render expects only a single argument");
+    }
+    JSONValue s = MUST_OPTIONAL(JSONValue, json_at(&args, 0));
+    if (s.type != JSON_TYPE_INT || s.int_number.type != U64) {
+        ERROR(JSONValue, TemplateError, 0, "Argument of template function render must be unsigned 64-bit integer");
+    }
+    TemplateNode *node = (TemplateNode *) s.int_number.u64;
+    TRY_TO(Int, JSONValue, render_node(ctx, node));
+    RETURN(JSONValue, json_null());
+}
+
+static ErrorOrJSONValue template_function_tolower(TemplateRenderContext *ctx, JSONValue args)
+{
+    if (args.type != JSON_TYPE_ARRAY) {
+        ERROR(JSONValue, TemplateError, 0, "Arguments must be passed to template functions as arrays");
+    }
+    if (json_len(&args) != 1) {
+        ERROR(JSONValue, TemplateError, 0, "Template function toupper expects only a single argument");
+    }
+    JSONValue s = MUST_OPTIONAL(JSONValue, json_at(&args, 0));
+    if (s.type != JSON_TYPE_STRING) {
+        ERROR(JSONValue, TemplateError, 0, "Argument of template function toupper must be string");
+    }
+    static StringBuilder sb;
+    sb.length = 0;
+    for (size_t ix = 0; ix < s.string.length; ++ix) {
+        sb_append_char(&sb, tolower(s.string.ptr[ix]));
+    }
+    RETURN(JSONValue, json_string(sb.view));
+}
+
+static ErrorOrJSONValue template_function_toupper(TemplateRenderContext *ctx, JSONValue args)
 {
     if (args.type != JSON_TYPE_ARRAY) {
         ERROR(JSONValue, TemplateError, 0, "Arguments must be passed to template functions as arrays");
