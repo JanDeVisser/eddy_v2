@@ -84,7 +84,7 @@ void json_encode_to_builder(JSONValue *value, JSONEncoder *encoder)
         sb_append_cstr(&encoder->sb, "null");
         break;
     default:
-        UNREACHABLE();
+        fatal("Invalid JSON type %d", value->type);
     }
 }
 
@@ -96,7 +96,7 @@ StringView json_to_string(JSONValue value)
         return json_encode(value);
     } break;
     case JSON_TYPE_STRING:
-        return value.string;
+        return sv_copy(value.string);
     case JSON_TYPE_DOUBLE:
         return sv_printf("%f", value.double_number);
         break;
@@ -175,7 +175,14 @@ void json_free(JSONValue value)
             sv_free(pair.name);
             json_free(pair.value);
         }
-        da_free_JSONValue(&value.object);
+        da_free_JSONNVPair(&value.object);
+    } break;
+    case JSON_TYPE_ARRAY: {
+        for (size_t ix = 0; ix < value.array.size; ++ix) {
+            JSONValue v = *(da_element_JSONValue(&value.array, ix));
+            json_free(v);
+        }
+        da_free_JSONValue(&value.array);
     } break;
     case JSON_TYPE_STRING:
         sv_free(value.string);
@@ -210,7 +217,14 @@ JSONValue json_copy(JSONValue value)
         ret.object = (JSONNVPairs) { 0 };
         for (size_t ix = 0; ix < value.object.size; ++ix) {
             JSONNVPair pair = *(da_element_JSONNVPair(&value.object, ix));
-            json_set(&ret, sv_cstr(pair.name), pair.value);
+            json_set(&ret, sv_cstr(pair.name), json_copy(pair.value));
+        }
+    } break;
+    case JSON_TYPE_ARRAY: {
+        ret.array = (JSONValues) { 0 };
+        for (size_t ix = 0; ix < value.array.size; ++ix) {
+            JSONValue v = *(da_element_JSONValue(&value.array, ix));
+            json_append(&ret, json_copy(v));
         }
     } break;
     case JSON_TYPE_STRING:
