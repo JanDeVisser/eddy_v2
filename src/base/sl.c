@@ -118,3 +118,13 @@ size_t sl_size(StringList *sl)
 {
     return (sl) ? sl->size : 0;
 }
+
+bool sl_has(StringList *sl, StringView sv)
+{
+    for (size_t ix = 0; ix < sl->size; ++ix) {
+        if (sv_eq(sl->strings[ix], sv)) {
+            return true;
+        }
+    }
+    return false;
+}

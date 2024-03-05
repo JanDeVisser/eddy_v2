@@ -50,6 +50,7 @@ typedef struct {
 
 OPTIONAL(StringRef);
 ERROR_OR(StringRef);
+ERROR_OR(OptionalStringRef);
 DA_WITH_NAME(StringRef, StringRefs);
 
 #define INTEGER_SIZES(S) S(8) S(16) S(32) S(64)
@@ -165,6 +166,7 @@ extern StringView  sl_front(StringList *sl);
 extern StringView  sl_back(StringList *sl);
 extern bool        sl_empty(StringList *sl);
 extern size_t      sl_size(StringList *sl);
+extern bool        sl_has(StringList *sl, StringView sv);
 
 extern StringScanner ss_create(StringView sv);
 extern void          ss_rewind(StringScanner *ss);
