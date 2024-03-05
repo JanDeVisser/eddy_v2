@@ -38,6 +38,8 @@ typedef enum {
 } ErrorCategory;
 
 typedef struct {
+    char         *file;
+    int           line;
     ErrorCategory cat;
     int           code;
     char         *message;
@@ -46,61 +48,61 @@ typedef struct {
 extern char const *ErrorCategory_name(ErrorCategory code);
 extern char const *Error_to_string(Error error);
 
-#define ERROR_OR_ALIAS(name, typ)                                                                                  \
-    typedef struct {                                                                                               \
-        typ   value;                                                                                               \
-        Error error;                                                                                               \
-    } ErrorOr##name;                                                                                               \
-                                                                                                                   \
-    inline static ErrorOr##name ErrorOr##name##_verror(ErrorCategory cat, int code, char const *msg, va_list args) \
-    {                                                                                                              \
-        ErrorOr##name ret = { 0 };                                                                                 \
-        ret.error.cat = cat;                                                                                       \
-        ret.error.code = code;                                                                                     \
-        size_t msg_len = vsnprintf(NULL, 0, msg, args) + 1;                                                        \
-        ret.error.message = (char *) mem_allocate(msg_len);                                                        \
-        vsnprintf(ret.error.message, msg_len, msg, args);                                                          \
-        return ret;                                                                                                \
-    }                                                                                                              \
-                                                                                                                   \
-    inline static ErrorOr##name ErrorOr##name##_error(ErrorCategory cat, int code, char const *msg, ...)           \
-    {                                                                                                              \
-        va_list args;                                                                                              \
-        va_start(args, msg);                                                                                       \
-        ErrorOr##name ret = ErrorOr##name##_verror(cat, code, msg, args);                                          \
-        va_end(args);                                                                                              \
-        return ret;                                                                                                \
-    }                                                                                                              \
-                                                                                                                   \
-    inline static ErrorOr##name ErrorOr##name##_copy(Error error)                                                  \
-    {                                                                                                              \
-        ErrorOr##name ret = { 0 };                                                                                 \
-        ret.error.cat = error.cat;                                                                                 \
-        ret.error.code = error.code;                                                                               \
-        ret.error.message = error.message;                                                                         \
-        return ret;                                                                                                \
-    }                                                                                                              \
-                                                                                                                   \
-    inline static ErrorOr##name ErrorOr##name##_return(typ value)                                                  \
-    {                                                                                                              \
-        ErrorOr##name ret = { 0 };                                                                                 \
-        ret.value = value;                                                                                         \
-        return ret;                                                                                                \
-    }                                                                                                              \
-                                                                                                                   \
-    inline static bool ErrorOr##name##_is_error(ErrorOr##name error_or)                                            \
-    {                                                                                                              \
-        return error_or.error.cat != NoError;                                                                      \
-    }                                                                                                              \
-                                                                                                                   \
-    inline static bool ErrorOr##name##_has_value(ErrorOr##name error_or)                                           \
-    {                                                                                                              \
-        return !ErrorOr##name##_is_error(error_or);                                                                \
+#define ERROR_OR_ALIAS(name, typ)                                                                                                        \
+    typedef struct {                                                                                                                     \
+        typ   value;                                                                                                                     \
+        Error error;                                                                                                                     \
+    } ErrorOr##name;                                                                                                                     \
+                                                                                                                                         \
+    inline static ErrorOr##name ErrorOr##name##_verror(char *file, int line, ErrorCategory cat, int code, char const *msg, va_list args) \
+    {                                                                                                                                    \
+        ErrorOr##name ret = { 0 };                                                                                                       \
+        ret.error.file = file;                                                                                                           \
+        ret.error.line = line;                                                                                                           \
+        ret.error.cat = cat;                                                                                                             \
+        ret.error.code = code;                                                                                                           \
+        size_t msg_len = vsnprintf(NULL, 0, msg, args) + 1;                                                                              \
+        ret.error.message = (char *) mem_allocate(msg_len);                                                                              \
+        vsnprintf(ret.error.message, msg_len, msg, args);                                                                                \
+        return ret;                                                                                                                      \
+    }                                                                                                                                    \
+                                                                                                                                         \
+    inline static ErrorOr##name ErrorOr##name##_error(char *file, int line, ErrorCategory cat, int code, char const *msg, ...)           \
+    {                                                                                                                                    \
+        va_list args;                                                                                                                    \
+        va_start(args, msg);                                                                                                             \
+        ErrorOr##name ret = ErrorOr##name##_verror(file, line, cat, code, msg, args);                                                    \
+        va_end(args);                                                                                                                    \
+        return ret;                                                                                                                      \
+    }                                                                                                                                    \
+                                                                                                                                         \
+    inline static ErrorOr##name ErrorOr##name##_copy(Error error)                                                                        \
+    {                                                                                                                                    \
+        ErrorOr##name ret = { 0 };                                                                                                       \
+        ret.error = error;                                                                                                               \
+        return ret;                                                                                                                      \
+    }                                                                                                                                    \
+                                                                                                                                         \
+    inline static ErrorOr##name ErrorOr##name##_return(typ value)                                                                        \
+    {                                                                                                                                    \
+        ErrorOr##name ret = { 0 };                                                                                                       \
+        ret.value = value;                                                                                                               \
+        return ret;                                                                                                                      \
+    }                                                                                                                                    \
+                                                                                                                                         \
+    inline static bool ErrorOr##name##_is_error(ErrorOr##name error_or)                                                                  \
+    {                                                                                                                                    \
+        return error_or.error.cat != NoError;                                                                                            \
+    }                                                                                                                                    \
+                                                                                                                                         \
+    inline static bool ErrorOr##name##_has_value(ErrorOr##name error_or)                                                                 \
+    {                                                                                                                                    \
+        return !ErrorOr##name##_is_error(error_or);                                                                                      \
     }
 
 #define RETURN(name, expr) return ErrorOr##name##_return((expr))
-#define ERROR(name, cat, code, msg, ...) return ErrorOr##name##_error(cat, code, msg __VA_OPT__(, ) __VA_ARGS__)
-#define VERROR(name, cat, code, msg, args) return ErrorOr##name##_verror(cat, code, msg, args)
+#define ERROR(name, cat, code, msg, ...) return ErrorOr##name##_error(__FILE_NAME__, __LINE__, cat, code, msg __VA_OPT__(, ) __VA_ARGS__)
+#define VERROR(name, cat, code, msg, args) return ErrorOr##name##_verror(__FILE_NAME__, __LINE__, cat, code, msg, args)
 
 #define MUST(name, expr)                                      \
     ({                                                        \
@@ -152,5 +154,6 @@ ERROR_OR_ALIAS(VoidPtr, void *);
 ERROR_OR_ALIAS(UInt64, uint64_t);
 ERROR_OR_ALIAS(Int, int);
 ERROR_OR_ALIAS(Size, size_t);
+ERROR_OR_ALIAS(Bool, bool);
 
 #endif /* __ERROR_OR_H__ */
