@@ -36,12 +36,14 @@ typedef enum {
 
 #define TPLKEYWORDS(S)            \
     S(Call, "call", NULL)         \
+    S(Case, "case", NULL)         \
     S(Close, ";", NULL)           \
     S(Else, "else", NULL)         \
     S(CloseBlock, "@", "@;")      \
     S(For, "for", NULL)           \
     S(If, "if", NULL)             \
     S(Macro, "macro", NULL)       \
+    S(Switch, "switch", NULL)     \
     S(StartExpression, "=", NULL) \
     S(Set, "set", NULL)
 
@@ -107,7 +109,8 @@ ERROR_OR(OptionalTplToken)
     S(IfStatement)           \
     S(MacroCall)             \
     S(MacroDef)              \
-    S(SetVariable)
+    S(SetVariable)           \
+    S(SwitchStatement)
 
 typedef enum {
 #undef KIND
@@ -211,6 +214,8 @@ ERROR_OR_ALIAS(TemplateExpression, TemplateExpression *)
 
 PAIR_WITH_NAME(StringView, JSONType, Parameter);
 
+DA_STRUCT_WITH_NAME(TemplateNode, struct template_node *, TemplateNodes);
+
 typedef struct template_node {
     TemplateNodeKind      kind;
     struct template_node *contents;
@@ -230,6 +235,7 @@ typedef struct template_node {
             struct template_node *false_branch;
         } if_statement;
         struct {
+            TemplateExpression *condition;
             StringView          macro;
             TemplateExpressions arguments;
         } macro_call;
@@ -241,6 +247,10 @@ typedef struct template_node {
             StringView          variable;
             TemplateExpression *value;
         } set_statement;
+        struct {
+            TemplateExpression   *expr;
+            struct template_node *cases;
+        } switch_statement;
     };
     struct template_node *next;
 } TemplateNode;

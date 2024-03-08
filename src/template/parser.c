@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "sv.h"
 #include <template/template.h>
 
 static ErrorOrTemplateExpression parse_expression_1(TemplateParserContext *ctx, TemplateExpression *lhs, int min_precedence);
@@ -112,7 +113,7 @@ ErrorOrTemplateExpression parse_expression_1(TemplateParserContext *ctx, Templat
     OptionalTplOperatorMapping op_maybe = TRY_TO(OptionalTplOperatorMapping, TemplateExpression,
         template_lexer_operator(ctx));
     while (op_maybe.has_value && op_maybe.value.binary_precedence >= min_precedence) {
-        TplOperatorMapping  op = op_maybe.value;
+        TplOperatorMapping op = op_maybe.value;
         trace(CAT_TEMPLATE, "parse_expression_1: binary operator %s prec %d >= %d", TplOperator_name(op.binary_op),
             op.binary_precedence, min_precedence);
         TemplateExpression *rhs = NULL;
@@ -158,7 +159,7 @@ ErrorOrTemplateExpression parse_expression_1(TemplateParserContext *ctx, Templat
 
 ErrorOrTemplateExpression parse_primary_expression(TemplateParserContext *ctx)
 {
-    TplToken token = TRY_TO(TplToken, TemplateExpression, template_lexer_next(ctx));
+    TplToken            token = TRY_TO(TplToken, TemplateExpression, template_lexer_next(ctx));
     TemplateExpression *ret = NULL;
     switch (token.type) {
     case TTTIdentifier: {
@@ -220,7 +221,7 @@ ErrorOrTemplateExpression parse_primary_expression(TemplateParserContext *ctx)
     RETURN(TemplateExpression, ret);
 }
 
-ErrorOrInt close_statement(TemplateParserContext *ctx, TemplateNode *node)
+ErrorOrInt close_statement(TemplateParserContext *ctx, TemplateNode *node, bool close_block_allowed)
 {
     TplToken t = TRY_TO(TplToken, Int, template_lexer_next(ctx));
     if (t.type != TTTKeyword) {
@@ -235,9 +236,13 @@ ErrorOrInt close_statement(TemplateParserContext *ctx, TemplateNode *node)
         TRY_TO(TplKeyword, Int, template_ctx_parse(ctx, TPLKWClose));
     } break;
     case TPLKWCloseBlock: {
-        *(ctx->current) = node;
-        node->contents = MALLOC(TemplateNode);
-    } break;
+        if (close_block_allowed) {
+            *(ctx->current) = node;
+            node->contents = MALLOC(TemplateNode);
+            break;
+        }
+        // Else fall through
+    }
     default: {
         StringView s = template_token_to_string(ctx, t);
         ERROR(Int, TemplateError, __LINE__, "Error parsing close of statement: Got '%.*s'", SV_ARG(s));
@@ -247,7 +252,7 @@ ErrorOrInt close_statement(TemplateParserContext *ctx, TemplateNode *node)
     RETURN(Int, 0);
 }
 
-ErrorOrInt parse_call(TemplateParserContext *ctx)
+ErrorOrInt parse_call(TemplateParserContext *ctx, TemplateExpression *expr)
 {
     StringView    name = TRY_TO(StringView, Int, template_lexer_require_identifier(ctx));
     TemplateNode *macro = template_find_macro(ctx->template, name);
@@ -257,6 +262,7 @@ ErrorOrInt parse_call(TemplateParserContext *ctx)
 
     TemplateNode *node = MALLOC(TemplateNode);
     node->kind = TNKMacroCall;
+    node->macro_call.condition = expr;
     node->macro_call.macro = name;
     for (size_t ix = 0; ix < macro->macro_def.parameters.size; ++ix) {
         TemplateExpression *arg = TRY_TO(TemplateExpression, Int, template_ctx_parse_expression(ctx));
@@ -265,7 +271,7 @@ ErrorOrInt parse_call(TemplateParserContext *ctx)
         }
         da_append_TemplateExpression(&node->macro_call.arguments, arg);
     }
-    TRY(Int, close_statement(ctx, node));
+    TRY(Int, close_statement(ctx, node, true));
     trace(CAT_TEMPLATE, "Created call node");
     RETURN(Int, 0);
 }
@@ -281,7 +287,7 @@ ErrorOrInt parse_for(TemplateParserContext *ctx)
     TemplateExpression *range = TRY_TO(TemplateExpression, Int, template_ctx_parse_expression(ctx));
 
     TemplateExpression *condition = NULL;
-    bool where = TRY_TO(Bool, Int, template_lexer_allow_sv(ctx, sv_from("where")));
+    bool                where = TRY_TO(Bool, Int, template_lexer_allow_sv(ctx, sv_from("where")));
     if (where) {
         condition = TRY_TO(TemplateExpression, Int, template_ctx_parse_expression(ctx));
     }
@@ -302,7 +308,7 @@ ErrorOrInt parse_for(TemplateParserContext *ctx)
     node->for_statement.range = range;
     node->for_statement.condition = condition;
     node->for_statement.macro = macro_name;
-    close_statement(ctx, node);
+    close_statement(ctx, node, true);
     trace(CAT_TEMPLATE, "Created for node");
     RETURN(Int, 0);
 }
@@ -380,7 +386,7 @@ ErrorOrInt parse_macro(TemplateParserContext *ctx)
 
     Macro macro = { node->macro_def.name, node };
     da_append_Macro(&ctx->template.macros, macro);
-    close_statement(ctx, node);
+    close_statement(ctx, node, true);
     trace(CAT_TEMPLATE, "Created macro definition");
     RETURN(Int, 0);
 }
@@ -416,6 +422,72 @@ ErrorOrInt parse_set(TemplateParserContext *ctx)
     RETURN(Int, 0);
 }
 
+ErrorOrInt parse_switch(TemplateParserContext *ctx)
+{
+    TemplateNode *node = MALLOC(TemplateNode);
+    node->kind = TNKSwitchStatement;
+
+    TplToken t = TRY_TO(TplToken, Int, template_lexer_next(ctx));
+    if (t.type != TTTKeyword) {
+        node->switch_statement.expr = TRY_TO(TemplateExpression, Int, template_ctx_parse_expression(ctx));
+        t = TRY_TO(TplToken, Int, template_lexer_next(ctx));
+    }
+    if (t.type != TTTKeyword) {
+        StringView s = template_token_to_string(ctx, t);
+        ERROR(Int, TemplateError, __LINE__, "Error parsing close of statement: Got '%.*s'", SV_ARG(s));
+    }
+    switch (t.keyword) {
+    case TPLKWClose: {
+        template_lexer_consume(ctx);
+        *(ctx->current) = node;
+        ctx->current = &node->switch_statement.cases;
+        while (true) {
+            TplToken   case_else = TRY_TO(TplToken, Int, template_lexer_next(ctx));
+            StringView s = template_token_to_string(ctx, t);
+            if (case_else.type != TTTKeyword) {
+                ERROR(Int, TemplateError, __LINE__, "Error parsing switch statement: Got '%.*s'", SV_ARG(s));
+            }
+            switch (case_else.keyword) {
+            case TPLKWClose: {
+                template_lexer_consume(ctx);
+                ctx->current = &node->next;
+                trace(CAT_TEMPLATE, "Created switch node");
+                RETURN(Int, 0);
+            }
+            case TPLKWCase:
+            case TPLKWElse: {
+                template_lexer_consume(ctx);
+                TemplateExpression *condition = NULL;
+                if (case_else.keyword == TPLKWCase) {
+                    condition = TRY_TO(TemplateExpression, Int, template_ctx_parse_expression(ctx));
+                    if (node->switch_statement.expr != NULL) {
+                        TemplateExpression *case_equals = MALLOC(TemplateExpression);
+                        case_equals->type = TETBinaryExpression;
+                        case_equals->binary.lhs = node->switch_statement.expr;
+                        case_equals->binary.op = BTOEquals;
+                        case_equals->binary.rhs = condition;
+                        condition = case_equals;
+                    }
+                }
+                TRY_TO(Bool, Int, template_lexer_allow_sv(ctx, sv_from("do")));
+                TRY(Int, parse_call(ctx, condition));
+            } break;
+            default: {
+                ERROR(Int, TemplateError, __LINE__, "Error parsing switch statement: Got '%.*s'", SV_ARG(s));
+            }
+            }
+        }
+    } break;
+    case TPLKWCloseBlock: {
+        ERROR(Int, TemplateError, __LINE__, "'switch' statements must have content");
+    }
+    default: {
+        StringView s = template_token_to_string(ctx, t);
+        ERROR(Int, TemplateError, __LINE__, "Error parsing switch statement: Got '%.*s'", SV_ARG(s));
+    }
+    }
+}
+
 ErrorOrTplKeyword template_ctx_parse_nodes(TemplateParserContext *ctx, ...)
 {
     va_list terminators;
@@ -439,7 +511,7 @@ ErrorOrTplKeyword template_ctx_parse_nodes(TemplateParserContext *ctx, ...)
             template_lexer_consume(ctx);
             switch (token.keyword) {
             case TPLKWCall:
-                TRY_TO(Int, TplKeyword, parse_call(ctx));
+                TRY_TO(Int, TplKeyword, parse_call(ctx, NULL));
                 break;
             case TPLKWFor:
                 TRY_TO(Int, TplKeyword, parse_for(ctx));
@@ -452,6 +524,9 @@ ErrorOrTplKeyword template_ctx_parse_nodes(TemplateParserContext *ctx, ...)
                 break;
             case TPLKWSet:
                 TRY_TO(Int, TplKeyword, parse_set(ctx));
+                break;
+            case TPLKWSwitch:
+                TRY_TO(Int, TplKeyword, parse_switch(ctx));
                 break;
             case TPLKWStartExpression: {
                 TemplateExpression *expr = TRY_TO(TemplateExpression, TplKeyword, template_ctx_parse_expression(ctx));

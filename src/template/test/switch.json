@@ -1,0 +1,26 @@
+{
+  "ctx": {
+    "message": "Hello, World!",
+    "range": [1, 2, 3, 4, 5],
+    "obj": {
+      "First": "Value",
+      "Second": "Thing"
+    },
+    "v1": 42,
+    "v2": 112,
+    "ref": "v2"
+  },
+  "template": [
+    "@macro odd x: int @ -- @= x @ is odd -- @;",
+    "@macro even x: int @ -- @= x @ is even -- @;",
+    "@for x in $.range@;",
+    "@switch x@;",
+    "@case 1 do odd x @@",
+    "@case 2 do even x @@",
+    "@case 3 do odd x @@",
+    "@case 4 do even x @@",
+    "@else do odd x @@",
+    "@;@;"
+  ],
+  "expected": " -- 1 is odd --  -- 2 is even --  -- 3 is odd --  -- 4 is even --  -- 5 is odd -- "
+}

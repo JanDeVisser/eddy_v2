@@ -4,9 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "error_or.h"
+#include "json.h"
 #include <ctype.h>
 
-#include <template.h>
+#include <template/template.h>
 
 typedef struct template_render_scope {
     JSONValue                     scope;
@@ -166,84 +168,32 @@ ErrorOrJSONValue evaluate_binary_expression(TemplateRenderContext *ctx, Template
         goto defer_rhs;
     }
     case BTOEquals: {
-        bool retval;
-        if (lhs.type == JSON_TYPE_INT || rhs.type == JSON_TYPE_INT) {
-            retval = json_int_value(lhs) == json_int_value(rhs);
-        } else if (lhs.type == JSON_TYPE_STRING || rhs.type == JSON_TYPE_STRING) {
-            retval = sv_eq(lhs.string, rhs.string);
-        } else if (lhs.type == JSON_TYPE_BOOLEAN || rhs.type == JSON_TYPE_BOOLEAN) {
-            retval = lhs.boolean == rhs.boolean;
-        } else {
-            ret = ErrorOrJSONValue_error(__FILE_NAME__, __LINE__, TemplateError, 0, "Can't compare your values yet");
-            goto defer_rhs;
-        }
+        bool retval = json_compare(lhs, rhs) == 0;
         ret = (ErrorOrJSONValue) { .error = { 0 }, .value = json_bool(retval) };
         goto defer_rhs;
     }
     case BTONotEquals: {
-        bool retval;
-        if (lhs.type == JSON_TYPE_INT || rhs.type == JSON_TYPE_INT) {
-            retval = json_int_value(lhs) != json_int_value(rhs);
-        } else if (lhs.type == JSON_TYPE_STRING || rhs.type == JSON_TYPE_STRING) {
-            retval = !sv_eq(lhs.string, rhs.string);
-        } else if (lhs.type == JSON_TYPE_BOOLEAN || rhs.type == JSON_TYPE_BOOLEAN) {
-            retval = lhs.boolean != rhs.boolean;
-        } else {
-            ret = ErrorOrJSONValue_error(__FILE_NAME__, __LINE__, TemplateError, 0, "Can't compare your values yet");
-            goto defer_rhs;
-        }
+        bool retval = json_compare(lhs, rhs) != 0;
         ret = (ErrorOrJSONValue) { .error = { 0 }, .value = json_bool(retval) };
         goto defer_rhs;
     }
     case BTOGreater: {
-        bool retval;
-        if (lhs.type == JSON_TYPE_INT || rhs.type == JSON_TYPE_INT) {
-            retval = json_int_value(lhs) > json_int_value(rhs);
-        } else if (lhs.type == JSON_TYPE_STRING || rhs.type == JSON_TYPE_STRING) {
-            retval = sv_cmp(lhs.string, rhs.string) > 0;
-        } else {
-            ret = ErrorOrJSONValue_error(__FILE_NAME__, __LINE__, TemplateError, 0, "Can't compare your values yet");
-            goto defer_rhs;
-        }
+        bool retval = json_compare(lhs, rhs) > 0;
         ret = (ErrorOrJSONValue) { .error = { 0 }, .value = json_bool(retval) };
         goto defer_rhs;
     }
     case BTOGreaterEquals: {
-        bool retval;
-        if (lhs.type == JSON_TYPE_INT || rhs.type == JSON_TYPE_INT) {
-            retval = json_int_value(lhs) >= json_int_value(rhs);
-        } else if (lhs.type == JSON_TYPE_STRING || rhs.type == JSON_TYPE_STRING) {
-            retval = sv_cmp(lhs.string, rhs.string) >= 0;
-        } else {
-            ret = ErrorOrJSONValue_error(__FILE_NAME__, __LINE__, TemplateError, 0, "Can't compare your values yet");
-            goto defer_rhs;
-        }
+        bool retval = json_compare(lhs, rhs) >= 0;
         ret = (ErrorOrJSONValue) { .error = { 0 }, .value = json_bool(retval) };
         goto defer_rhs;
     }
     case BTOLess: {
-        bool retval;
-        if (lhs.type == JSON_TYPE_INT || rhs.type == JSON_TYPE_INT) {
-            retval = json_int_value(lhs) < json_int_value(rhs);
-        } else if (lhs.type == JSON_TYPE_STRING || rhs.type == JSON_TYPE_STRING) {
-            retval = sv_cmp(lhs.string, rhs.string) < 0;
-        } else {
-            ret = ErrorOrJSONValue_error(__FILE_NAME__, __LINE__, TemplateError, 0, "Can't compare your values yet");
-            goto defer_rhs;
-        }
+        bool retval = json_compare(lhs, rhs) < 0;
         ret = (ErrorOrJSONValue) { .error = { 0 }, .value = json_bool(retval) };
         goto defer_rhs;
     }
     case BTOLessEquals: {
-        bool retval;
-        if (lhs.type == JSON_TYPE_INT || rhs.type == JSON_TYPE_INT) {
-            retval = json_int_value(lhs) <= json_int_value(rhs);
-        } else if (lhs.type == JSON_TYPE_STRING || rhs.type == JSON_TYPE_STRING) {
-            retval = sv_cmp(lhs.string, rhs.string) <= 0;
-        } else {
-            ret = ErrorOrJSONValue_error(__FILE_NAME__, __LINE__, TemplateError, 0, "Can't compare your values yet");
-            goto defer_rhs;
-        }
+        bool retval = json_compare(lhs, rhs) <= 0;
         ret = (ErrorOrJSONValue) { .error = { 0 }, .value = json_bool(retval) };
         goto defer_rhs;
     }
@@ -362,11 +312,21 @@ ErrorOrInt call_macro(TemplateRenderContext *ctx, StringView name, JSONValue arg
     TRY(Int, render_node(ctx, macro->contents));
     ctx->scope = arg_scope.up;
     json_free(call_scope.scope);
-    RETURN(Int, 0);
+    RETURN(Int, 1);
 }
 
 ErrorOrInt render_macro(TemplateRenderContext *ctx, TemplateNode *node)
 {
+    if (node->macro_call.condition != NULL) {
+        JSONValue condition = TRY_TO(JSONValue, Int, evaluate_expression(ctx, node->macro_call.condition));
+        if (condition.type != JSON_TYPE_BOOLEAN) {
+            ERROR(Int, TemplateError, 0, "call condition must be boolean");
+        }
+        if (!condition.boolean) {
+            RETURN(Int, 0);
+        }
+    }
+
     TemplateNode *macro = template_find_macro(ctx->template, node->macro_call.macro);
     assert(macro != NULL);
 
@@ -472,6 +432,19 @@ ErrorOrInt render_if_statement(TemplateRenderContext *ctx, TemplateNode *node)
     RETURN(Int, 0);
 }
 
+ErrorOrInt render_switch_statement(TemplateRenderContext *ctx, TemplateNode *node)
+{
+    trace(CAT_TEMPLATE, "Rendering switch statement");
+    for (TemplateNode *case_node = node->switch_statement.cases; case_node; case_node = case_node->next) {
+        // 0: skipped, 1: executed:
+        int executed = TRY(Int, render_macro(ctx, case_node));
+        if (executed) {
+            break;
+        }
+    }
+    RETURN(Int, 0);
+}
+
 ErrorOrInt render_node(TemplateRenderContext *ctx, TemplateNode *node)
 {
     while (node) {
@@ -504,6 +477,9 @@ ErrorOrInt render_node(TemplateRenderContext *ctx, TemplateNode *node)
             json_set_sv(scope, node->set_statement.variable, value);
             trace(CAT_TEMPLATE, "Setting variable '%.*s' to '%.*s'", SV_ARG(node->for_statement.variable), SV_ARG(json_to_string(value)));
         } break;
+        case TNKSwitchStatement:
+            TRY(Int, render_switch_statement(ctx, node));
+            break;
         default:
             UNREACHABLE();
         }

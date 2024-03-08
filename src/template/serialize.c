@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "json.h"
 #include <template/template.h>
 
 char const *TemplateNodeKind_name(TemplateNodeKind kind)
@@ -178,6 +179,9 @@ JSONValue template_node_serialize(Template tpl, TemplateNode *node)
         case TNKMacroCall: {
             JSONValue macro_call = json_object();
             json_set(&macro_call, "macro", json_string(node->macro_call.macro));
+            if (node->macro_call.condition != NULL) { 
+               json_set(&macro_call, "condition", template_expression_serialize(tpl, node->macro_call.condition));
+            }
             JSONValue args = json_array();
             for (size_t ix = 0; ix < node->macro_call.arguments.size; ++ix) {
                 json_append(&args, template_expression_serialize(tpl, node->macro_call.arguments.elements[ix]));
@@ -206,6 +210,16 @@ JSONValue template_node_serialize(Template tpl, TemplateNode *node)
             json_set(&set_var, "variable", json_string(node->set_statement.variable));
             json_set(&set_var, "value", template_expression_serialize(tpl, node->set_statement.value));
             json_set(&n, k, set_var);
+        } break;
+        case TNKSwitchStatement: {
+            JSONValue switch_stmt = json_object();
+            json_set(&switch_stmt, "expression", template_expression_serialize(tpl, node->switch_statement.expr));
+            JSONValue cases = json_array();
+            for (TemplateNode *case_node = node->switch_statement.cases; case_node; case_node = case_node->next) {
+                json_append(&cases, template_node_serialize(tpl, case_node));
+            }
+            json_set(&switch_stmt, "cases", cases);
+            json_set(&n, k, switch_stmt);
         } break;
         default:
             UNREACHABLE();
