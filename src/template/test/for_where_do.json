@@ -11,9 +11,8 @@
     "ref": "v2"
   },
   "template": [
-    "@set total 0 @",
-    "@for x in $.range @;@set total total + x @;@",
-    " -- @= total @ -- "
+    "@macro foo x: int @ -- @= x @ -- @",
+    "@for x in $.range where x % 2 == 0 do foo @@"
   ],
-  "expected": "\n -- 15 -- "
+  "expected": " -- 2 --  -- 4 -- "
 }

@@ -12,8 +12,8 @@
   },
   "template": [
     "@set total 0 @",
-    "@for x in $.range @;@set total total + x @;@",
-    " -- @= total @ -- "
+    "@for x in $.range where x % 2 == 0 @;@set total total + x @;@",
+    " -- @= total @ -- ",
   ],
-  "expected": "\n -- 15 -- "
+  "expected": "\n -- 6 -- "
 }

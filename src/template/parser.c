@@ -280,6 +280,12 @@ ErrorOrInt parse_for(TemplateParserContext *ctx)
     TRY_TO(Bool, Int, template_lexer_allow_sv(ctx, sv_from("in")));
     TemplateExpression *range = TRY_TO(TemplateExpression, Int, template_ctx_parse_expression(ctx));
 
+    TemplateExpression *condition = NULL;
+    bool where = TRY_TO(Bool, Int, template_lexer_allow_sv(ctx, sv_from("where")));
+    if (where) {
+        condition = TRY_TO(TemplateExpression, Int, template_ctx_parse_expression(ctx));
+    }
+
     StringView macro_name = { 0 };
     if (TRY_TO(Bool, Int, template_lexer_allow_sv(ctx, sv_from("do")))) {
         macro_name = TRY_TO(StringView, Int, template_lexer_require_identifier(ctx));
@@ -294,6 +300,7 @@ ErrorOrInt parse_for(TemplateParserContext *ctx)
     node->for_statement.variable = variable;
     node->for_statement.variable2 = variable2;
     node->for_statement.range = range;
+    node->for_statement.condition = condition;
     node->for_statement.macro = macro_name;
     close_statement(ctx, node);
     trace(CAT_TEMPLATE, "Created for node");

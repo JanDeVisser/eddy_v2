@@ -221,6 +221,7 @@ typedef struct template_node {
             StringView          variable;
             StringView          variable2;
             TemplateExpression *range;
+            TemplateExpression *condition;
             StringView          macro;
         } for_statement;
         struct {

@@ -416,9 +416,7 @@ ErrorOrInt render_for_loop(TemplateRenderContext *ctx, TemplateNode *node)
     StringView          var = node->for_statement.variable;
     StringView          var2 = node->for_statement.variable2;
     TemplateRenderScope loop_scope = { json_object(), ctx->scope };
-    if (node->for_statement.macro.length == 0) {
-        ctx->scope = &loop_scope;
-    }
+    ctx->scope = &loop_scope;
     for (int ix = 0; ix < json_len(&value); ++ix) {
         if (var2.length == 0) {
             JSONValue loop_val = MUST_OPTIONAL(JSONValue, json_at(&value, ix));
@@ -429,6 +427,17 @@ ErrorOrInt render_for_loop(TemplateRenderContext *ctx, TemplateNode *node)
             json_set_sv(&loop_scope.scope, var2, json_copy(MUST_OPTIONAL(JSONValue, json_at(&loop_vals, 1))));
         }
 
+        if (node->for_statement.condition != NULL) {
+            JSONValue include_value = TRY_TO(JSONValue, Int, evaluate_expression(ctx, node->for_statement.condition));
+            if (include_value.type != JSON_TYPE_BOOLEAN) {
+                json_free(value);
+                ERROR(Int, TemplateError, 0, "for loop condition must be boolean. '%.*s' is a %s", SV_ARG(json_to_string(include_value)), JSONType_name(include_value.type));
+            }
+            if (!include_value.boolean) {
+                continue;
+            }
+        }
+
         if (node->for_statement.macro.length == 0) {
             TemplateRenderScope inner_scope = { json_object(), &loop_scope };
             ctx->scope = &inner_scope;
@@ -436,12 +445,12 @@ ErrorOrInt render_for_loop(TemplateRenderContext *ctx, TemplateNode *node)
             json_free(inner_scope.scope);
             ctx->scope = &loop_scope;
         } else {
+            ctx->scope = ctx->scope->up;
             TRY(Int, call_macro(ctx, node->for_statement.macro, loop_scope.scope, node->contents));
+            ctx->scope = &loop_scope;
         }
     }
-    if (node->for_statement.macro.length == 0) {
-        ctx->scope = loop_scope.up;
-    }
+    ctx->scope = ctx->scope->up;
     json_free(value);
     RETURN(Int, 0);
 }
