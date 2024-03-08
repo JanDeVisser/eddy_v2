@@ -11,12 +11,12 @@
 #include <sv.h>
 
 #define JSONTYPES(S) \
-    S(NULL) \
-    S(OBJECT) \
-    S(ARRAY) \
-    S(STRING) \
-    S(INT) \
-    S(DOUBLE) \
+    S(NULL)          \
+    S(OBJECT)        \
+    S(ARRAY)         \
+    S(STRING)        \
+    S(INT)           \
+    S(DOUBLE)        \
     S(BOOLEAN)
 
 typedef enum {
@@ -51,7 +51,7 @@ DA_FUNCTIONS(JSONNVPair)
 OPTIONAL(JSONValue)
 ERROR_OR(JSONValue)
 
-extern const char *      JSONType_name(JSONType type);
+extern char const       *JSONType_name(JSONType type);
 extern JSONValue         json_object(void);
 extern JSONValue         json_array(void);
 extern JSONValue         json_null(void);
@@ -64,8 +64,12 @@ extern JSONValue         json_bool(bool value);
 extern void              json_free(JSONValue value);
 extern JSONValue         json_move(JSONValue *from);
 extern JSONValue         json_copy(JSONValue from);
+extern int               json_compare(JSONValue a, JSONValue b);
 extern void              json_append(JSONValue *array, JSONValue elem);
+extern void              json_add(JSONValue *array, JSONValue elem);
+extern OptionalInt       json_find(JSONValue *array, JSONValue elem);
 extern OptionalJSONValue json_at(JSONValue *array, size_t index);
+extern JSONValue        *json_at_ref(JSONValue *array, size_t index);
 extern size_t            json_len(JSONValue *array);
 extern void              json_set(JSONValue *value, char const *attr, JSONValue elem);
 extern void              json_optional_set(JSONValue *value, char const *attr, OptionalJSONValue elem);
@@ -77,6 +81,7 @@ extern void              json_set_sv(JSONValue *value, StringView attr, JSONValu
 extern OptionalJSONValue json_entry_at(JSONValue *value, int ix);
 extern OptionalJSONValue json_get(JSONValue *value, char const *attr);
 extern OptionalJSONValue json_get_sv(JSONValue *value, StringView attr);
+`extern JSONValue        *json_get_ref(JSONValue *value, StringView attr);
 extern JSONValue         json_get_default(JSONValue *value, char const *attr, JSONValue default_);
 extern bool              json_get_bool(JSONValue *value, char const *attr, bool default_);
 extern int               json_get_int(JSONValue *value, char const *attr, int default_);

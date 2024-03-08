@@ -11,6 +11,7 @@
 
 #include <errorcode.h>
 #include <log.h>
+#include <mem.h>
 #include <mutex.h>
 
 Mutex mutex_create(void)

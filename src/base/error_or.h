@@ -4,15 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 
+#ifndef __ERROR_OR_H__
+#define __ERROR_OR_H__
+
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 
 #include <log.h>
 #include <mem.h>
-
-#ifndef __ERROR_OR_H__
-#define __ERROR_OR_H__
 
 #define ERRORCATEGORIES(S) \
     S(NoError, 0)          \

@@ -236,10 +236,85 @@ JSONValue json_copy(JSONValue value)
     return ret;
 }
 
+int json_compare(JSONValue a, JSONValue b)
+{
+    if (a.type != b.type) {
+        return a.type - b.type;
+    }
+    switch (a.type) {
+    case JSON_TYPE_OBJECT: {
+        if (a.object.size != b.object.size) {
+            return a.object.size - b.object.size;
+        }
+        for (size_t ix = 0; ix < a.object.size; ++ix) {
+            JSONNVPair *ap = da_element_JSONNVPair(&a.object, ix);
+            JSONNVPair *bp = da_element_JSONNVPair(&b.object, ix);
+            int         cmp = sv_cmp(ap->name, bp->name);
+            if (cmp != 0) {
+                return cmp;
+            }
+            cmp = json_compare(ap->value, bp->value);
+            if (cmp != 0) {
+                return cmp;
+            }
+        }
+    } break;
+    case JSON_TYPE_ARRAY: {
+        if (a.array.size != b.array.size) {
+            return a.array.size - b.array.size;
+        }
+        for (size_t ix = 0; ix < a.array.size; ++ix) {
+            JSONValue *av = da_element_JSONValue(&a.array, ix);
+            JSONValue *bv = da_element_JSONValue(&b.array, ix);
+            int        cmp = json_compare(*av, *bv);
+            if (cmp != 0) {
+                return cmp;
+            }
+        }
+    } break;
+    case JSON_TYPE_STRING:
+        return sv_cmp(a.string, b.string);
+    case JSON_TYPE_INT: {
+        Integer cmp = integer_subtract(a.int_number, b.int_number);
+        Integer ret = MUST_OPTIONAL(Integer, integer_coerce_to(cmp, I32));
+        return ret.i32;
+    }
+    case JSON_TYPE_DOUBLE:
+        return (a.double_number > b.double_number) - (a.double_number < b.double_number);
+    case JSON_TYPE_BOOLEAN:
+        return a.boolean - b.boolean;
+    case JSON_TYPE_NULL:
+        return 0;
+    default:
+        UNREACHABLE();
+    }
+    return 0;
+}
+
 void json_append(JSONValue *array, JSONValue elem)
 {
     assert(array->type == JSON_TYPE_ARRAY);
     da_append_JSONValue(&array->array, elem);
+}
+
+void json_add(JSONValue *array, JSONValue elem)
+{
+    OptionalInt ix = json_find(array, elem);
+    if (!ix.has_value) {
+        json_append(array, elem);
+    }
+}
+
+OptionalInt json_find(JSONValue *array, JSONValue elem)
+{
+    assert(array->type == JSON_TYPE_ARRAY);
+    for (int ix = 0; ix < array->array.size; ++ix) {
+        JSONValue *v = da_element_JSONValue(&array->array, ix);
+        if (json_compare(*v, elem) == 0) {
+            RETURN_VALUE(Int, ix);
+        }
+    }
+    RETURN_EMPTY(Int);
 }
 
 OptionalJSONValue json_at(JSONValue *array, size_t index)
@@ -249,6 +324,15 @@ OptionalJSONValue json_at(JSONValue *array, size_t index)
         RETURN_VALUE(JSONValue, *da_element_JSONValue(&array->array, index));
     }
     RETURN_EMPTY(JSONValue);
+}
+
+JSONValue *json_at_ref(JSONValue *array, size_t index)
+{
+    assert(array->type == JSON_TYPE_ARRAY);
+    if (index < array->array.size) {
+        return da_element_JSONValue(&array->array, index);
+    }
+    return NULL;
 }
 
 size_t json_len(JSONValue *array)
@@ -377,6 +461,18 @@ OptionalJSONValue json_get_sv(JSONValue *value, StringView attr)
         }
     }
     RETURN_EMPTY(JSONValue);
+}
+
+JSONValue *json_get_ref(JSONValue *value, StringView attr)
+{
+    assert(value->type == JSON_TYPE_OBJECT);
+    for (size_t ix = 0; ix < value->object.size; ++ix) {
+        JSONNVPair const *pair = da_element_JSONNVPair(&value->object, ix);
+        if (sv_eq(pair->name, attr)) {
+            return (JSONValue *) &pair->value;
+        }
+    }
+    return NULL;
 }
 
 JSONValue json_get_default(JSONValue *value, char const *attr, JSONValue default_)

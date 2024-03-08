@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <pthread.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <unistd.h>
 
 #include <log.h>
 #include <options.h>
-#include <pthread.h>
 #include <sv.h>
 
 typedef enum log_level {
@@ -25,21 +25,33 @@ static void emit_log_message(LogLevel level, TraceCategory category, char const 
 
 static LogLevel log_level = LL_PANIC;
 
-static char const* trace_category_to_string(TraceCategory category)
+static char const *trace_category_to_string(TraceCategory category)
 {
-    switch(category) {
+    switch (category) {
 #undef TRACECATEGORY
-#define TRACECATEGORY(cat) case CAT_##cat: return #cat;
+#define TRACECATEGORY(cat) \
+    case CAT_##cat:        \
+        return #cat;
         TRACECATEGORIES(TRACECATEGORY)
-    #undef TRACECATEGORY
-        case CAT_COUNT: return "";
+#undef TRACECATEGORY
+    case CAT_COUNT:
+        return "";
     default:
         UNREACHABLE();
     }
 };
 
-
-
+TraceCategory trace_category_from_string(StringView category)
+{
+#undef S
+#define S(c)                                    \
+    if (sv_eq_ignore_case_cstr(category, #c)) { \
+        return CAT_##c;                             \
+    }
+    TRACECATEGORIES(S)
+#undef S
+    return CAT_NONE;
+}
 void emit_log_message(LogLevel level, TraceCategory category, char const *msg, ...)
 {
     va_list args;
@@ -71,6 +83,32 @@ void trace(TraceCategory category, char const *msg, ...)
 bool log_category_on(TraceCategory category)
 {
     return s_categories[(int) category];
+}
+
+void log_turn_on(TraceCategory category)
+{
+    s_categories[(int) category] = true;
+}
+
+void log_turn_off(TraceCategory category)
+{
+    s_categories[(int) category] = false;
+}
+
+void log_turn_on_sv(StringView category)
+{
+    TraceCategory cat = trace_category_from_string(category);
+    if (cat != CAT_NONE) {
+        log_turn_on(cat);
+    }
+}
+
+void log_turn_off_sv(StringView category)
+{
+    TraceCategory cat = trace_category_from_string(category);
+    if (cat != CAT_NONE) {
+        log_turn_off(cat);
+    }
 }
 
 void vtrace(char const *msg, va_list args)
@@ -114,9 +152,9 @@ void log_init()
             break;
         }
 #undef TRACECATEGORY
-#define TRACECATEGORY(c)                          \
+#define TRACECATEGORY(c)                                      \
     if (sv_eq_ignore_case_cstr(categories.strings[ix], #c)) { \
-        s_categories[CAT_##c] = true;             \
+        s_categories[CAT_##c] = true;                         \
     }
         TRACECATEGORIES(TRACECATEGORY)
 #undef TRACECATEGORY
