@@ -16,60 +16,67 @@ DA_IMPL_TYPE(TemplateExpression, TemplateExpression *);
 /*
  * Precedences according to https://en.cppreference.com/w/c/language/operator_precedence
  */
-static TemplateOperatorMapping s_operator_mapping[] = {
+static TplOperatorMapping s_operator_mapping[] = {
 #undef S
-#define S(TOKEN, STR, BINOP, BINPREC, UNOP, UNPREC) { TOT##TOKEN, STR, BINOP, BINPREC, UNOP, UNPREC },
-    TEMPLATEOPERATORTOKENS(S) { TOTCount, "X", InvalidOperator, -1, InvalidOperator, -1 },
+#define S(TOKEN, STR, BINOP, BINPREC, UNOP, UNPREC) { TO##TOKEN, STR, BINOP, BINPREC, UNOP, UNPREC },
+    TPLOPTOKENS(S) { TOCount, "X", InvalidOperator, -1, InvalidOperator, -1 },
+#undef S
+};
+
+static TplKeywordMapping s_keyword_mapping[] = {
+#undef S
+#define S(TOKEN, STR, ALT) { TPLKW##TOKEN, STR, ALT },
+    TPLKEYWORDS(S) { TPLKWCount, NULL, NULL },
 #undef S
 };
 
 #define IS_IDENTIFIER_START(ch) (isalpha(ch) || ch == '$' || ch == '_')
 #define IS_IDENTIFIER_CHAR(ch) (isalpha(ch) || isdigit(ch) || ch == '$' || ch == '_')
 
-char const *TemplateExpressionTokenType_name(TemplateExpressionTokenType type)
+char const *TplTokenType_name(TPLTokenType type)
 {
     switch (type) {
 #undef S
-#define S(T)      \
-    case TETT##T: \
+#define S(T)     \
+    case TTT##T: \
         return #T;
-        TEMPLATEEXPRESSIONTOKENTYPES(S)
+        TPLTOKENTYPES(S)
 #undef S
     default:
         UNREACHABLE();
     }
 }
 
-char const *TemplateOperatorToken_name(TemplateOperatorToken token)
+char const *TplOpToken_name(TplOpToken token)
 {
     switch (token) {
 #undef S
 #define S(TOKEN, STR, BINOP, BINPREC, UNOP, UNPREC) \
-    case TOT##TOKEN:                                \
+    case TO##TOKEN:                                 \
         return #TOKEN;
-        TEMPLATEOPERATORTOKENS(S)
+        TPLOPTOKENS(S)
 #undef S
     default:
         UNREACHABLE();
     }
 }
 
-StringView template_token_to_string(TemplateParserContext *ctx, TemplateExpressionToken token)
+StringView template_token_to_string(TemplateParserContext *ctx, TplToken token)
 {
     size_t current = ctx->sb.length;
-    sb_printf(&ctx->sb, "%s ", TemplateExpressionTokenType_name(token.type));
+    sb_printf(&ctx->sb, "%s ", TplTokenType_name(token.type));
     switch (token.type) {
-    case TETTSymbol:
+    case TTTSymbol:
         sb_printf(&ctx->sb, "'%c'", token.ch);
         break;
-    case TETTOperator:
-        sb_printf(&ctx->sb, "'%s'", TemplateOperatorToken_name(token.op));
+    case TTTOperator:
+        sb_printf(&ctx->sb, "'%s'", TplOpToken_name(token.op));
         break;
-    case TETTUnknown:
-    case TETTEndOfText:
+    case TTTUnknown:
+    case TTTEndOfText:
         break;
-    case TETTString:
-    case TETTComment: {
+    case TTTString:
+    case TTTComment: {
         StringView s = sv(&ctx->sb, token.text);
         sb_printf(&ctx->sb, "'%.*s'", SV_ARG(s));
     } break;
@@ -80,68 +87,77 @@ StringView template_token_to_string(TemplateParserContext *ctx, TemplateExpressi
     return (StringView) { ctx->sb.ptr + current, ctx->sb.length - current };
 }
 
-OptionalTemplateOperatorMapping template_operator_mapping(TemplateOperatorToken token)
+OptionalTplOperatorMapping template_operator_mapping(TplOpToken token)
 {
-    if (token < TOTCount) {
-        return OptionalTemplateOperatorMapping_create(s_operator_mapping[token]);
+    if (token < TOCount) {
+        return OptionalTplOperatorMapping_create(s_operator_mapping[token]);
     }
-    return OptionalTemplateOperatorMapping_empty();
+    return OptionalTplOperatorMapping_empty();
 }
 
 void template_lexer_consume(TemplateParserContext *ctx)
 {
-    if (ctx->token.type != TETTEndOfText) {
+    if (ctx->token.type != TTTEndOfText) {
         trace(CAT_TEMPLATE, "template_lexer_consume");
-        ctx->token = (TemplateExpressionToken) { 0 };
+        ctx->token = (TplToken) { 0 };
         return;
     }
     trace(CAT_TEMPLATE, "template_lexer_consume (ignored; EndOfText)");
 }
 
-ErrorOrTemplateExpressionToken template_lexer_peek(TemplateParserContext *ctx)
+ErrorOrTplToken template_lexer_peek(TemplateParserContext *ctx)
 {
-    if (ctx->token.type != TETTUnknown) {
+    if (ctx->token.type != TTTUnknown) {
         StringView token_string = template_token_to_string(ctx, ctx->token);
         trace(CAT_TEMPLATE, "template_lexer_next: %.*s (pending)", SV_ARG(token_string));
-        RETURN(TemplateExpressionToken, ctx->token);
+        RETURN(TplToken, ctx->token);
     }
 
-    StringScanner          *ss = &ctx->ss;
-    int                     ch = ss_peek(ss);
-    size_t                  current_index = ctx->sb.length;
-    TemplateExpressionToken token = { 0 };
-    StringView              s = sv_lchop(ss->string, ss->point);
+    StringScanner *ss = &ctx->ss;
+    int            ch = ss_peek(ss);
+    size_t         current_index = ctx->sb.length;
+    TplToken       token = { 0 };
+    StringView     s = sv_lchop(ss->string, ss->point);
 
     ss_reset(ss);
-    token.type = TETTUnknown;
+    token.type = TTTUnknown;
 
     if (!ch) {
-        token.type = TETTEndOfText;
+        token.type = TTTEndOfText;
     } else if (IS_IDENTIFIER_START(ch)) {
-        token.type = TETTIdentifier;
+        token.type = TTTIdentifier;
         for (ch = ss_peek(ss); IS_IDENTIFIER_CHAR(ch); ch = ss_peek(ss)) {
             ss_skip_one(ss);
         }
         s = ss_read_from_mark(ss);
         if (sv_eq_cstr(s, "true")) {
-            token.type = TETTTrue;
+            token.type = TTTTrue;
         } else if (sv_eq_cstr(s, "false")) {
-            token.type = TETTFalse;
+            token.type = TTTFalse;
         } else if (sv_eq_cstr(s, "null")) {
-            token.type = TETTNull;
+            token.type = TTTNull;
         }
     } else if (isdigit(ch)) {
-        token.type = TETTNumber;
+        token.type = TTTNumber;
         for (ch = ss_peek(ss); ch && isdigit(ch); ch = ss_peek(ss)) {
             ss_skip_one(ss);
         }
     } else if (isspace(ch)) {
-        token.type = TETTWhitespace;
+        token.type = TTTWhitespace;
         for (ch = ss_peek(ss); ch && isspace(ch); ch = ss_peek(ss)) {
             ss_skip_one(ss);
         }
+    } else if (ch == '\\') {
+        token.type = TTTSymbol;
+        ss_skip_one(ss);
+        ch = ss_peek(ss);
+        if (!ch) {
+            ERROR(TplToken, TemplateError, 0, "Unexpected end of input");
+        }
+        token.ch = ch;
+        ss_skip_one(ss);
     } else if (strchr("\"'`", ch) != NULL) {
-        token.type = TETTString;
+        token.type = TTTString;
         int quote = ch;
         ss_skip_one(ss);
         for (ch = ss_peek(ss); ch && ch != quote; ch = ss_peek(ss)) {
@@ -162,37 +178,40 @@ ErrorOrTemplateExpressionToken template_lexer_peek(TemplateParserContext *ctx)
         ss_skip_one(ss);
         ch = ss_peek(ss);
         switch (ch) {
-        case '%':
-            ss_skip_one(ss);
-            token.type = TETTStartOfStatement;
-            break;
-        case '=':
-            ss_skip_one(ss);
-            token.type = TETTStartOfExpression;
-            break;
         case '#':
-            token.type = TETTComment;
+            token.type = TTTComment;
             ss_skip_one(ss);
             while (!ss_expect_sv(ss, sv_from("#@"))) {
                 sb_append_char(&ctx->sb, ss_peek(ss));
                 ss_skip_one(ss);
             }
             break;
-        default:
-            token.type = TETTSymbol;
-            token.ch = ch;
-            break;
+        default: {
+            int        matched = -1;
+            StringView matched_kw = { 0 };
+            s = sv_lchop(ss->string, ss->point);
+            for (int ix = 0; ix < TPLKWCount; ++ix) {
+                StringView kw = sv_from(s_keyword_mapping[ix].string);
+                if (sv_startswith(s, kw)) {
+                    if (matched < 0 || sv_length(kw) > sv_length(matched_kw)) {
+                        matched = ix;
+                        matched_kw = kw;
+                    }
+                }
+            }
+            token.type = TTTKeyword;
+            if (matched >= 0) {
+                ss_skip(ss, matched_kw.length);
+                token.keyword = matched;
+            } else {
+                token.keyword = TPLKWClose;
+            }
+        } break;
         }
-    } else if (ss_expect_sv(ss, sv_from("=@"))) {
-        token.type = TETTEndOfExpression;
-    } else if (ss_expect_sv(ss, sv_from("%@"))) {
-        token.type = TETTEndOfStatement;
-    } else if (ss_expect_sv(ss, sv_from("/@"))) {
-        token.type = TETTEndOfStatementBlock;
     } else {
         int        matched = -1;
         StringView matched_op = { 0 };
-        for (int ix = 0; ix < TOTCount; ++ix) {
+        for (int ix = 0; ix < TOCount; ++ix) {
             StringView op = sv_from(s_operator_mapping[ix].string);
             if (sv_startswith(s, op)) {
                 if (matched < 0 || sv_length(op) > sv_length(matched_op)) {
@@ -203,10 +222,10 @@ ErrorOrTemplateExpressionToken template_lexer_peek(TemplateParserContext *ctx)
         }
         if (matched >= 0) {
             ss_skip(ss, matched_op.length);
-            token.type = TETTOperator;
+            token.type = TTTOperator;
             token.op = matched;
         } else {
-            token.type = TETTSymbol;
+            token.type = TTTSymbol;
             ss_skip_one(ss);
             token.ch = ch;
         }
@@ -216,55 +235,55 @@ ErrorOrTemplateExpressionToken template_lexer_peek(TemplateParserContext *ctx)
         token.text = (StringRef) { current_index, ctx->sb.length - current_index };
     }
     ctx->token = token;
-    assert(token.type != TETTUnknown);
+    assert(token.type != TTTUnknown);
 
     {
         StringView token_string = template_token_to_string(ctx, token);
         trace(CAT_TEMPLATE, "template_lexer_peek: %.*s", SV_ARG(token_string));
     }
-    RETURN(TemplateExpressionToken, token);
+    RETURN(TplToken, token);
 }
 
-ErrorOrTemplateExpressionToken template_lexer_next(TemplateParserContext *ctx)
+ErrorOrTplToken template_lexer_next(TemplateParserContext *ctx)
 {
-    TemplateExpressionToken token;
+    TplToken token;
     while (true) {
-        token = TRY(TemplateExpressionToken, template_lexer_peek(ctx));
-        if (token.type == TETTComment || token.type == TETTWhitespace) {
+        token = TRY(TplToken, template_lexer_peek(ctx));
+        if (token.type == TTTComment || token.type == TTTWhitespace) {
             template_lexer_consume(ctx);
             continue;
         }
         break;
     }
-    RETURN(TemplateExpressionToken, token);
+    RETURN(TplToken, token);
 }
 
-ErrorOrOptionalTemplateExpressionToken template_lexer_allow_type(TemplateParserContext *ctx, TemplateExpressionTokenType type)
+ErrorOrOptionalTplToken template_lexer_allow_type(TemplateParserContext *ctx, TPLTokenType type)
 {
-    TemplateExpressionToken token = TRY_TO(TemplateExpressionToken, OptionalTemplateExpressionToken, template_lexer_next(ctx));
-    StringView              t = template_token_to_string(ctx, token);
+    TplToken   token = TRY_TO(TplToken, OptionalTplToken, template_lexer_next(ctx));
+    StringView t = template_token_to_string(ctx, token);
     if (token.type != type) {
-        trace(CAT_TEMPLATE, "Looking for token type '%s', got '%.*s'", TemplateExpressionTokenType_name(type), SV_ARG(t));
-        RETURN(OptionalTemplateExpressionToken, OptionalTemplateExpressionToken_empty());
+        trace(CAT_TEMPLATE, "Looking for token type '%s', got '%.*s'", TplTokenType_name(type), SV_ARG(t));
+        RETURN(OptionalTplToken, OptionalTplToken_empty());
     }
     template_lexer_consume(ctx);
     trace(CAT_TEMPLATE, "Lexed token '%.*s'", SV_ARG(t));
-    RETURN(OptionalTemplateExpressionToken, OptionalTemplateExpressionToken_create(token));
+    RETURN(OptionalTplToken, OptionalTplToken_create(token));
 }
 
-ErrorOrTemplateExpressionToken template_lexer_require_type(TemplateParserContext *ctx, TemplateExpressionTokenType type)
+ErrorOrTplToken template_lexer_require_type(TemplateParserContext *ctx, TPLTokenType type)
 {
-    OptionalTemplateExpressionToken token_maybe = TRY_TO(OptionalTemplateExpressionToken, TemplateExpressionToken, template_lexer_allow_type(ctx, type));
+    OptionalTplToken token_maybe = TRY_TO(OptionalTplToken, TplToken, template_lexer_allow_type(ctx, type));
     if (!token_maybe.has_value) {
-        ERROR(TemplateExpressionToken, TemplateError, __LINE__, "Required token of type '%s'", TemplateExpressionTokenType_name(type));
+        ERROR(TplToken, TemplateError, __LINE__, "Required token of type '%s'", TplTokenType_name(type));
     }
-    RETURN(TemplateExpressionToken, token_maybe.value);
+    RETURN(TplToken, token_maybe.value);
 }
 
 ErrorOrOptionalStringView template_lexer_allow_identifier(TemplateParserContext *ctx)
 {
-    TemplateExpressionToken token = TRY_TO(TemplateExpressionToken, OptionalStringView, template_lexer_next(ctx));
-    if (token.type != TETTIdentifier) {
+    TplToken token = TRY_TO(TplToken, OptionalStringView, template_lexer_next(ctx));
+    if (token.type != TTTIdentifier) {
         StringView t = template_token_to_string(ctx, token);
         trace(CAT_TEMPLATE, "Looking for identifier, got '%.*s'", SV_ARG(t));
         RETURN(OptionalStringView, OptionalStringView_empty());
@@ -276,8 +295,8 @@ ErrorOrOptionalStringView template_lexer_allow_identifier(TemplateParserContext 
 
 ErrorOrBool template_lexer_allow_sv(TemplateParserContext *ctx, StringView string)
 {
-    TemplateExpressionToken token = TRY_TO(TemplateExpressionToken, Bool, template_lexer_next(ctx));
-    if (token.type != TETTIdentifier) {
+    TplToken token = TRY_TO(TplToken, Bool, template_lexer_next(ctx));
+    if (token.type != TTTIdentifier) {
         StringView t = template_token_to_string(ctx, token);
         trace(CAT_TEMPLATE, "Looking for '%.*s', got '%.*s'", SV_ARG(string), SV_ARG(t));
         RETURN(Bool, false);
@@ -302,9 +321,9 @@ ErrorOrStringView template_lexer_require_identifier(TemplateParserContext *ctx)
 
 ErrorOrBool template_lexer_allow_symbol(TemplateParserContext *ctx, int symbol)
 {
-    TemplateExpressionToken token = TRY_TO(TemplateExpressionToken, Bool, template_lexer_next(ctx));
-    if (token.type != TETTSymbol || token.ch != symbol) {
-        trace(CAT_TEMPLATE, "Looking for symbol '%c', got %s", symbol, TemplateExpressionTokenType_name(token.type));
+    TplToken token = TRY_TO(TplToken, Bool, template_lexer_next(ctx));
+    if (token.type != TTTSymbol || token.ch != symbol) {
+        trace(CAT_TEMPLATE, "Looking for symbol '%c', got %s", symbol, TplTokenType_name(token.type));
         RETURN(Bool, false);
     }
     template_lexer_consume(ctx);
@@ -321,25 +340,47 @@ ErrorOrBool template_lexer_require_symbol(TemplateParserContext *ctx, int symbol
     RETURN(Bool, true);
 }
 
-ErrorOrTemplateExpressionToken template_lexer_require_one_of(TemplateParserContext *ctx, char *symbols)
+ErrorOrTplToken template_lexer_require_one_of(TemplateParserContext *ctx, char *symbols)
 {
-    TemplateExpressionToken token = TRY(TemplateExpressionToken, template_lexer_require_type(ctx, TETTSymbol));
+    TplToken token = TRY(TplToken, template_lexer_require_type(ctx, TTTSymbol));
     if (strchr(symbols, token.ch) == NULL) {
-        ERROR(TemplateExpressionToken, TemplateError, __LINE__, "Required one of '%s'", symbols);
+        ERROR(TplToken, TemplateError, __LINE__, "Required one of '%s'", symbols);
     }
-    RETURN(TemplateExpressionToken, token);
+    RETURN(TplToken, token);
 }
 
-ErrorOrOptionalTemplateOperatorMapping template_lexer_operator(TemplateParserContext *ctx)
+ErrorOrBool template_lexer_allow_keyword(TemplateParserContext *ctx, TplKeyword keyword)
 {
-    TemplateExpressionToken lookahead = TRY_TO(TemplateExpressionToken, OptionalTemplateOperatorMapping, template_lexer_next(ctx));
+    TplToken token = TRY_TO(TplToken, Bool, template_lexer_next(ctx));
+    if (token.type != TTTKeyword || token.keyword != keyword) {
+        trace(CAT_TEMPLATE, "Looking for keyword '%s', got %s",
+            TplKeyword_name(keyword), TplTokenType_name(token.type));
+        RETURN(Bool, false);
+    }
+    template_lexer_consume(ctx);
+    trace(CAT_TEMPLATE, "Lexed keyword '%s'", TplKeyword_name(keyword));
+    RETURN(Bool, true);
+}
+
+ErrorOrBool template_lexer_require_keyword(TemplateParserContext *ctx, TplKeyword keyword)
+{
+    bool symbol_maybe = TRY(Bool, template_lexer_allow_keyword(ctx, keyword));
+    if (!symbol_maybe) {
+        ERROR(Bool, TemplateError, __LINE__, "Required keyword '%s'", TplKeyword_name(keyword));
+    }
+    RETURN(Bool, true);
+}
+
+ErrorOrOptionalTplOperatorMapping template_lexer_operator(TemplateParserContext *ctx)
+{
+    TplToken lookahead = TRY_TO(TplToken, OptionalTplOperatorMapping, template_lexer_next(ctx));
     switch (lookahead.type) {
-    case TETTOperator:
-        trace(CAT_TEMPLATE, "template_lexer_operator: %s", TemplateOperatorToken_name(lookahead.op));
-        RETURN(OptionalTemplateOperatorMapping, template_operator_mapping(lookahead.op));
+    case TTTOperator:
+        trace(CAT_TEMPLATE, "template_lexer_operator: %s", TplOpToken_name(lookahead.op));
+        RETURN(OptionalTplOperatorMapping, template_operator_mapping(lookahead.op));
     default:
         trace(CAT_TEMPLATE, "template_lexer_operator: empty");
-        RETURN(OptionalTemplateOperatorMapping,
-            OptionalTemplateOperatorMapping_empty());
+        RETURN(OptionalTplOperatorMapping,
+            OptionalTplOperatorMapping_empty());
     }
 }

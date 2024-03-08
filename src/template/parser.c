@@ -6,8 +6,73 @@
 
 #include <template/template.h>
 
-static ErrorOrTemplateExpression              parse_expression_1(TemplateParserContext *ctx, TemplateExpression *lhs, int min_precedence);
-static ErrorOrTemplateExpression              parse_primary_expression(TemplateParserContext *ctx);
+static ErrorOrTemplateExpression parse_expression_1(TemplateParserContext *ctx, TemplateExpression *lhs, int min_precedence);
+static ErrorOrTemplateExpression parse_primary_expression(TemplateParserContext *ctx);
+
+DA_IMPL(TplKeyword);
+
+StringView template_expression_to_string(Template tpl, TemplateExpression *expr)
+{
+    StringBuilder sb = { 0 };
+    switch (expr->type) {
+    case TETIdentifier:
+        sb_append_sv(&sb, expr->raw_text);
+        break;
+    case TETBinaryExpression: {
+        sb_append_char(&sb, '(');
+        StringView s = template_expression_to_string(tpl, expr->binary.lhs);
+        sb_append_sv(&sb, s);
+        sv_free(s);
+        sb_printf(&sb, " %s ", TplOperator_name(expr->binary.op));
+        s = template_expression_to_string(tpl, expr->binary.rhs);
+        sb_append_sv(&sb, s);
+        sv_free(s);
+        sb_append_char(&sb, ')');
+    } break;
+    case TETUnaryExpression: {
+        sb_printf(&sb, " %s ", TplOperator_name(expr->unary.op));
+        StringView s = template_expression_to_string(tpl, expr->unary.operand);
+        sb_append_sv(&sb, s);
+        sv_free(s);
+    } break;
+    case TETNumber:
+        sb_printf(&sb, "%d", expr->number);
+        break;
+    case TETString:
+        sb_append_sv(&sb, sv(&tpl.sb, expr->text));
+        break;
+    case TETBoolean:
+        sb_printf(&sb, "%s", expr->boolean ? "true" : "false");
+        break;
+    case TETNull:
+        sb_append_cstr(&sb, "(null)");
+        break;
+    case TETDereference: {
+        sb_append_char(&sb, '{');
+        StringView s = template_expression_to_string(tpl, expr->dereference);
+        sb_append_sv(&sb, s);
+        sv_free(s);
+        sb_append_char(&sb, '}');
+    } break;
+    case TETFunctionCall: {
+        StringView s = template_expression_to_string(tpl, expr->function_call.function);
+        sb_append_sv(&sb, s);
+        sb_append_char(&sb, '(');
+        for (size_t ix = 0; ix < expr->function_call.arguments.size; ++ix) {
+            if (ix > 0) {
+                sb_append_cstr(&sb, ", ");
+            }
+            s = template_expression_to_string(tpl, expr->function_call.arguments.elements[ix]);
+            sb_append_sv(&sb, s);
+            sv_free(s);
+        }
+        sb_append_char(&sb, ')');
+    } break;
+    default:
+        UNREACHABLE();
+    }
+    return sb.view;
+}
 
 /*
  * Precedence climbing method (https://en.wikipedia.org/wiki/Operator-precedence_parser):
@@ -38,43 +103,45 @@ ErrorOrTemplateExpression template_ctx_parse_expression(TemplateParserContext *c
         trace(CAT_TEMPLATE, "No primary expression");
         RETURN(TemplateExpression, NULL);
     }
-    trace(CAT_TEMPLATE, "Primary expression parsed; attempt to parse binary expr");
     return parse_expression_1(ctx, primary, 0);
 }
 
 ErrorOrTemplateExpression parse_expression_1(TemplateParserContext *ctx, TemplateExpression *lhs, int min_precedence)
 {
     trace(CAT_TEMPLATE, "parse_expression_1");
-    OptionalTemplateOperatorMapping op_maybe = TRY_TO(OptionalTemplateOperatorMapping, TemplateExpression,
+    OptionalTplOperatorMapping op_maybe = TRY_TO(OptionalTplOperatorMapping, TemplateExpression,
         template_lexer_operator(ctx));
     while (op_maybe.has_value && op_maybe.value.binary_precedence >= min_precedence) {
-        TemplateOperatorMapping op = op_maybe.value;
-        TemplateExpression     *rhs = NULL;
-        int                     prec = op.binary_precedence;
+        TplOperatorMapping  op = op_maybe.value;
+        trace(CAT_TEMPLATE, "parse_expression_1: binary operator %s prec %d >= %d", TplOperator_name(op.binary_op),
+            op.binary_precedence, min_precedence);
+        TemplateExpression *rhs = NULL;
+        int                 prec = op.binary_precedence;
         template_lexer_consume(ctx);
         if (op.binary_op == BTOCall) {
             TemplateExpression *expr = MALLOC(TemplateExpression);
             expr->type = TETFunctionCall;
             expr->function_call.function = lhs;
-            TemplateExpressionToken t;
+            TplToken t;
             do {
                 TemplateExpression *arg = TRY(TemplateExpression, template_ctx_parse_expression(ctx));
                 if (arg) {
                     da_append_TemplateExpression(&expr->function_call.arguments, arg);
                 }
-                t = TRY_TO(TemplateExpressionToken, TemplateExpression, template_lexer_require_one_of(ctx, ",)"));
-            } while (t.type != TETTSymbol || t.ch != ')');
+                t = TRY_TO(TplToken, TemplateExpression, template_lexer_require_one_of(ctx, ",)"));
+            } while (t.type != TTTSymbol || t.ch != ')');
             template_lexer_consume(ctx);
             lhs = expr;
-            op_maybe = TRY_TO(OptionalTemplateOperatorMapping, TemplateExpression, template_lexer_operator(ctx));
+            op_maybe = TRY_TO(OptionalTplOperatorMapping, TemplateExpression, template_lexer_operator(ctx));
             continue;
         }
         rhs = TRY(TemplateExpression, parse_primary_expression(ctx));
-        op_maybe = TRY_TO(OptionalTemplateOperatorMapping, TemplateExpression, template_lexer_operator(ctx));
+        op_maybe = TRY_TO(OptionalTplOperatorMapping, TemplateExpression, template_lexer_operator(ctx));
         while (op_maybe.has_value && op_maybe.value.binary_precedence > prec) {
-            template_lexer_consume(ctx);
+            trace(CAT_TEMPLATE, "parse_expression_1: binary operator %s prec %d > %d - recursing",
+                TplOperator_name(op_maybe.value.binary_op), op_maybe.value.binary_precedence, prec);
             rhs = TRY(TemplateExpression, parse_expression_1(ctx, rhs, prec + 1));
-            op_maybe = TRY_TO(OptionalTemplateOperatorMapping, TemplateExpression, template_lexer_operator(ctx));
+            op_maybe = TRY_TO(OptionalTplOperatorMapping, TemplateExpression, template_lexer_operator(ctx));
         }
         TemplateExpression *expr = MALLOC(TemplateExpression);
         expr->type = TETBinaryExpression;
@@ -83,83 +150,91 @@ ErrorOrTemplateExpression parse_expression_1(TemplateParserContext *ctx, Templat
         expr->binary.op = op.binary_op;
         lhs = expr;
     }
+    StringView s = template_expression_to_string(ctx->template, lhs);
+    trace(CAT_TEMPLATE, "parse_expression_1: returning %.*s", SV_ARG(s));
+    sv_free(s);
     RETURN(TemplateExpression, lhs);
 }
 
 ErrorOrTemplateExpression parse_primary_expression(TemplateParserContext *ctx)
 {
-    TemplateExpressionToken token = TRY_TO(TemplateExpressionToken, TemplateExpression, template_lexer_next(ctx));
+    TplToken token = TRY_TO(TplToken, TemplateExpression, template_lexer_next(ctx));
+    TemplateExpression *ret = NULL;
     switch (token.type) {
-    case TETTIdentifier: {
+    case TTTIdentifier: {
         template_lexer_consume(ctx);
-        TemplateExpression *var = MALLOC(TemplateExpression);
-        var->type = TETIdentifier;
-        var->raw_text = token.raw_text;
-        RETURN(TemplateExpression, var);
-    }
-    case TETTNumber: {
+        ret = MALLOC(TemplateExpression);
+        ret->type = TETIdentifier;
+        ret->raw_text = token.raw_text;
+    } break;
+    case TTTNumber: {
         template_lexer_consume(ctx);
-        TemplateExpression *ret = MALLOC(TemplateExpression);
-        ret->type = TETNumber;
         IntegerParseResult parse_result = sv_parse_i32(token.raw_text);
         assert(parse_result.success);
+        ret = MALLOC(TemplateExpression);
+        ret->type = TETNumber;
         ret->number = parse_result.integer.i32;
-        RETURN(TemplateExpression, ret);
-    }
-    case TETTString: {
+    } break;
+    case TTTString: {
         template_lexer_consume(ctx);
-        TemplateExpression *ret = MALLOC(TemplateExpression);
+        ret = MALLOC(TemplateExpression);
         ret->type = TETString;
         ret->text = token.text;
-        RETURN(TemplateExpression, ret);
-    }
-    case TETTTrue:
-    case TETTFalse: {
+    } break;
+    case TTTTrue:
+    case TTTFalse: {
         template_lexer_consume(ctx);
-        TemplateExpression *ret = MALLOC(TemplateExpression);
+        ret = MALLOC(TemplateExpression);
         ret->type = TETBoolean;
-        ret->boolean = token.type == TETTTrue;
-        RETURN(TemplateExpression, ret);
-    }
-    case TETTNull: {
+        ret->boolean = token.type == TTTTrue;
+    } break;
+    case TTTNull: {
         template_lexer_consume(ctx);
-        TemplateExpression *ret = MALLOC(TemplateExpression);
+        ret = MALLOC(TemplateExpression);
         ret->type = TETNull;
-        RETURN(TemplateExpression, ret);
-    }
-    case TETTOperator: {
+    } break;
+    case TTTOperator: {
         template_lexer_consume(ctx);
-        TemplateOperatorMapping op = MUST_OPTIONAL(TemplateOperatorMapping, template_operator_mapping(token.op));
+        TplOperatorMapping op = MUST_OPTIONAL(TplOperatorMapping, template_operator_mapping(token.op));
         assert(op.token == token.op);
         if (op.unary_op == InvalidOperator) {
             ERROR(TemplateExpression, TemplateError, __LINE__, "'%s' cannot be used as a unary operator", op.string);
         }
-        TemplateExpression *ret = MALLOC(TemplateExpression);
+        ret = MALLOC(TemplateExpression);
         ret->type = TETUnaryExpression;
         ret->unary.op = op.unary_op;
         ret->unary.operand = TRY(TemplateExpression, template_ctx_parse_expression(ctx));
-        if (op.token == TOTOpenCurly) {
+        if (op.token == TOOpenCurly) {
             TRY_TO(Bool, TemplateExpression, template_lexer_require_symbol(ctx, '}'));
+        } else if (op.token == TOOpenParen) {
+            TRY_TO(Bool, TemplateExpression, template_lexer_require_symbol(ctx, ')'));
         }
-        RETURN(TemplateExpression, ret);
-    }
+    } break;
     default:
+        trace(CAT_TEMPLATE, "parse_primary_expression: not a primary expression");
         RETURN(TemplateExpression, NULL);
     }
+    StringView s = template_expression_to_string(ctx->template, ret);
+    trace(CAT_TEMPLATE, "parse_primary_expression: returning %.*s", SV_ARG(s));
+    sv_free(s);
+    RETURN(TemplateExpression, ret);
 }
 
 ErrorOrInt close_statement(TemplateParserContext *ctx, TemplateNode *node)
 {
-    TemplateExpressionToken t = TRY_TO(TemplateExpressionToken, Int, template_lexer_next(ctx));
-    switch (t.type) {
-    case TETTEndOfStatement: {
-        template_lexer_consume(ctx);
+    TplToken t = TRY_TO(TplToken, Int, template_lexer_next(ctx));
+    if (t.type != TTTKeyword) {
+        StringView s = template_token_to_string(ctx, t);
+        ERROR(Int, TemplateError, __LINE__, "Error parsing close of statement: Got '%.*s'", SV_ARG(s));
+    }
+    template_lexer_consume(ctx);
+    switch (t.keyword) {
+    case TPLKWClose: {
         *(ctx->current) = node;
         ctx->current = &node->contents;
-        TRY_TO(StringView, Int, template_ctx_parse(ctx, "end"));
+        TRY_TO(TplKeyword, Int, template_ctx_parse(ctx, TPLKWClose));
     } break;
-    case TETTEndOfStatementBlock: {
-        template_lexer_consume(ctx);
+    case TPLKWCloseBlock: {
         *(ctx->current) = node;
         node->contents = MALLOC(TemplateNode);
     } break;
@@ -233,19 +308,23 @@ ErrorOrInt parse_if(TemplateParserContext *ctx)
     node->kind = TNKIfStatement;
     node->if_statement.condition = condition;
 
-    TemplateExpressionToken t = TRY_TO(TemplateExpressionToken, Int, template_lexer_next(ctx));
-    switch (t.type) {
-    case TETTEndOfStatement: {
+    TplToken t = TRY_TO(TplToken, Int, template_lexer_next(ctx));
+    if (t.type != TTTKeyword) {
+        StringView s = template_token_to_string(ctx, t);
+        ERROR(Int, TemplateError, __LINE__, "Error parsing close of statement: Got '%.*s'", SV_ARG(s));
+    }
+    switch (t.keyword) {
+    case TPLKWClose: {
         template_lexer_consume(ctx);
         *(ctx->current) = node;
         ctx->current = &node->if_statement.true_branch;
-        StringView terminated_by = TRY_TO(StringView, Int, template_ctx_parse(ctx, "else", "end"));
-        if (sv_eq_cstr(terminated_by, "else")) {
+        TplKeyword terminated_by = TRY_TO(TplKeyword, Int, template_ctx_parse(ctx, TPLKWClose, TPLKWElse));
+        if (terminated_by == TPLKWElse) {
             ctx->current = &node->if_statement.false_branch;
-            TRY_TO(StringView, Int, template_ctx_parse(ctx, "end"));
+            TRY_TO(TplKeyword, Int, template_ctx_parse(ctx, TPLKWClose));
         }
     } break;
-    case TETTEndOfStatementBlock: {
+    case TPLKWCloseBlock: {
         ERROR(Int, TemplateError, __LINE__, "'if' statements must have content");
     }
     default: {
@@ -308,86 +387,105 @@ ErrorOrInt parse_set(TemplateParserContext *ctx)
     node->kind = TNKSetVariable;
     node->set_statement.variable = variable;
     node->set_statement.value = value;
-    close_statement(ctx, node);
-
+    TplToken t = TRY_TO(TplToken, Int, template_lexer_next(ctx));
+    if (t.type != TTTKeyword) {
+        StringView s = template_token_to_string(ctx, t);
+        ERROR(Int, TemplateError, __LINE__, "Error parsing close of statement: Got '%.*s'", SV_ARG(s));
+    }
+    template_lexer_consume(ctx);
+    switch (t.keyword) {
+    case TPLKWCloseBlock:
+    case TPLKWClose: {
+        *(ctx->current) = node;
+        node->contents = MALLOC(TemplateNode);
+    } break;
+    default: {
+        StringView s = template_token_to_string(ctx, t);
+        ERROR(Int, TemplateError, __LINE__, "Error parsing close of statement: Got '%.*s'", SV_ARG(s));
+    }
+    }
     ctx->current = &node->next;
     trace(CAT_TEMPLATE, "Created set node");
     RETURN(Int, 0);
 }
 
-ErrorOrStringView template_ctx_parse_nodes(TemplateParserContext *ctx, ...)
+ErrorOrTplKeyword template_ctx_parse_nodes(TemplateParserContext *ctx, ...)
 {
-    va_list        terminators;
+    va_list terminators;
     va_start(terminators, ctx);
-    StringList terminator_list = { 0 };
-    for (char *t = va_arg(terminators, char *); t != NULL; t = va_arg(terminators, char *)) {
-        sl_push(&terminator_list, sv_from(t));
+    TplKeywords terminator_list = { 0 };
+    for (TplKeyword kw = va_arg(terminators, TplKeyword); kw != TPLKWCount; kw = va_arg(terminators, TplKeyword)) {
+        da_append_TplKeyword(&terminator_list, kw);
     }
     while (true) {
-        TemplateExpressionToken token = TRY_TO(TemplateExpressionToken, StringView, template_lexer_peek(ctx));
+        TplToken token = TRY_TO(TplToken, TplKeyword, template_lexer_peek(ctx));
         switch (token.type) {
-        case TETTComment:
+        case TTTComment:
             break;
-        case TETTEndOfText: {
-            if (sl_empty(&terminator_list)) {
-                RETURN(StringView, sv_null());
+        case TTTEndOfText: {
+            if (terminator_list.size == 0) {
+                RETURN(TplKeyword, TPLKWCount);
             }
-            StringView terminators_str = sl_join(&terminator_list, sv_from(", "));
-            ERROR(StringView, TemplateError, __LINE__, "Expected one of '%.*s' block terminators", SV_ARG(terminators_str));
+            ERROR(TplKeyword, TemplateError, __LINE__, "Expected block terminator");
         }
-        case TETTStartOfStatement: {
+        case TTTKeyword: {
             template_lexer_consume(ctx);
-            StringView stmt = TRY(StringView, template_lexer_require_identifier(ctx));
-            if (!sl_empty(&terminator_list) && sl_has(&terminator_list, stmt)) {
-                TRY_TO(TemplateExpressionToken, StringView, template_lexer_require_type(ctx, TETTEndOfStatement));
-                RETURN(StringView, stmt);
+            switch (token.keyword) {
+            case TPLKWCall:
+                TRY_TO(Int, TplKeyword, parse_call(ctx));
+                break;
+            case TPLKWFor:
+                TRY_TO(Int, TplKeyword, parse_for(ctx));
+                break;
+            case TPLKWIf:
+                TRY_TO(Int, TplKeyword, parse_if(ctx));
+                break;
+            case TPLKWMacro:
+                TRY_TO(Int, TplKeyword, parse_macro(ctx));
+                break;
+            case TPLKWSet:
+                TRY_TO(Int, TplKeyword, parse_set(ctx));
+                break;
+            case TPLKWStartExpression: {
+                TemplateExpression *expr = TRY_TO(TemplateExpression, TplKeyword, template_ctx_parse_expression(ctx));
+                TRY_TO(Bool, TplKeyword, template_lexer_require_keyword(ctx, TPLKWClose));
+                TemplateNode *node = MALLOC(TemplateNode);
+                node->kind = TNKExpr;
+                node->expr = expr;
+                trace(CAT_TEMPLATE, "Created expression node");
+                *(ctx->current) = node;
+                ctx->current = &(*ctx->current)->next;
+            } break;
+            default:
+                for (size_t ix = 0; ix < terminator_list.size; ++ix) {
+                    if (token.keyword == terminator_list.elements[ix]) {
+                        RETURN(TplKeyword, token.keyword);
+                    }
+                }
+                ERROR(TplKeyword, TemplateError, __LINE__, "Unhandled keyword '%s'", TplKeyword_name(token.keyword));
             }
-            if (sv_eq_cstr(stmt, "call")) {
-                TRY_TO(Int, StringView, parse_call(ctx));
-            } else if (sv_eq_cstr(stmt, "for")) {
-                TRY_TO(Int, StringView, parse_for(ctx));
-            } else if (sv_eq_cstr(stmt, "if")) {
-                TRY_TO(Int, StringView, parse_if(ctx));
-            } else if (sv_eq_cstr(stmt, "macro")) {
-                TRY_TO(Int, StringView, parse_macro(ctx));
-            } else if (sv_eq_cstr(stmt, "set")) {
-                TRY_TO(Int, StringView, parse_set(ctx));
-            } else {
-                ERROR(StringView, TemplateError, __LINE__, "Unknown statement '%.*s'", SV_ARG(stmt));
-            }
-        } break;
-        case TETTStartOfExpression: {
-            template_lexer_consume(ctx);
-            TemplateExpression     *expr = TRY_TO(TemplateExpression, StringView, template_ctx_parse_expression(ctx));
-            TRY_TO(TemplateExpressionToken, StringView, template_lexer_require_type(ctx, TETTEndOfExpression));
-            TemplateNode *node = MALLOC(TemplateNode);
-            node->kind = TNKExpr;
-            node->expr = expr;
-            trace(CAT_TEMPLATE, "Created expression node");
-            *(ctx->current) = node;
-            ctx->current = &(*ctx->current)->next;
         } break;
         default: {
-            StringBuilder sb = {0};
-            while (token.type != TETTStartOfExpression && token.type != TETTStartOfStatement && token.type != TETTEndOfText) {
+            StringBuilder sb = { 0 };
+            while (token.type != TTTKeyword && token.type != TTTEndOfText) {
                 switch (token.type) {
-                case TETTComment:
+                case TTTComment:
                     break;
-                case TETTSymbol:
+                case TTTSymbol:
                     sb_append_char(&sb, token.ch);
                     break;
-                case TETTString:
+                case TTTString:
                     sb_append_sv(&sb, sv(&ctx->sb, token.text));
                     break;
-                case TETTWhitespace:
+                case TTTWhitespace:
                     if (!sv_eq_cstr(token.raw_text, "\n") || sb.length > 0)
                         // Fall through!
-                default:
-                    sb_append_sv(&sb, token.raw_text);
+                    default:
+                        sb_append_sv(&sb, token.raw_text);
                     break;
                 }
                 template_lexer_consume(ctx);
-                token = TRY_TO(TemplateExpressionToken, StringView, template_lexer_peek(ctx));
+                token = TRY_TO(TplToken, TplKeyword, template_lexer_peek(ctx));
             }
 
             TemplateNode *node = MALLOC(TemplateNode);
@@ -408,6 +506,6 @@ ErrorOrTemplate template_parse(StringView template)
     ctx.template.text = template;
     ctx.ss = ss_create(template);
     ctx.current = &ctx.template.node;
-    TRY_TO(StringView, Template, template_ctx_parse(&ctx));
+    TRY_TO(TplKeyword, Template, template_ctx_parse(&ctx));
     RETURN(Template, ctx.template);
 }

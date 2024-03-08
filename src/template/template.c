@@ -30,21 +30,9 @@ ErrorOrStringView render_template(StringView template_text, JSONValue context)
     return template_render(template, context);
 }
 
-#ifdef TEMPLATE_RENDER
-
-int main(int argc, char **argv)
+ErrorOrSize render_template_file(StringView template_filename, JSONValue context, StringView output_filename)
 {
-    log_init();
-    if (argc != 3) {
-        printf("Usage: render <template file> <json file>\n");
-        exit(1);
-    }
-    StringView template = MUST(StringView, read_file_by_name(sv_from(argv[1])));
-    StringView json = MUST(StringView, read_file_by_name(sv_from(argv[2])));
-    JSONValue  context = MUST(JSONValue, json_decode(json));
-    StringView rendered = MUST(StringView, render_template(template, context));
-    printf("%.*s\n", SV_ARG(rendered));
-    return 0;
+    StringView template_text = TRY_TO(StringView, Size, read_file_by_name(template_filename));
+    StringView rendered = TRY_TO(StringView, Size, render_template(template_text, context));
+    return write_file_by_name(output_filename, rendered);
 }
-
-#endif /* TEMPLATE_RENDER */

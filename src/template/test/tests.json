@@ -1,0 +1,4 @@
+[
+    "helloworld", "ref", "add", "paren", "bool", "macro", "unary", "streq",
+    "for_do", "function", "if", "if_else", "for"
+]

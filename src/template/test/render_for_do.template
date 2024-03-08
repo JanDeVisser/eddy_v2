@@ -1,2 +1,0 @@
-@% macro foo x: int %@ -- @= x =@ -- @% end %@
-@% for x in $.range do foo /@

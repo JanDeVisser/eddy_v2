@@ -11,8 +11,8 @@ char const *TemplateNodeKind_name(TemplateNodeKind kind)
     switch (kind) {
 #undef KIND
 #define KIND(K)  \
-case TNK##K: \
-return #K;
+    case TNK##K: \
+        return #K;
         TEMPLATENODEKINDS(KIND)
 #undef KIND
     default:
@@ -25,8 +25,8 @@ char const *TemplateExpressionType_name(TemplateExpressionType type)
     switch (type) {
 #undef TYPE
 #define TYPE(T)  \
-case TET##T: \
-return #T;
+    case TET##T: \
+        return #T;
         TEMPLATEEXPRESSIONTYPES(TYPE)
 #undef KIND
     default:
@@ -34,7 +34,7 @@ return #T;
     }
 }
 
-char const *TemplateOperator_name(TemplateOperator op)
+char const *TplOperator_name(TplOperator op)
 {
     switch (op) {
     case InvalidOperator:
@@ -75,6 +75,22 @@ char const *TemplateOperator_name(TemplateOperator op)
         return "UTOInvert";
     case UTODereference:
         return "UTODereference";
+    case UTOParenthesize:
+        return "UTOParenthesize";
+    default:
+        UNREACHABLE();
+    }
+}
+
+char const *TplKeyword_name(TplKeyword keyword)
+{
+    switch (keyword) {
+#undef S
+#define S(T, STR, ALT)  \
+    case TPLKW##T: \
+        return #T;
+        TPLKEYWORDS(S)
+#undef S
     default:
         UNREACHABLE();
     }
@@ -88,14 +104,14 @@ JSONValue template_expression_serialize(Template tpl, TemplateExpression *expr)
     switch (expr->type) {
     case TETUnaryExpression: {
         JSONValue unary = json_object();
-        json_set_cstr(&unary, "operator", TemplateOperator_name(expr->unary.op));
+        json_set_cstr(&unary, "operator", TplOperator_name(expr->unary.op));
         json_set(&unary, "operand", template_expression_serialize(tpl, expr->unary.operand));
         json_set(&ret, t, unary);
     } break;
     case TETBinaryExpression: {
         JSONValue binary = json_object();
         json_set(&binary, "lhs", template_expression_serialize(tpl, expr->binary.lhs));
-        json_set_cstr(&binary, "operator", TemplateOperator_name(expr->binary.op));
+        json_set_cstr(&binary, "operator", TplOperator_name(expr->binary.op));
         json_set(&binary, "rhs", template_expression_serialize(tpl, expr->binary.rhs));
         json_set(&ret, t, binary);
     } break;

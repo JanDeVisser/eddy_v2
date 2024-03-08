@@ -59,7 +59,13 @@ ErrorOrJSONValue evaluate_unary_expression(TemplateRenderContext *ctx, TemplateE
     JSONValue value = TRY(JSONValue, evaluate_expression(ctx, expr->unary.operand));
     switch (expr->unary.op) {
     case UTODereference:
+        if (value.type != JSON_TYPE_STRING) {
+            json_free(value);
+            ERROR(JSONValue, TemplateError, 0, "{...} must evaluate to a string");
+        }
+        RETURN(JSONValue, value);
     case UTOIdentity:
+    case UTOParenthesize:
         RETURN(JSONValue, value);
     case UTOInvert: {
         if (value.type != JSON_TYPE_BOOLEAN) {
@@ -84,7 +90,7 @@ ErrorOrJSONValue evaluate_binary_expression(TemplateRenderContext *ctx, Template
 {
     ErrorOrJSONValue ret = { 0 };
     JSONValue        lhs = TRY(JSONValue, evaluate_expression(ctx, expr->binary.lhs));
-    trace(CAT_TEMPLATE, "Rendering binary expression %s", TemplateOperator_name(expr->binary.op));
+    trace(CAT_TEMPLATE, "Rendering binary expression %s", TplOperator_name(expr->binary.op));
     if (expr->binary.op == BTOSubscript) {
         if (lhs.type != JSON_TYPE_OBJECT) {
             ret = ErrorOrJSONValue_error(__FILE_NAME__, __LINE__, TemplateError, 0, "Only objects can be subscripted");
@@ -284,21 +290,26 @@ ErrorOrJSONValue evaluate_function_call(TemplateRenderContext *ctx, TemplateExpr
     return ret;
 }
 
-ErrorOrJSONValue evaluate_identifier(TemplateRenderContext *ctx, TemplateExpression *expr)
+JSONValue *get_variable_scope(TemplateRenderContext *ctx, StringView name)
 {
     TemplateRenderScope *scope = ctx->scope;
-    OptionalJSONValue    var = { 0 };
     while (scope) {
-        var = json_get_sv(&scope->scope, expr->raw_text);
-        if (var.has_value) {
-            break;
+        JSONValue *var = json_get_ref(&scope->scope, name);
+        if (var != NULL) {
+            return &scope->scope;
         }
         scope = scope->up;
     }
-    if (!var.has_value) {
+    return NULL;
+}
+
+ErrorOrJSONValue evaluate_identifier(TemplateRenderContext *ctx, TemplateExpression *expr)
+{
+    JSONValue *scope = get_variable_scope(ctx, expr->raw_text);
+    if (scope == NULL) {
         ERROR(JSONValue, TemplateError, 0, "Variable '%.*s' not there", SV_ARG(expr->raw_text));
     }
-    RETURN(JSONValue, json_copy(var.value));
+    RETURN(JSONValue, json_copy(MUST_OPTIONAL(JSONValue, json_get_sv(scope, expr->raw_text))));
 }
 
 ErrorOrJSONValue evaluate_expression(TemplateRenderContext *ctx, TemplateExpression *expr)
@@ -331,8 +342,8 @@ ErrorOrInt call_macro(TemplateRenderContext *ctx, StringView name, JSONValue arg
     assert(macro != NULL);
 
     for (size_t ix = 0; ix < macro->macro_def.parameters.size; ++ix) {
-        Parameter *param = da_element_Parameter(&macro->macro_def.parameters, ix);
-        StringView param_name = param->key;
+        Parameter        *param = da_element_Parameter(&macro->macro_def.parameters, ix);
+        StringView        param_name = param->key;
         OptionalJSONValue value_maybe = json_get_sv(&args, param_name);
         if (!value_maybe.has_value) {
             json_free(args);
@@ -359,11 +370,11 @@ ErrorOrInt render_macro(TemplateRenderContext *ctx, TemplateNode *node)
     TemplateNode *macro = template_find_macro(ctx->template, node->macro_call.macro);
     assert(macro != NULL);
 
-    JSONValue  args = json_object();
-    JSONValue  varargs = { 0 };
+    JSONValue args = json_object();
+    JSONValue varargs = { 0 };
     for (size_t ix = 0; ix < macro->macro_def.parameters.size; ++ix) {
         Parameter *param = da_element_Parameter(&macro->macro_def.parameters, ix);
-        JSONValue value = TRY_TO(JSONValue, Int, evaluate_expression(ctx, node->macro_call.arguments.elements[ix]));
+        JSONValue  value = TRY_TO(JSONValue, Int, evaluate_expression(ctx, node->macro_call.arguments.elements[ix]));
         if (ix == macro->macro_def.parameters.size - 1 && param->value == JSON_TYPE_ARRAY && value.type != JSON_TYPE_ARRAY) {
             varargs = json_array();
             json_append(&varargs, value);
@@ -376,7 +387,7 @@ ErrorOrInt render_macro(TemplateRenderContext *ctx, TemplateNode *node)
             JSONValue value = TRY_TO(JSONValue, Int, evaluate_expression(ctx, node->macro_call.arguments.elements[ix]));
             json_append(&varargs, value);
         }
-        json_set_sv(&args, macro->macro_def.parameters.elements[macro->macro_def.parameters.size-1].key, varargs);
+        json_set_sv(&args, macro->macro_def.parameters.elements[macro->macro_def.parameters.size - 1].key, varargs);
     }
     return call_macro(ctx, node->macro_call.macro, args, node->contents);
 }
@@ -402,21 +413,20 @@ ErrorOrInt render_for_loop(TemplateRenderContext *ctx, TemplateNode *node)
     if (node->for_statement.variable2.length > 0 && value.type != JSON_TYPE_OBJECT) {
         ERROR(Int, TemplateError, 0, "Can only iterate over objects");
     }
-    StringView var = node->for_statement.variable;
-    StringView var2 = node->for_statement.variable2;
-    JSONValue loop_vars =  json_object();
-    TemplateRenderScope loop_scope = { loop_vars, ctx->scope };
+    StringView          var = node->for_statement.variable;
+    StringView          var2 = node->for_statement.variable2;
+    TemplateRenderScope loop_scope = { json_object(), ctx->scope };
     if (node->for_statement.macro.length == 0) {
         ctx->scope = &loop_scope;
     }
     for (int ix = 0; ix < json_len(&value); ++ix) {
         if (var2.length == 0) {
             JSONValue loop_val = MUST_OPTIONAL(JSONValue, json_at(&value, ix));
-            json_set_sv(&loop_vars, var, json_copy(loop_val));
+            json_set_sv(&loop_scope.scope, var, json_copy(loop_val));
         } else {
             JSONValue loop_vals = MUST_OPTIONAL(JSONValue, json_entry_at(&value, ix));
-            json_set_sv(&loop_vars, var, json_copy(MUST_OPTIONAL(JSONValue, json_at(&loop_vals, 0))));
-            json_set_sv(&loop_vars, var2, json_copy(MUST_OPTIONAL(JSONValue, json_at(&loop_vals, 1))));
+            json_set_sv(&loop_scope.scope, var, json_copy(MUST_OPTIONAL(JSONValue, json_at(&loop_vals, 0))));
+            json_set_sv(&loop_scope.scope, var2, json_copy(MUST_OPTIONAL(JSONValue, json_at(&loop_vals, 1))));
         }
 
         if (node->for_statement.macro.length == 0) {
@@ -426,8 +436,11 @@ ErrorOrInt render_for_loop(TemplateRenderContext *ctx, TemplateNode *node)
             json_free(inner_scope.scope);
             ctx->scope = &loop_scope;
         } else {
-            TRY(Int, call_macro(ctx, node->for_statement.macro, loop_vars, node->contents));
+            TRY(Int, call_macro(ctx, node->for_statement.macro, loop_scope.scope, node->contents));
         }
+    }
+    if (node->for_statement.macro.length == 0) {
+        ctx->scope = loop_scope.up;
     }
     json_free(value);
     RETURN(Int, 0);
@@ -474,8 +487,12 @@ ErrorOrInt render_node(TemplateRenderContext *ctx, TemplateNode *node)
         case TNKMacroDef:
             break;
         case TNKSetVariable: {
-            JSONValue  value = TRY_TO(JSONValue, Int, evaluate_expression(ctx, node->set_statement.value));
-            json_set_sv(&ctx->scope->scope, node->for_statement.variable, value);
+            JSONValue *scope = get_variable_scope(ctx, node->set_statement.variable);
+            JSONValue value = TRY_TO(JSONValue, Int, evaluate_expression(ctx, node->set_statement.value));
+            if (scope == NULL) {
+                scope=&ctx->scope->scope;
+            }
+            json_set_sv(scope, node->set_statement.variable, value);
             trace(CAT_TEMPLATE, "Setting variable '%.*s' to '%.*s'", SV_ARG(node->for_statement.variable), SV_ARG(json_to_string(value)));
         } break;
         default:
