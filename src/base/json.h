@@ -81,7 +81,7 @@ extern void              json_set_sv(JSONValue *value, StringView attr, JSONValu
 extern OptionalJSONValue json_entry_at(JSONValue *value, int ix);
 extern OptionalJSONValue json_get(JSONValue *value, char const *attr);
 extern OptionalJSONValue json_get_sv(JSONValue *value, StringView attr);
-`extern JSONValue        *json_get_ref(JSONValue *value, StringView attr);
+extern JSONValue        *json_get_ref(JSONValue *value, StringView attr);
 extern JSONValue         json_get_default(JSONValue *value, char const *attr, JSONValue default_);
 extern bool              json_get_bool(JSONValue *value, char const *attr, bool default_);
 extern int               json_get_int(JSONValue *value, char const *attr, int default_);
