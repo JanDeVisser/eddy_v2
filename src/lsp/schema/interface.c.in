@@ -1,0 +1,44 @@
+@macro decode_property p: object
+@{
+        OptionalJSONValue v8 = json_get(&@= name_lower @.value, \"@= p.name @\");
+        value.line = @= p.alias @_decode(v8);
+    }
+@
+@macro encode_property p: object
+@json_optional_set(&@= name_lower @, \"@= p.name @\", @= p.alias @_encode(value.@= p.name @));
+@
+/**
+ * Copyright (c) 2024, Jan de Visser <jan@@finiandarcy.com>
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * THIS IS GENERATED CODE. DO NOT MODIFY.
+ */
+
+@set name_lower tolower($.name) %%@
+#include <lsp/schema/@= name_lower @.h>
+
+OPTIONAL_JSON_ENCODE_IMPL(@= $.name @);
+OPTIONAL_JSON_DECODE_IMPL(@= $.name @);
+
+DA_IMPL(@= $.name @);
+DA_JSON_ENCODE_IMPL(@= $.name @, @= $.plural @, elements);
+DA_JSON_DECODE_IMPL(@= $.name @, @= $.plural @, elements);
+OPTIONAL_JSON_ENCODE_IMPL(@= $.plural @);
+OPTIONAL_JSON_DECODE_IMPL(@= $.plural @);
+
+@= $.name @ @= $.name @_decode(OptionalJSONValue @= name_lower @)
+{
+    assert(@= name_lower @.has_value);
+    assert(@= name_lower @.value.type == JSON_TYPE_OBJECT);
+    @= $.name @ value = {0};
+    @% for p in $.interface.properties do decode_property %%@
+    return value;
+}
+
+OptionalJSONValue @= $.name @_encode(@= $.name @ value)
+{
+    JSONValue @= name_lower @ = json_object();
+    @% for p in $.interface.properties do encode_property %%@
+    RETURN_VALUE(JSONValue, @= name_lower @);
+}

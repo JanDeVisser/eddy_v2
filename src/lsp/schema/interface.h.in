@@ -1,8 +1,11 @@
-@% macro property p: object
-%@    @% if p.type.basic_type == "uinteger" %@unsigned int @% end %@@% if p.type.basic_type == "string" %@StringView @% end %@@= p.name =@;
-@% end %@
+@macro property p: object
+@    @= p.ctype @ @= p.name @;;
+@
+@macro include i: string
+@#include <lsp/schema/@= tolower(i) @.h>
+@
 /**
- * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
+ * Copyright (c) 2024, Jan de Visser <jan@@finiandarcy.com>
  *
  * SPDX-License-Identifier: MIT
  *
@@ -11,28 +14,29 @@
 
 // clang-format off
 
-#ifndef __LSP_@= toupper($.name) =@_H__
-#define __LSP_@= toupper($.name) =@_H__
+#ifndef __LSP_@= toupper($.name) @_H__
+#define __LSP_@= toupper($.name) @_H__
 
 #include <lsp/lsp_base.h>
+@for i in $.dependencies do include %%@
 
 typedef struct {
-@% for p in $.interface.properties do property /@
-} @= $.name =@;
+@for p in $.interface.properties do property @@
+} @= $.name @;
 
-OPTIONAL(@= $.name =@);
-OPTIONAL_JSON_ENCODE(@= $.name =@);
-OPTIONAL_JSON_DECODE(@= $.name =@);
+OPTIONAL(@= $.name @);
+OPTIONAL_JSON_ENCODE(@= $.name @);
+OPTIONAL_JSON_DECODE(@= $.name @);
 
-DA_WITH_NAME(@= $.name =@, @= $.plural =@);
-JSON_ENCODE(@= $.plural =@, @= $.plural =@);
-JSON_DECODE(@= $.plural =@, @= $.plural =@);
-OPTIONAL(@= $.plural =@);
-OPTIONAL_JSON_ENCODE(@= $.plural =@);
-OPTIONAL_JSON_DECODE(@= $.plural =@);
+DA_WITH_NAME(@= $.name @, @= $.plural @);
+JSON_ENCODE(@= $.plural @, @= $.plural @);
+JSON_DECODE(@= $.plural @, @= $.plural @);
+OPTIONAL(@= $.plural @);
+OPTIONAL_JSON_ENCODE(@= $.plural @);
+OPTIONAL_JSON_DECODE(@= $.plural @);
 
-extern @= $.name =@ @= $.name =@_decode(OptionalJSONValue value);
-extern OptionalJSONValue @= $.name =@_encode(@= $.name =@ value);
+extern @= $.name @ @= $.name @_decode(OptionalJSONValue value);
+extern OptionalJSONValue @= $.name @_encode(@= $.name @ value);
 
 // clang-format on
-#endif /* __LSP_@= toupper($.name) =@_H__ */
+#endif /* __LSP_@= toupper($.name) @_H__ */

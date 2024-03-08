@@ -2,10 +2,14 @@ include_directories(.)
 
 add_executable(
         ts
+        generate.c
         ts.c
+        parse.c
+        serialize.c
+        tostring.c
 )
 
-target_link_libraries(ts base template)
+target_link_libraries(ts template base)
 target_compile_definitions(ts PUBLIC TS_PARSER)
 
 install(TARGETS ts
