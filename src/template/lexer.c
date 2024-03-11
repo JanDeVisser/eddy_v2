@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "log.h"
 #include <ctype.h>
 
 #include <json.h>
@@ -25,8 +26,8 @@ static TplOperatorMapping s_operator_mapping[] = {
 
 static TplKeywordMapping s_keyword_mapping[] = {
 #undef S
-#define S(TOKEN, STR, ALT) { TPLKW##TOKEN, STR, ALT },
-    TPLKEYWORDS(S) { TPLKWCount, NULL, NULL },
+#define S(TOKEN, STR, ALT) { TKW##TOKEN, STR, ALT },
+    TPLKEYWORDS(S) { TKWCount, NULL, NULL },
 #undef S
 };
 
@@ -98,18 +99,16 @@ OptionalTplOperatorMapping template_operator_mapping(TplOpToken token)
 void template_lexer_consume(TemplateParserContext *ctx)
 {
     if (ctx->token.type != TTTEndOfText) {
-        trace(CAT_TEMPLATE, "template_lexer_consume");
-        ctx->token = (TplToken) { 0 };
+        ctx->token = (TplToken) {0};
         return;
     }
-    trace(CAT_TEMPLATE, "template_lexer_consume (ignored; EndOfText)");
 }
 
 ErrorOrTplToken template_lexer_peek(TemplateParserContext *ctx)
 {
     if (ctx->token.type != TTTUnknown) {
         StringView token_string = template_token_to_string(ctx, ctx->token);
-        trace(CAT_TEMPLATE, "template_lexer_next: %.*s (pending)", SV_ARG(token_string));
+        trace(CAT_TEMPLATE, "template_lexer_peek: %.*s (pending)", SV_ARG(token_string));
         RETURN(TplToken, ctx->token);
     }
 
@@ -117,10 +116,9 @@ ErrorOrTplToken template_lexer_peek(TemplateParserContext *ctx)
     int            ch = ss_peek(ss);
     size_t         current_index = ctx->sb.length;
     TplToken       token = { 0 };
-    StringView     s = sv_lchop(ss->string, ss->point);
 
+    token.position = ss->point;
     ss_reset(ss);
-    token.type = TTTUnknown;
 
     if (!ch) {
         token.type = TTTEndOfText;
@@ -129,7 +127,7 @@ ErrorOrTplToken template_lexer_peek(TemplateParserContext *ctx)
         for (ch = ss_peek(ss); IS_IDENTIFIER_CHAR(ch); ch = ss_peek(ss)) {
             ss_skip_one(ss);
         }
-        s = ss_read_from_mark(ss);
+        StringView s = ss_read_from_mark(ss);
         if (sv_eq_cstr(s, "true")) {
             token.type = TTTTrue;
         } else if (sv_eq_cstr(s, "false")) {
@@ -181,7 +179,7 @@ ErrorOrTplToken template_lexer_peek(TemplateParserContext *ctx)
         case '#':
             token.type = TTTComment;
             ss_skip_one(ss);
-            while (!ss_expect_sv(ss, sv_from("#@"))) {
+            while (ss_peek(ss) && !ss_expect_sv(ss, sv_from("#@"))) {
                 sb_append_char(&ctx->sb, ss_peek(ss));
                 ss_skip_one(ss);
             }
@@ -189,8 +187,8 @@ ErrorOrTplToken template_lexer_peek(TemplateParserContext *ctx)
         default: {
             int        matched = -1;
             StringView matched_kw = { 0 };
-            s = sv_lchop(ss->string, ss->point);
-            for (int ix = 0; ix < TPLKWCount; ++ix) {
+            StringView s = ss_peek_tail(ss);
+            for (int ix = 0; ix < TKWCount; ++ix) {
                 StringView kw = sv_from(s_keyword_mapping[ix].string);
                 if (sv_startswith(s, kw)) {
                     if (matched < 0 || sv_length(kw) > sv_length(matched_kw)) {
@@ -204,13 +202,14 @@ ErrorOrTplToken template_lexer_peek(TemplateParserContext *ctx)
                 ss_skip(ss, matched_kw.length);
                 token.keyword = matched;
             } else {
-                token.keyword = TPLKWClose;
+                token.keyword = TKWClose;
             }
         } break;
         }
     } else {
         int        matched = -1;
         StringView matched_op = { 0 };
+        StringView s = ss_peek_tail(ss);
         for (int ix = 0; ix < TOCount; ++ix) {
             StringView op = sv_from(s_operator_mapping[ix].string);
             if (sv_startswith(s, op)) {
@@ -239,7 +238,7 @@ ErrorOrTplToken template_lexer_peek(TemplateParserContext *ctx)
 
     {
         StringView token_string = template_token_to_string(ctx, token);
-        trace(CAT_TEMPLATE, "template_lexer_peek: %.*s", SV_ARG(token_string));
+        trace(CAT_TEMPLATE, "template_lexer_peek: %zu:%zu %.*s", token.position.line, token.position.column, SV_ARG(token_string));
     }
     RETURN(TplToken, token);
 }

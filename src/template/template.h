@@ -45,14 +45,15 @@ typedef enum {
     S(Macro, "macro", NULL)       \
     S(Switch, "switch", NULL)     \
     S(StartExpression, "=", NULL) \
-    S(Set, "set", NULL)
+    S(Set, "set", NULL)           \
+    S(Text, "\"", "'")
 
 typedef enum {
 #undef S
-#define S(T, STR, ALT) TPLKW##T,
+#define S(T, STR, ALT) TKW##T,
     TPLKEYWORDS(S)
 #undef S
-        TPLKWCount,
+        TKWCount,
 } TplKeyword;
 
 ERROR_OR(TplKeyword);
@@ -89,6 +90,7 @@ ERROR_OR(OptionalTplOpToken)
 
 typedef struct {
     TPLTokenType type;
+    TextPosition position;
     StringView   raw_text;
     union {
         StringRef  text;
@@ -251,6 +253,9 @@ typedef struct template_node {
             TemplateExpression   *expr;
             struct template_node *cases;
         } switch_statement;
+        struct {
+            bool literal;            
+        } text_node;
     };
     struct template_node *next;
 } TemplateNode;
@@ -315,6 +320,6 @@ extern TemplateNode                     *template_find_macro(Template template, 
 extern ErrorOrStringView                 render_template(StringView template_text, JSONValue context);
 extern ErrorOrSize                       render_template_file(StringView template_filename, JSONValue context, StringView output_filename);
 
-#define template_ctx_parse(CTX, ...) template_ctx_parse_nodes((CTX) __VA_OPT__(, ) __VA_ARGS__, TPLKWCount)
+#define template_ctx_parse(CTX, ...) template_ctx_parse_nodes((CTX) __VA_OPT__(, ) __VA_ARGS__, TKWCount)
 
 #endif /* TEMPLATE_H */

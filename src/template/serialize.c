@@ -88,7 +88,7 @@ char const *TplKeyword_name(TplKeyword keyword)
     switch (keyword) {
 #undef S
 #define S(T, STR, ALT)  \
-    case TPLKW##T: \
+    case TKW##T: \
         return #T;
         TPLKEYWORDS(S)
 #undef S

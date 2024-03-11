@@ -95,29 +95,32 @@ ErrorOrJSONValue evaluate_binary_expression(TemplateRenderContext *ctx, Template
     trace(CAT_TEMPLATE, "Rendering binary expression %s", TplOperator_name(expr->binary.op));
     if (expr->binary.op == BTOSubscript) {
         if (lhs.type != JSON_TYPE_OBJECT) {
-            ret = ErrorOrJSONValue_error(__FILE_NAME__, __LINE__, TemplateError, 0, "Only objects can be subscripted");
-            goto defer_lhs;
+            json_free(lhs);
+            ERROR(JSONValue, TemplateError, 0, "Only objects can be subscripted");
         }
         trace(CAT_TEMPLATE, "lhs: %.*s", SV_ARG(json_to_string(lhs)));
         JSONValue rhs = { 0 };
         if (expr->binary.rhs->type != TETIdentifier) {
             rhs = TRY(JSONValue, evaluate_expression(ctx, expr->binary.rhs));
             if (rhs.type != JSON_TYPE_STRING) {
-                ret = ErrorOrJSONValue_error(__FILE_NAME__, __LINE__, TemplateError, 0, "Subscript must be identifier");
-                goto defer_rhs;
+                json_free(rhs);
+                json_free(lhs);
+                ERROR(JSONValue, TemplateError, 0, "Subscript must be identifier");
             }
         } else {
             rhs = json_string(expr->binary.rhs->raw_text);
         }
         OptionalJSONValue property_maybe = json_get_sv(&lhs, rhs.string);
         if (!property_maybe.has_value) {
-            ret = ErrorOrJSONValue_error(__FILE_NAME__, __LINE__, TemplateError, 0, "Property '%.*s' not there", SV_ARG(rhs.string));
-            goto defer_rhs;
+            json_free(rhs);
+            json_free(lhs);
+            ERROR(JSONValue, TemplateError, 0, "Property '%.*s' not there", SV_ARG(rhs.string));
         }
         JSONValue property = json_copy(property_maybe.value);
         trace(CAT_TEMPLATE, ".[%.*s] = '%.*s'", SV_ARG(rhs.string), SV_ARG(json_to_string(property)));
-        ret = (ErrorOrJSONValue) { .error = { 0 }, .value = json_copy(property) };
-        goto defer_rhs;
+        json_free(rhs);
+        json_free(lhs);
+        RETURN(JSONValue, property);
     }
 
     JSONValue rhs = TRY(JSONValue, evaluate_expression(ctx, expr->binary.rhs));
@@ -289,7 +292,9 @@ ErrorOrJSONValue evaluate_expression(TemplateRenderContext *ctx, TemplateExpress
 ErrorOrInt call_macro(TemplateRenderContext *ctx, StringView name, JSONValue args, TemplateNode *contents)
 {
     TemplateNode *macro = template_find_macro(ctx->template, name);
-    assert(macro != NULL);
+    if (macro == NULL) {
+        ERROR(Int, TemplateError, 0, "Unknown macro '%.*s' called", SV_ARG(name));
+    }
 
     for (size_t ix = 0; ix < macro->macro_def.parameters.size; ++ix) {
         Parameter        *param = da_element_Parameter(&macro->macro_def.parameters, ix);
@@ -378,6 +383,7 @@ ErrorOrInt render_for_loop(TemplateRenderContext *ctx, TemplateNode *node)
     TemplateRenderScope loop_scope = { json_object(), ctx->scope };
     ctx->scope = &loop_scope;
     for (int ix = 0; ix < json_len(&value); ++ix) {
+        json_set(&loop_scope.scope, "$index", json_int(ix));
         if (var2.length == 0) {
             JSONValue loop_val = MUST_OPTIONAL(JSONValue, json_at(&value, ix));
             json_set_sv(&loop_scope.scope, var, json_copy(loop_val));
