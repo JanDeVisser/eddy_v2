@@ -4,20 +4,28 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "optional.h"
+#include "schema/DocumentUri.h"
 #include <sys/syslimits.h>
 #include <unistd.h>
 
-#define STATIC_ALLOCATOR
-#include <allocate.h>
 #include <eddy.h>
-#include <language.h>
+#include <json.h>
 #include <palette.h>
 #include <process.h>
-
-#include <lsp/initialize.h>
-#include <lsp/lsp_base.h>
-#include <lsp/semantictokens.h>
-#include <lsp/synchronization.h>
+#include <lsp/schema/lsp_base.h>
+#include <lsp/schema/DidChangeTextDocumentParams.h>
+#include <lsp/schema/DidCloseTextDocumentParams.h>
+#include <lsp/schema/DidOpenTextDocumentParams.h>
+#include <lsp/schema/DidSaveTextDocumentParams.h>
+#include <lsp/schema/DocumentFormattingParams.h>
+#include <lsp/schema/InitializeParams.h>
+#include <lsp/schema/InitializeResult.h>
+#include <lsp/schema/ServerCapabilities.h>
+#include <lsp/schema/SemanticTokens.h>
+#include <lsp/schema/SemanticTokensParams.h>
+#include <lsp/schema/SemanticTokenTypes.h>
+#include <lsp/schema/TextEdit.h>
 
 static Process           *lsp = NULL;
 static ServerCapabilities server_capabilties;
@@ -124,7 +132,8 @@ void lsp_initialize()
     char prj[PATH_MAX + 8];
     memset(prj, '\0', PATH_MAX + 8);
     snprintf(prj, PATH_MAX + 7, "file://%.*s", SV_ARG(eddy.project_dir));
-    params.rootUri = (OptionalStringView) { .has_value = true, .value = sv_from(prj) };
+    params.rootUri.tag = 0;
+    params.rootUri._0 = sv_from(prj);
     params.capabilities.textDocument.has_value = true;
 
     StringList tokenTypes = {0};
@@ -150,7 +159,7 @@ void lsp_initialize()
     OptionalJSONValue params_json = InitializeParams_encode(params);
     Response          response = MUST(Response, lsp_message("initialize", params_json));
     if (response_success(&response)) {
-        InitializeResult result = InitializeResult_decode(response.result);
+        InitializeResult result = MUST_OPTIONAL(InitializeResult, InitializeResult_decode(response.result));
         if (result.serverInfo.has_value) {
             trace(CAT_LSP, "LSP server name: %.*s", SV_ARG(result.serverInfo.name));
             if (result.serverInfo.version.has_value) {
@@ -162,7 +171,7 @@ void lsp_initialize()
         // trace(CAT_LSP, "#Token types: %zu", server_capabilties.semanticTokensProvider.value.legend.tokenTypes.size);
         for (int i = 0; i < server_capabilties.semanticTokensProvider.value.legend.tokenTypes.size; ++i) {
             StringView tokenType = server_capabilties.semanticTokensProvider.value.legend.tokenTypes.strings[i];
-            SemanticTokenTypes semantic_token_type = SemanticTokenTypes_parse(tokenType);
+            SemanticTokenTypes semantic_token_type = MUST_OPTIONAL(SemanticTokenTypes, SemanticTokenTypes_parse(tokenType));
             // trace(CAT_LSP, "%d: '%.*s' %d", i, SV_ARG(tokenType), semantic_token_type);
             switch (semantic_token_type) {
                 case SemanticTokenTypesNamespace: colors[i] = PI_KNOWN_IDENTIFIER; break;
@@ -228,13 +237,12 @@ void lsp_semantic_tokens(int buffer_num)
     OptionalJSONValue semantic_tokens_params_json = SemanticTokensParams_encode(semantic_tokens_params);
     Response          response = MUST(Response, lsp_message("textDocument/semanticTokens/full", semantic_tokens_params_json));
     if (response_success(&response)) {
-        SemanticTokensResult result = SemanticTokensResult_decode(response.result);
-        assert(result.tag == 0);
+        SemanticTokens result = MUST_OPTIONAL(SemanticTokens, SemanticTokens_decode(response.result));
         size_t lineno = 0;
         Index *line = buffer->lines.elements + lineno;
         size_t offset = 0;
-        UInts data = result._0.data;
-        for (size_t ix = 0; ix < result._0.data.size; ix += 5) {
+        UInt32s data = result.data;
+        for (size_t ix = 0; ix < result.data.size; ix += 5) {
             if (data.elements[ix] > 0) {
                 lineno += data.elements[ix];
                 assert(lineno < buffer->lines.size);
@@ -299,11 +307,11 @@ void lsp_did_change(int buffer_num, IntVector2 start, IntVector2 end, StringView
     did_change.textDocument.uri = buffer_uri(buffer);
     did_change.textDocument.version = buffer->version;
     TextDocumentContentChangeEvent contentChange = {0};
-    contentChange.range.start.line = start.line;
-    contentChange.range.start.character = start.column;
-    contentChange.range.end.line = end.line;
-    contentChange.range.end.character = end.column;
-    contentChange.text = text;
+    contentChange._0.range.start.line = start.line;
+    contentChange._0.range.start.character = start.column;
+    contentChange._0.range.end.line = end.line;
+    contentChange._0.range.end.character = end.column;
+    contentChange._0.text = text;
     da_append_TextDocumentContentChangeEvent(&did_change.contentChanges, contentChange);
     OptionalJSONValue did_change_json = DidChangeTextDocumentParams_encode(did_change);
     lsp_notification("textDocument/didChange", did_change_json);
@@ -338,7 +346,7 @@ int lsp_format(int buffer_num)
     if (response.result.value.type != JSON_TYPE_ARRAY) {
         return -1;
     }
-    TextEdits edits = TextEdits_decode(response.result);
+    TextEdits edits = MUST_OPTIONAL(TextEdits, TextEdits_decode(response.result));
     for (size_t ix = 0; ix < edits.size; ++ix) {
         TextEdit edit = edits.elements[ix];
         IntVector2 start = { edit.range.start.character, edit.range.start.line };

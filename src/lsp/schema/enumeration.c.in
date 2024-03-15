@@ -1,0 +1,45 @@
+{%- extends "schemaobj.c.in" -%}
+
+{% block custom_code -%}
+{% if enumeration.type == "string" -%}
+StringView {{ name }}_to_string({{ name }} value)
+{
+    switch (value) {
+{% for v in enumeration["values"] -%}
+    case {{ name }}{{ v.capitalized }}: return sv_from("{{ v.string }}");
+{%- endfor -%}
+    default: UNREACHABLE();
+    }
+}
+
+Optional{{ name }} {{ name }}_parse(StringView s)
+{
+{% for v in enumeration["values"] -%}
+    if (sv_eq_cstr(s, "{{ v.string }}")) RETURN_VALUE({{name}}, {{ name }}{{ v.capitalized }});
+{% endfor -%}
+    RETURN_EMPTY({{name}});
+}
+{%- endif %}
+{% endblock -%}
+
+
+{% block decode -%}
+    assert(json.has_value);
+{% if enumeration.type == "string" -%}
+    assert(json.value.type == JSON_TYPE_STRING);
+    return {{name}}_parse(json.value.string);
+{%- else -%}
+    assert(json.value.type == JSON_TYPE_INT);
+{% for v in enumeration["values"] -%}
+    if ({{ v[enumeration.type] }} == json_int_value(json.value)) RETURN_VALUE({{name}}, {{ name }}{{ v.capitalized }});
+{%- endfor -%}
+    RETURN_EMPTY({{ name }});
+{%- endif -%}
+{% endblock -%}
+{% block encode -%}
+{% if enumeration.type == "string" -%}
+    RETURN_VALUE(JSONValue, json_string({{ name }}_to_string(value)));
+{%- else -%}
+    RETURN_VALUE(JSONValue, json_int(value));
+{%- endif -%}
+{% endblock -%}

@@ -99,13 +99,13 @@ StringView interface_to_string(Interface interface)
     return ret.view;
 }
 
-StringView namespace_to_string(Namespace namespace)
+StringView enumeration_to_string(Enumeration enumeration)
 {
-    StringBuilder ret = sb_createf("namespace %.*s {\n", SV_ARG(namespace.name));
-    for (size_t ix = 0; ix < namespace.values.size; ++ix) {
-        NamespaceValue *value = namespace.values.elements + ix;
-        sb_printf(&ret, "  %.*s: %s =", SV_ARG(value->name), basic_type_name(namespace.value_type));
-        switch (namespace.value_type) {
+    StringBuilder ret = sb_createf("enum %.*s {\n", SV_ARG(enumeration.name));
+    for (size_t ix = 0; ix < enumeration.values.size; ++ix) {
+        EnumerationValue *value = enumeration.values.elements + ix;
+        sb_printf(&ret, "  %.*s: %s =", SV_ARG(value->name), basic_type_name(enumeration.value_type));
+        switch (enumeration.value_type) {
         case BasicTypeInt:
         case BasicTypeUnsigned:
             sb_printf(&ret, "%d", value->int_value);
@@ -135,6 +135,9 @@ StringView typedef_to_string(TypeDef type_def)
         StringView iface = interface_to_string(type_def.interface);
         sb_printf(&ret, "interface %.*s %.*s;", SV_ARG(type_def.name), SV_ARG(iface));
         sv_free(iface);
+    } break;
+    case TypeDefKindEnumeration: {
+        ret.view = enumeration_to_string(type_def.enumeration);
     } break;
     default:
         UNREACHABLE();

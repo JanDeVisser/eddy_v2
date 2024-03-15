@@ -1,0 +1,229 @@
+{% macro dunno_man(p) %} Dunno man {% endmacro -%}
+{% macro decode_variant_struct_option(s, var, value, tag, lvl) -%}
+    {%- set fld_var = "v%d" % (lvl + 1) -%}
+    {%- set is_decoded = "decoded%d" % lvl -%}
+    bool {{is_decoded}} = false;
+    OptionalJSONValue {{fld_var}} = {0};
+    do {
+    {% for p in s.properties -%}
+        {{fld_var}} = json_get(&{{var}}.value, "{{ p.name }}");
+        {%- if p.type.kind == "basic_type" or p.type.kind == "constant" or p.type.kind == "typeref" -%}
+            {%- set ctype = "%s%s%s" % ("Optional" if p.optional else "", p.type[p.type.kind].alias, "s" if p.type.array else "") -%}
+            {%- set opt_var = "opt%d_%d_%s" % (lvl, tag, p.name) -%}
+            Optional{{ctype}} {{opt_var}} = {{ctype}}_decode({{fld_var}});
+            if (!{{opt_var}}.has_value) {
+                break;
+            }
+            {{value}}._{{tag}}.{{p.name}} = {{opt_var}}.value;
+        {% elif p.type.kind == "struct" -%}
+            NYI("Struct in a struct in a variant");
+        {%- elif p.type.kind == "variant" -%}
+            NYI("Variant in a struct in a variant");
+        {%- else -%}
+            NYI("Unexpected kind '{{p.type.kind}}' for member '{{p.name}}' of anonymous struct in variant");
+        {%- endif -%}
+    {%- endfor -%}
+        {{is_decoded}} = true;
+    } while (false);
+    if ({{is_decoded}}) break;
+{% endmacro -%}
+{% macro decode_variant_option(o, var, value, tag, lvl) -%}
+    {
+    {% if o.kind == "basic_type" or o.kind == "constant" or o.kind == "typeref" -%}
+        {%- set ctype = "%s%s" % (o[o.kind].alias, "s" if o.array else "") -%}
+        Optional{{ctype}} decoded = {{ctype}}_decode({{var}});
+        if (decoded.has_value) {
+            {{value}}.tag = {{tag}};
+            {{value}}._{{tag}} = decoded.value;
+            break;
+        }
+    {% elif o.kind == "struct" -%}
+        {{ decode_variant_struct_option(o, var, value, tag, lvl) }}
+    {% elif o.kind == "variant" -%}
+        NYI("variant inside variant");
+    {% endif -%}
+    }
+{% endmacro -%}
+{% macro decode_variant(type, optional, var, value, lvl) -%}
+    {% if optional -%}
+        if ({{var}}.has_value) {
+    {% else -%}
+        assert({{var}}.has_value);
+    {% endif -%}
+    {{value}}.has_value = true;
+    while (true) {
+    {% for v in type.options -%}
+        {{ decode_variant_option(v, var, value, loop.index0, lvl+1) }}
+    {%- endfor -%}
+        RETURN_EMPTY({{name}});
+    }
+    {%- if optional %} } {% endif -%}
+{% endmacro -%}
+{% macro decode_property(p, json_var, value, lvl) -%}
+    {%- set var = "v%d" % lvl -%}
+    {
+        OptionalJSONValue {{var}} = json_get(&{{json_var}}.value, "{{ p.name }}");
+        {%- if p.type.kind == "basic_type" or p.type.kind == "constant" or p.type.kind == "typeref" -%}
+            {%- set ctype = "%s%s%s" % ("Optional" if p.optional else "", p.type[p.type.kind].alias, "s" if p.type.array else "") -%}
+            {{value}} = FORWARD_OPTIONAL({{ctype}}, {{ name }}, {{ctype}}_decode({{var}}));
+        {% elif p.type.kind == "struct" -%}
+            {% if p.optional -%}
+                if ({{var}}.has_value) {
+            {% else -%}
+                assert({{var}}.has_value);
+            {% endif -%}
+            {{value}}.has_value = true;
+            {% for sp in p.type.properties -%}
+                {{decode_property(sp, var, "%s.%s" % (value, sp.name), lvl + 1) }}
+            {% endfor -%}
+            {% if p.optional %} } {% endif -%}
+        {%- elif p.type.kind == "variant" -%}
+            {{ decode_variant(p.type, p.optional, var, value, lvl) }}
+        {%- else -%}
+            {{ dunno_man(p) }}
+        {%- endif -%}
+    }
+{% endmacro -%}
+{%- macro encode_variant_option(o, var, value, tag, lvl) -%}
+    {%- set var = "v%d" % lvl -%}
+    {% if o.kind == "basic_type" or o.kind == "constant" or o.kind == "typeref" -%}
+        {%- set ctype = "%s%s" % (o[o.kind].alias, "s" if o.array else "") -%}
+        {{var}} = MUST_OPTIONAL(JSONValue, {{ctype}}_encode({{value}}._{{tag}}));
+    {% elif o.kind == "struct" -%}
+        {%- set s_var = "v%d" % (lvl + 1) -%}
+        {
+            {{var}} = json_object();
+            {% for sp in o.properties -%}
+                {{encode_property(sp, "%s._%d" % (value, tag), lvl) }}
+            {% endfor -%}
+        }
+    {%- endif -%}
+{%- endmacro -%}
+{% macro encode_variant(type, value, lvl) -%}
+    {%- set enclosing = "v%d" % lvl -%}
+    {%- set var = "v%d" % (lvl + 1) -%}
+    JSONValue {{var}} = {0};
+    switch ({{value}}.tag) {
+    {% for o in type.options -%}
+        case {{ loop.index0 }}:
+        {{ encode_variant_option(o, var, value, loop.index0, lvl + 1) }} 
+        break;
+    {% endfor -%}
+    default:
+        UNREACHABLE();
+    }
+{% endmacro -%}
+{% macro encode_variant_property(p, value, lvl) -%}
+    {%- set enclosing = "v%d" % lvl -%}
+    {%- set var = "v%d" % (lvl + 1) -%}
+    {% if p.optional -%}
+        if ({{value}}.has_value) {
+    {% else -%}
+        assert({{value}}.has_value);
+        {
+    {% endif -%}
+    {{ encode_variant(p.type, value, lvl) }}
+    json_set(&{{enclosing}}, "{{p.name}}", {{var}});
+    }
+{% endmacro -%}
+{% macro encode_property(p, value, lvl) -%}
+    {%- set enclosing = "v%d" % lvl -%}
+    {%- if p.type.kind == "basic_type" or p.type.kind == "constant" or p.type.kind == "typeref" -%}
+        {%- set decorated_type = "%s%s%s" % ("Optional" if p.optional else "", p.type[p.type.kind].alias, "s" if p.type.array else "") -%}
+        json_optional_set(&{{ enclosing }}, "{{ p.name }}", {{ decorated_type }}_encode({{value}}.{{ p.name }}));
+    {%- elif p.type.kind == "struct" -%}
+        {%- set val = value + "." + p.name -%}
+        {% if p.optional -%}
+            if ({{val}}.has_value) {
+        {% else -%}
+            assert({{val}}.has_value);
+            {
+        {% endif -%}
+        {%- set var = "v%d" % (lvl + 1) -%}
+                JSONValue {{var}} = json_object();
+                {% for sp in p.type.properties -%}
+                    {{encode_property(sp, val, lvl + 1) }}
+                {% endfor -%}
+                json_set(&{{enclosing}}, "{{p.name}}", {{var}});
+            }
+    {%- elif p.type.kind == "variant" -%}{{ encode_variant_property(p, value + "." + p.name, lvl) }}
+    {%- else -%} {{ dunno_man(p) }}
+    {%- endif -%}
+{% endmacro -%}
+/**
+ * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * THIS IS GENERATED CODE. DO NOT MODIFY.
+ */
+
+#include <lsp/schema/{{ name }}.h>
+
+{% block boilerplate_impls -%}
+
+DA_IMPL({{name}})
+
+OptionalJSONValue Optional{{name}}_encode(Optional{{name}} value)
+{
+    if (value.has_value) {
+        return {{name}}_encode(value.value);
+    } else {
+        RETURN_EMPTY(JSONValue);
+    }
+}
+
+OptionalOptional{{name}} Optional{{name}}_decode(OptionalJSONValue json)
+{
+    if (!json.has_value) {
+        RETURN_EMPTY(Optional{{name}});
+    }
+    RETURN_VALUE(Optional{{name}}, {{name}}_decode(json));
+}
+
+OptionalJSONValue {{name}}s_encode({{name}}s value)
+{
+    JSONValue ret = json_array();
+    for (size_t ix = 0; ix < value.size; ++ix) {
+        json_append(&ret, {{name}}_encode(value.elements[ix]).value);
+    }
+    RETURN_VALUE(JSONValue, ret);
+}
+
+Optional{{name}}s {{name}}s_decode(OptionalJSONValue json)
+{
+    if (!json.has_value) {
+        RETURN_EMPTY({{name}}s);
+    }
+    assert(json.value.type == JSON_TYPE_ARRAY);
+    {{name}}s ret = { 0 };
+    for (size_t ix = 0; ix < json_len(&json.value); ++ix) {
+        OptionalJSONValue  elem = json_at(&json.value, ix);
+        Optional{{name}} val = {{name}}_decode(elem);
+        if (!val.has_value) {
+            RETURN_EMPTY({{name}}s);
+        }
+        da_append_{{name}}(&ret, val.value);
+    }
+    RETURN_VALUE({{name}}s, ret);
+}
+{% endblock -%}
+
+{% block custom_code -%}
+{% endblock -%}
+
+{% block decode_impl -%}
+Optional{{ name }} {{ name }}_decode(OptionalJSONValue json)
+{
+    {% block decode -%}
+    {% endblock -%}
+}
+{% endblock -%}
+
+{% block encode_impl -%}
+OptionalJSONValue {{ name }}_encode({{ name }} value)
+{
+    {% block encode -%}
+    {% endblock -%}
+}
+{% endblock -%}
