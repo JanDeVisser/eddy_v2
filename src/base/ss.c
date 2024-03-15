@@ -27,17 +27,18 @@ void ss_reset(StringScanner *ss)
 
 void ss_partial_rewind(StringScanner *ss, size_t num)
 {
-    if (num > (ss->point - ss->mark)) {
-        num = ss->point - ss->mark;
+    if (num > (ss->point.index - ss->mark.index)) {
+        num = ss->point.index - ss->mark.index;
     }
-    ss->point -= num;
+    if (num > 0) {
+        ss_rewind(ss);
+        ss_skip(ss, ss->point.index - ss->mark.index - num);
+    }
 }
 
 void ss_pushback(StringScanner *ss)
 {
-    if (ss->point > ss->mark) {
-        ss->point--;
-    }
+    ss_partial_rewind(ss, 1);
 }
 
 StringView ss_read(StringScanner *ss, size_t num)
@@ -45,27 +46,27 @@ StringView ss_read(StringScanner *ss, size_t num)
     if ((int64_t) (num) < 0) {
         num = 0;
     }
-    if ((ss->point + num) > ss->string.length) {
-        num = ss->string.length - ss->point;
+    if ((ss->point.index + num) > ss->string.length) {
+        num = ss->string.length - ss->point.index;
     }
-    StringView ret = sv_substring(ss->string, ss->point, num);
-    ss->point = ss->point + num;
+    StringView ret = sv_substring(ss->string, ss->point.index, num);
+    ss_skip(ss, num);
     return ret;
 }
 
 StringView ss_read_from_mark(StringScanner *ss)
 {
-    size_t num = ss->point - ss->mark;
+    size_t num = ss->point.index - ss->mark.index;
     if (num > 0) {
-        ss_rewind(ss);
-        return ss_read(ss, num);
+        return sv_substring(ss->string, ss->mark.index, ss->point.index - ss->mark.index);
     }
     return sv_null();
 }
 
 int ss_readchar(StringScanner *ss)
 {
-    return (ss->point < ss->string.length - 1) ? ss->string.ptr[++ss->point] : '\0';
+    ss_skip_one(ss);
+    return (ss->point.index <= ss->string.length - 1) ? ss->string.ptr[ss->point.index] : '\0';
 }
 
 int ss_peek(StringScanner *ss)
@@ -75,26 +76,38 @@ int ss_peek(StringScanner *ss)
 
 int ss_peek_with_offset(StringScanner *ss, size_t offset)
 {
-    return ((ss->point + offset) < ss->string.length) ? ss->string.ptr[ss->point + offset] : 0;
+    return ((ss->point.index + offset) < ss->string.length) ? ss->string.ptr[ss->point.index + offset] : 0;
 }
 
 StringView ss_peek_sv(StringScanner *ss, size_t length)
 {
-    if (ss->point + length > ss->string.length) {
-        length = ss->string.length - ss->point;
+    if (ss->point.index + length > ss->string.length) {
+        length = ss->string.length - ss->point.index;
     }
     if (length == 0) {
         return sv_null();
     }
-    return (StringView) { .ptr = ss->string.ptr + ss->point, length };
+    return (StringView) { .ptr = ss->string.ptr + ss->point.index, length };
+}
+
+StringView ss_peek_tail(StringScanner *ss)
+{
+    return sv_lchop(ss->string, ss->point.index);
 }
 
 void ss_skip(StringScanner *ss, size_t num)
 {
-    if (ss->point + num > ss->string.length) {
-        num = ss->string.length - ss->point;
+    if (ss->point.index + num > ss->string.length) {
+        num = ss->string.length - ss->point.index;
     }
-    ss->point += num;
+    for (size_t new_index = ss->point.index + num; ss->point.index < new_index; ++ss->point.index) {
+        if (ss->string.ptr[ss->point.index] == '\n') {
+            ++ss->point.line;
+            ss->point.column = 0;
+        } else {
+            ++ss->point.column;
+        }
+    }
 }
 
 void ss_skip_one(StringScanner *ss)
@@ -121,7 +134,7 @@ bool ss_expect_with_offset(StringScanner *ss, char ch, size_t offset)
     if (ss_peek_with_offset(ss, offset) != ch) {
         return false;
     }
-    ss->point += offset + 1;
+    ss_skip(ss, offset + 1);
     return true;
 }
 
@@ -132,14 +145,14 @@ bool ss_expect(StringScanner *ss, char ch)
 
 bool ss_expect_sv(StringScanner *ss, StringView sv)
 {
-    if (ss->point + sv.length > ss->string.length) {
+    if (ss->point.index + sv.length > ss->string.length) {
         return false;
     }
-    StringView s = sv_substring(ss->string, ss->point, sv.length);
+    StringView s = sv_substring(ss->string, ss->point.index, sv.length);
     if (!sv_eq(s, sv)) {
         return false;
     }
-    ss->point += sv.length;
+    ss_skip(ss, sv.length);
     return true;
 }
 
@@ -156,7 +169,7 @@ bool ss_is_one_of(StringScanner *ss, char const *expect)
 bool ss_expect_one_of_with_offset(StringScanner *ss, char const *expect, size_t offset)
 {
     if (ss_is_one_of_with_offset(ss, expect, offset)) {
-        ss->point += offset + 1;
+        ss_skip(ss, offset+1);
         return true;
     }
     return false;

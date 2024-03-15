@@ -484,14 +484,14 @@ ErrorOrInt deserialize_char_entity(XMLDeserializer *deserializer)
     }
     StringView code = ss_read_from_mark(&deserializer->ss);
     if (sv_empty(code)) {
-        ERROR(Int, XMLError, deserializer->ss.point, "Bad escape- '&#;'");
+        ERROR(Int, XMLError, deserializer->ss.point.line, "Bad escape- '&#;'");
     }
     if (!ss_expect(&deserializer->ss, ';')) {
-        ERROR(Int, XMLError, deserializer->ss.point, "Escape not termininated before end of document");
+        ERROR(Int, XMLError, deserializer->ss.point.line, "Escape not termininated before end of document");
     }
     IntegerParseResult parse_result = sv_parse_u32(code);
     if (!parse_result.success) {
-        ERROR(Int, XMLError, deserializer->ss.point, "Bad escape- '%.*' is not a character entity", SV_ARG(code));
+        ERROR(Int, XMLError, deserializer->ss.point.line, "Bad escape- '%.*' is not a character entity", SV_ARG(code));
     }
     uint32_t int_value = parse_result.integer.u32;
     char    *int_value_as_char = (char *) (&int_value);
@@ -522,11 +522,11 @@ ErrorOrOptionalStringView deserialize_text(XMLDeserializer *deserializer, String
             } else if (ss_expect(&deserializer->ss, '#')) {
                 TRY_TO(Int, OptionalStringView, deserialize_char_entity(deserializer));
             } else {
-                ERROR(OptionalStringView, XMLError, deserializer->ss.point, "Bad escape");
+                ERROR(OptionalStringView, XMLError, deserializer->ss.point.line, "Bad escape");
             }
         } break;
         case '\0':
-            ERROR(OptionalStringView, XMLError, deserializer->ss.point, "Unterminated text");
+            ERROR(OptionalStringView, XMLError, deserializer->ss.point.line, "Unterminated text");
         case '<':
             if (sv_is_whitespace(deserializer->sb.view)) {
                 RETURN(OptionalStringView, OptionalStringView_empty());
@@ -535,7 +535,7 @@ ErrorOrOptionalStringView deserialize_text(XMLDeserializer *deserializer, String
         case '\'':
         case '\"':
         case '>':
-            ERROR(OptionalStringView, XMLError, deserializer->ss.point, "Invalid character in text: '%c'", ch);
+            ERROR(OptionalStringView, XMLError, deserializer->ss.point.line, "Invalid character in text: '%c'", ch);
         default:
             sb_append_char(&deserializer->sb, ch);
             ss_skip_one(&deserializer->ss);
@@ -553,7 +553,7 @@ ErrorOrStringView deserialize_tag(XMLDeserializer *deserializer)
     }
     StringView ret = ss_read_from_mark(&deserializer->ss);
     if (sv_empty(ret)) {
-        ERROR(StringView, XMLError, deserializer->ss.point, "Expected tag name");
+        ERROR(StringView, XMLError, deserializer->ss.point.line, "Expected tag name");
     }
     trace(CAT_XML, "deserialize_tag(): %.*s", SV_ARG(ret));
     RETURN(StringView, ret);
@@ -563,13 +563,13 @@ ErrorOrStringView deserialize_attr_value(XMLDeserializer *deserializer)
 {
     StringScanner *ss = &deserializer->ss;
     if (!ss_is_one_of(ss, "\"'")) {
-        ERROR(StringView, XMLError, deserializer->ss.point, "Expected opening quote");
+        ERROR(StringView, XMLError, deserializer->ss.point.line, "Expected opening quote");
     }
-    StringView close = (StringView) { ss->string.ptr + ss->point, 1 };
+    StringView close = (StringView) ss_peek_sv(ss, 1);;
     ss_skip_one(ss);
     OptionalStringView ret_maybe = TRY_TO(OptionalStringView, StringView, deserialize_text(deserializer, close));
     if (!ret_maybe.has_value) {
-        ERROR(StringView, XMLError, deserializer->ss.point, "No attribute value");
+        ERROR(StringView, XMLError, deserializer->ss.point.line, "No attribute value");
     }
     trace(CAT_XML, "deserialize_attr_value(): %.*s", SV_ARG(ret_maybe.value));
     RETURN(StringView, ret_maybe.value);
@@ -586,7 +586,7 @@ ErrorOrOptionalXMLNode deserialize_processing_instruction(XMLDeserializer *deser
         StringView attr = TRY_TO(StringView, OptionalXMLNode, deserialize_tag(deserializer));
         ss_skip_whitespace(&deserializer->ss);
         while (ss_peek(&deserializer->ss) != '=') {
-            ERROR(OptionalXMLNode, XMLError, deserializer->ss.point, "Expected =");
+            ERROR(OptionalXMLNode, XMLError, deserializer->ss.point.line, "Expected =");
         }
         ss_skip_one(&deserializer->ss);
         ss_skip_whitespace(&deserializer->ss);
@@ -596,7 +596,7 @@ ErrorOrOptionalXMLNode deserialize_processing_instruction(XMLDeserializer *deser
     }
     ss_skip_one(&deserializer->ss);
     if (!ss_expect(&deserializer->ss, '>')) {
-        ERROR(OptionalXMLNode, XMLError, deserializer->ss.point, "Processing instruction not closed by '?>'");
+        ERROR(OptionalXMLNode, XMLError, deserializer->ss.point.line, "Processing instruction not closed by '?>'");
     }
     trace(CAT_XML, "PI '%.*s' deserialized", SV_ARG(tag));
     RETURN(OptionalXMLNode, OptionalXMLNode_create(result));
@@ -615,7 +615,7 @@ ErrorOrOptionalXMLNode deserialize_element(XMLDeserializer *deserializer, XMLNod
         StringView attr = TRY_TO(StringView, OptionalXMLNode, deserialize_tag(deserializer));
         ss_skip_whitespace(ss);
         while (ss_peek(ss) != '=') {
-            ERROR(OptionalXMLNode, XMLError, deserializer->ss.point, "Expected =");
+            ERROR(OptionalXMLNode, XMLError, deserializer->ss.point.line, "Expected =");
         }
         ss_skip_one(ss);
         ss_skip_whitespace(ss);
@@ -631,10 +631,10 @@ ErrorOrOptionalXMLNode deserialize_element(XMLDeserializer *deserializer, XMLNod
         }
     }
     if (!ss_expect_sv(ss, tag)) {
-        ERROR(OptionalXMLNode, XMLError, deserializer->ss.point, "Expected '</%.s'>", SV_ARG(tag));
+        ERROR(OptionalXMLNode, XMLError, deserializer->ss.point.line, "Expected '</%.s'>", SV_ARG(tag));
     }
     if (!ss_expect(ss, '>')) {
-        ERROR(OptionalXMLNode, XMLError, deserializer->ss.point, "Expected >");
+        ERROR(OptionalXMLNode, XMLError, deserializer->ss.point.line, "Expected >");
     }
     ss_skip_whitespace(&deserializer->ss);
     trace(CAT_XML, "Element '%.*s' [%zu] [%zu] deserialized", SV_ARG(tag), xml_attribute_count(result), xml_child_count(result));
@@ -647,15 +647,15 @@ ErrorOrOptionalXMLNode deserialize_node(XMLDeserializer *deserializer, XMLNode p
 
     if (xml_node_type(parent) == XML_TYPE_ELEMENT) {
         StringView debug = xml_debug(parent);
-        trace(CAT_XML, "deserialize_node(%zu, %.*s)", deserializer->ss.point, SV_ARG(debug));
+        trace(CAT_XML, "deserialize_node(%zu, %.*s)", deserializer->ss.point.line, SV_ARG(debug));
         sv_free(debug);
     } else {
-        trace(CAT_XML, "deserialize_node(%zu, [%zu] %.*s)", deserializer->ss.point, parent.index, SV_ARG(xml_to_string(parent)));
+        trace(CAT_XML, "deserialize_node(%zu, [%zu] %.*s)", deserializer->ss.point.line, parent.index, SV_ARG(xml_to_string(parent)));
     }
     // ss_skip_whitespace(&deserializer->ss);
     switch (ss_peek(&deserializer->ss)) {
     case 0:
-        ERROR(OptionalXMLNode, XMLError, deserializer->ss.point, "Expected node");
+        ERROR(OptionalXMLNode, XMLError, deserializer->ss.point.line, "Expected node");
     case '<': {
         trace(CAT_XML, "Found '<'");
         ss_skip_one(&deserializer->ss);

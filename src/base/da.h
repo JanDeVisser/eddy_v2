@@ -8,6 +8,7 @@
 #define __DA_H__
 
 #include <stdlib.h>
+#include <base/optional.h>
 
 #define DIA_ELEMENTS(T, E) \
     size_t size;           \
@@ -121,8 +122,13 @@ extern void da_free(DA_void *array, size_t elem_size, char const *type);
 
 DA_STRUCT(void_ptr, void *);
 DA_STRUCT(char_ptr, char *);
-DA_WITH_NAME(uint32_t, UInts);
+DA_WITH_NAME(int, Ints);
+DA_WITH_NAME(uint32_t, UInt32s);
+DA_WITH_NAME(bool, Bools);
 DA_WITH_NAME(size_t, Sizes);
 DA_WITH_NAME(char, Chars);
+OPTIONAL(Ints);
+OPTIONAL(UInt32s);
+OPTIONAL(Bools);
 
 #endif /* __DA_H__ */

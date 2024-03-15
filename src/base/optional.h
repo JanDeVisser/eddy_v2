@@ -7,7 +7,6 @@
 #ifndef __OPTIONAL_H__
 #define __OPTIONAL_H__
 
-#include <da.h>
 #include <error_or.h>
 
 #define OPTIONAL_ALIAS(T, alias)                                        \
@@ -34,6 +33,15 @@
                 #expr, __FILE_NAME__, __LINE__);                        \
         }                                                               \
         T##_maybe.value;                                                \
+    })
+
+#define FORWARD_OPTIONAL(T, S, expr)    \
+    ({                                  \
+        Optional##T T##_maybe = (expr); \
+        if (!T##_maybe.has_value) {     \
+            return (Optional##S) { 0 }; \
+        }                               \
+        T##_maybe.value;                \
     })
 
 #define TRY_OPTIONAL(T, expr, E, CAT, MSG, ...)               \

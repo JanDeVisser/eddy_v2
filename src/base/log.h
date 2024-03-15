@@ -8,6 +8,8 @@
 #define __LOG_H__
 
 #include <stdarg.h>
+#include <stdbool.h>
+#include <stdint.h>
 
 #include <config.h>
 
@@ -38,7 +40,6 @@ typedef enum trace_category {
 #undef TRACECATEGORY
         CAT_COUNT
 } TraceCategory;
-
 
 struct string_view;
 

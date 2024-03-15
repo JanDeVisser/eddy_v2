@@ -89,6 +89,7 @@ void *da_pop_front(DA_void *array, size_t elem_size, char const *type)
 
 DA_IMPL_TYPE(char_ptr, char *)
 DA_IMPL_TYPE(void_ptr, void *)
+DA_IMPL(int)
 DA_IMPL(uint32_t)
 DA_IMPL(size_t)
 DA_IMPL(char)

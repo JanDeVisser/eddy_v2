@@ -542,7 +542,7 @@ ErrorOrStringView json_decode_string(JSONDecoder *decoder)
             ch = ss_peek(&decoder->ss);
             switch (ch) {
             case 0:
-                ERROR(StringView, JSONError, 0, "Bad escape");
+                ERROR(StringView, JSONError, decoder->ss.point.line, "Bad escape");
             case 'n':
                 sb_append_char(&decoder->sb, '\n');
                 break;
@@ -661,7 +661,7 @@ ErrorOrJSONValue json_decode_value(JSONDecoder *decoder)
         if (ss_expect_sv(&decoder->ss, sv_from("null"))) {
             RETURN(JSONValue, json_null());
         }
-        ERROR(JSONValue, JSONError, 0, "Invalid JSON");
+        ERROR(JSONValue, JSONError, 0, "%d:%d: Invalid JSON", decoder->ss.point.line, decoder->ss.point.column);
     }
     }
 }

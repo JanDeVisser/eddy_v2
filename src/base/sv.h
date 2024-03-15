@@ -28,8 +28,10 @@ ERROR_OR(OptionalStringView);
 
 DA_ELEMENTS(StringView, strings)
 typedef DA_StringView StringList;
-typedef DA_StringView StringViewArray;
+typedef DA_StringView StringViews;
 ERROR_OR(StringList);
+OPTIONAL(StringList);
+typedef OptionalStringList OptionalStringViews;
 
 typedef struct string_builder {
     union {
@@ -61,10 +63,16 @@ typedef struct integer_parse_result {
     Integer    integer;
 } IntegerParseResult;
 
+typedef struct {
+    size_t index;
+    size_t line;
+    size_t column;
+} TextPosition;
+
 typedef struct StringScanner {
-    StringView string;
-    size_t     mark;
-    size_t     point;
+    StringView   string;
+    TextPosition mark;
+    TextPosition point;
 } StringScanner;
 
 extern void               free_buffer(char *buffer);
@@ -185,6 +193,7 @@ extern int           ss_readchar(StringScanner *ss);
 extern int           ss_peek(StringScanner *ss);
 extern int           ss_peek_with_offset(StringScanner *ss, size_t offset);
 extern StringView    ss_peek_sv(StringScanner *ss, size_t length);
+extern StringView    ss_peek_tail(StringScanner *ss);
 extern void          ss_skip(StringScanner *ss, size_t num);
 extern void          ss_skip_one(StringScanner *ss);
 extern void          ss_skip_whitespace(StringScanner *ss);
