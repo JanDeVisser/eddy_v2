@@ -4,10 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "log.h"
-#include "optional.h"
-#include "schema/DocumentUri.h"
-#include "sv.h"
+#include <stdarg.h>
 #include <sys/syslimits.h>
 #include <unistd.h>
 
@@ -33,6 +30,21 @@ static Process           *lsp = NULL;
 static ServerCapabilities server_capabilties;
 static PaletteIndex       colors[30];
 
+void trace_json(OptionalJSONValue json, char const *msg, ...)
+{
+    va_list args;
+    va_start(args, msg);
+    vtrace(CAT_LSP, msg, args);
+    if (!json.has_value) {
+        trace(CAT_LSP, "(no json)");
+        return;
+    }
+    va_end(args);
+    StringView s = json_to_string(json.value);
+    trace(CAT_LSP, "%.*s", SV_ARG(s));
+    sv_free(s);
+}
+
 ErrorOrResponse lsp_message(char const *method, OptionalJSONValue params)
 {
     static int id = 0;
@@ -40,7 +52,7 @@ ErrorOrResponse lsp_message(char const *method, OptionalJSONValue params)
     req.params = params;
     assert(lsp);
     JSONValue json = request_encode(&req);
-    trace(CAT_LSP, "==> %.*s", SV_ARG(json_to_string(json)));
+    trace_json(OptionalJSONValue_create(json), "==>");
     StringView request_json = json_encode(json);
     StringView req_content_length = sv_printf("Content-Length: %zu\r\n\r\n", request_json.length + 2);
     TRY_TO(Size, Response, write_pipe_write(&lsp->in, req_content_length));
@@ -74,7 +86,6 @@ ErrorOrResponse lsp_message(char const *method, OptionalJSONValue params)
         if (response_json.length < resp_content_length) {
             continue;
         }
-        trace(CAT_LSP, "<== %.*s", SV_ARG(response_json));
         buf = (StringView) { 0 };
         ErrorOrJSONValue ret_maybe = json_decode(response_json);
         if (ErrorOrJSONValue_is_error(ret_maybe)) {
@@ -82,6 +93,7 @@ ErrorOrResponse lsp_message(char const *method, OptionalJSONValue params)
             trace(CAT_LSP, "****** <== %.*s", SV_ARG(response_json));
             return ErrorOrResponse_copy(ret_maybe.error);
         }
+        trace_json(OptionalJSONValue_create(ret_maybe.value), "<==");
         JSONValue ret = ret_maybe.value;
 
         if (json_has(&ret, "method")) {
@@ -113,7 +125,7 @@ void lsp_notification(char const *method, OptionalJSONValue params)
     write_pipe_write(&lsp->in, sv_from(content_length));
     write_pipe_write(&lsp->in, json);
     write_pipe_write(&lsp->in, sv_from("\r\n"));
-    trace(CAT_LSP, "==| %.*s", SV_ARG(json));
+    trace_json(params, "==|");
 }
 
 void lsp_initialize()
@@ -307,13 +319,18 @@ void lsp_semantic_tokens(int buffer_num)
     size_t         offset = 0;
     UInt32s        data = result.data;
     for (size_t ix = 0; ix < result.data.size; ix += 5) {
+        trace(CAT_LSP, "Semantic token[%zu]: [%du, %du, %du]", ix, data.elements[ix], data.elements[ix + 1], data.elements[ix + 2]);
         if (data.elements[ix] > 0) {
             lineno += data.elements[ix];
-            assert(lineno < buffer->lines.size);
+            if (lineno >= buffer->lines.size) {
+                trace(CAT_LSP, "Semantic token[%zu] lineno %zu > buffer->lines %zu", ix, lineno, buffer->lines.size);
+                continue;
+            }
             line = buffer->lines.elements + lineno;
             offset = 0;
         }
         offset += data.elements[ix + 1];
+        trace(CAT_LSP, "Semantic token[%zu]: line: %zu col: %zu", ix, lineno, offset);
         size_t length = data.elements[ix + 2];
         for (size_t token_ix = 0; token_ix < line->num_tokens; ++token_ix) {
             assert(line->first_token + token_ix < buffer->tokens.size);

@@ -77,7 +77,10 @@ OptionalJSONValue UInt32_encode(unsigned int value)
 
 OptionalUInt32 UInt32_decode(OptionalJSONValue json)
 {
-    if (!json.has_value || json.value.type != JSON_TYPE_INT || json.value.int_number.type != U32) {
+    if (!json.has_value) {
+        RETURN_EMPTY(UInt32);
+    }
+    if (json.value.type != JSON_TYPE_INT) {
         RETURN_EMPTY(UInt32);
     }
     RETURN_VALUE(UInt32, json.value.int_number.u32);
@@ -94,7 +97,7 @@ OptionalJSONValue UInt32s_encode(UInt32s value)
 
 OptionalUInt32s UInt32s_decode(OptionalJSONValue json)
 {
-    if (!json.has_value || json.value.type == JSON_TYPE_ARRAY) {
+    if (!json.has_value || json.value.type != JSON_TYPE_ARRAY) {
         RETURN_EMPTY(UInt32s);
     }
     UInt32s ret = { 0 };
@@ -175,10 +178,9 @@ OptionalJSONValue Empty_encode(Empty value)
 
 OptionalEmpty Empty_decode(OptionalJSONValue json)
 {
-    if (!json.has_value) {
+    if (!json.has_value || json.value.type != JSON_TYPE_OBJECT || json.value.object.size != 0) {
         RETURN_EMPTY(Empty);
     }
-    assert(json.value.type == JSON_TYPE_OBJECT && json.value.object.size == 0);
     RETURN_VALUE(Empty, (Empty) {});
 }
 
@@ -191,10 +193,9 @@ OptionalJSONValue Null_encode(Null value)
 
 OptionalNull Null_decode(OptionalJSONValue json)
 {
-    if (!json.has_value) {
+    if (!json.has_value || json.value.type != JSON_TYPE_NULL) {
         RETURN_EMPTY(Null);
     }
-    assert(json.value.type == JSON_TYPE_NULL);
     RETURN_VALUE(Null, (Null) {});
 }
 
