@@ -76,8 +76,16 @@ void trace(TraceCategory category, char const *msg, ...)
     }
     va_list args;
     va_start(args, msg);
-    vemit_log_message(LL_TRACE, category, msg, args);
+    vtrace(category, msg, args);
     va_end(args);
+}
+
+void vtrace(TraceCategory category, char const *msg, va_list args)
+{
+    if (!s_categories[(int) category]) {
+        return;
+    }
+    vemit_log_message(LL_TRACE, category, msg, args);
 }
 
 bool log_category_on(TraceCategory category)
@@ -109,11 +117,6 @@ void log_turn_off_sv(StringView category)
     if (cat != CAT_NONE) {
         log_turn_off(cat);
     }
-}
-
-void vtrace(char const *msg, va_list args)
-{
-    vemit_log_message(LL_TRACE, CAT_COUNT, msg, args);
 }
 
 void _fatal(char const *msg, ...)
