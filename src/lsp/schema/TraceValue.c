@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/TraceValue.h>
 
 DA_IMPL(TraceValue)
-
-OptionalJSONValue OptionalTraceValue_encode(OptionalTraceValue value)
-{
-    if (value.has_value) {
-        return TraceValue_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalTraceValue OptionalTraceValue_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalTraceValue);
-    }
-    RETURN_VALUE(OptionalTraceValue, TraceValue_decode(json));
-}
 
 OptionalJSONValue TraceValues_encode(TraceValues value)
 {
@@ -53,6 +37,7 @@ OptionalTraceValues TraceValues_decode(OptionalJSONValue json)
     }
     RETURN_VALUE(TraceValues, ret);
 }
+
 StringView TraceValue_to_string(TraceValue value)
 {
     switch (value) {
@@ -77,12 +62,16 @@ OptionalTraceValue TraceValue_parse(StringView s)
         RETURN_VALUE(TraceValue, TraceValueVerbose);
     RETURN_EMPTY(TraceValue);
 }
+
 OptionalTraceValue TraceValue_decode(OptionalJSONValue json)
 {
-    assert(json.has_value);
+    if (!json.has_value) {
+        RETURN_EMPTY(TraceValue);
+    }
     assert(json.value.type == JSON_TYPE_STRING);
     return TraceValue_parse(json.value.string);
 }
+
 OptionalJSONValue TraceValue_encode(TraceValue value)
 {
     RETURN_VALUE(JSONValue, json_string(TraceValue_to_string(value)));

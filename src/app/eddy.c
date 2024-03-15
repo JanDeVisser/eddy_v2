@@ -198,8 +198,8 @@ void eddy_are_you_sure_handler(ListBox *are_you_sure, QueryOption selection)
 
 void eddy_cmd_quit(CommandContext *ctx)
 {
-    Eddy    *eddy = (Eddy *) ctx->target;
-    bool has_modified_buffers = false;
+    Eddy *eddy = (Eddy *) ctx->target;
+    bool  has_modified_buffers = false;
     for (size_t ix = 0; ix < eddy->buffers.size; ++ix) {
         Buffer *buffer = da_element_Buffer(&eddy->buffers, ix);
         if (buffer->saved_version < buffer->version) {
@@ -240,9 +240,9 @@ void eddy_cmd_run_command(CommandContext *ctx)
 void eddy_open_fs_handler(ListBox *listbox, DirEntry entry)
 {
     FileSelectorStatus *status = listbox->memo;
-    DirListing *dir = (DirListing *) listbox->memo;
-    StringView  filename = sv_printf("%.*s/%.*s", SV_ARG(dir->directory), SV_ARG(entry.name));
-    StringView  canonical = fs_canonical(filename);
+    DirListing         *dir = (DirListing *) listbox->memo;
+    StringView          filename = sv_printf("%.*s/%.*s", SV_ARG(dir->directory), SV_ARG(entry.name));
+    StringView          canonical = fs_canonical(filename);
     sv_free(filename);
     ErrorOrBuffer buffer_maybe = eddy_open_buffer(&eddy, canonical);
     if (ErrorOrBuffer_is_error(buffer_maybe)) {

@@ -20,16 +20,12 @@ typedef struct {
 } DidChangeTextDocumentParams;
 
 OPTIONAL(DidChangeTextDocumentParams);
-OPTIONAL(OptionalDidChangeTextDocumentParams);
 DA_WITH_NAME(DidChangeTextDocumentParams, DidChangeTextDocumentParamss);
 OPTIONAL(DidChangeTextDocumentParamss);
-OPTIONAL(OptionalDidChangeTextDocumentParamss);
 
-extern OptionalJSONValue                           DidChangeTextDocumentParams_encode(DidChangeTextDocumentParams value);
-extern OptionalDidChangeTextDocumentParams         DidChangeTextDocumentParams_decode(OptionalJSONValue json);
-extern OptionalJSONValue                           OptionalDidChangeTextDocumentParams_encode(OptionalDidChangeTextDocumentParams value);
-extern OptionalOptionalDidChangeTextDocumentParams OptionalDidChangeTextDocumentParams_decode(OptionalJSONValue json);
-extern OptionalJSONValue                           DidChangeTextDocumentParamss_encode(DidChangeTextDocumentParamss value);
-extern OptionalDidChangeTextDocumentParamss        DidChangeTextDocumentParamss_decode(OptionalJSONValue json);
+extern OptionalJSONValue                    DidChangeTextDocumentParams_encode(DidChangeTextDocumentParams value);
+extern OptionalDidChangeTextDocumentParams  DidChangeTextDocumentParams_decode(OptionalJSONValue json);
+extern OptionalJSONValue                    DidChangeTextDocumentParamss_encode(DidChangeTextDocumentParamss value);
+extern OptionalDidChangeTextDocumentParamss DidChangeTextDocumentParamss_decode(OptionalJSONValue json);
 
 #endif /* __LSP_DIDCHANGETEXTDOCUMENTPARAMS_H__ */

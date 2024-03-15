@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/TextDocumentItem.h>
 
 DA_IMPL(TextDocumentItem)
-
-OptionalJSONValue OptionalTextDocumentItem_encode(OptionalTextDocumentItem value)
-{
-    if (value.has_value) {
-        return TextDocumentItem_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalTextDocumentItem OptionalTextDocumentItem_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalTextDocumentItem);
-    }
-    RETURN_VALUE(OptionalTextDocumentItem, TextDocumentItem_decode(json));
-}
 
 OptionalJSONValue TextDocumentItems_encode(TextDocumentItems value)
 {
@@ -53,6 +37,7 @@ OptionalTextDocumentItems TextDocumentItems_decode(OptionalJSONValue json)
     }
     RETURN_VALUE(TextDocumentItems, ret);
 }
+
 OptionalTextDocumentItem TextDocumentItem_decode(OptionalJSONValue json)
 {
     if (!json.has_value || json.value.type != JSON_TYPE_OBJECT) {
@@ -77,12 +62,29 @@ OptionalTextDocumentItem TextDocumentItem_decode(OptionalJSONValue json)
     }
     RETURN_VALUE(TextDocumentItem, value);
 }
+
 OptionalJSONValue TextDocumentItem_encode(TextDocumentItem value)
 {
     JSONValue v1 = json_object();
-    json_optional_set(&v1, "uri", DocumentUri_encode(value.uri));
-    json_optional_set(&v1, "languageId", StringView_encode(value.languageId));
-    json_optional_set(&v1, "version", Int_encode(value.version));
-    json_optional_set(&v1, "text", StringView_encode(value.text));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = DocumentUri_encode(value.uri);
+        json_optional_set(&v1, "uri", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = StringView_encode(value.languageId);
+        json_optional_set(&v1, "languageId", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = Int_encode(value.version);
+        json_optional_set(&v1, "version", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = StringView_encode(value.text);
+        json_optional_set(&v1, "text", _encoded_maybe);
+    }
     RETURN_VALUE(JSONValue, v1);
 }

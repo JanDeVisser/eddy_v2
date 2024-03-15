@@ -20,16 +20,12 @@ typedef struct {
 } Location;
 
 OPTIONAL(Location);
-OPTIONAL(OptionalLocation);
 DA_WITH_NAME(Location, Locations);
 OPTIONAL(Locations);
-OPTIONAL(OptionalLocations);
 
-extern OptionalJSONValue        Location_encode(Location value);
-extern OptionalLocation         Location_decode(OptionalJSONValue json);
-extern OptionalJSONValue        OptionalLocation_encode(OptionalLocation value);
-extern OptionalOptionalLocation OptionalLocation_decode(OptionalJSONValue json);
-extern OptionalJSONValue        Locations_encode(Locations value);
-extern OptionalLocations        Locations_decode(OptionalJSONValue json);
+extern OptionalJSONValue Location_encode(Location value);
+extern OptionalLocation  Location_decode(OptionalJSONValue json);
+extern OptionalJSONValue Locations_encode(Locations value);
+extern OptionalLocations Locations_decode(OptionalJSONValue json);
 
 #endif /* __LSP_LOCATION_H__ */

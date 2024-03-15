@@ -33,8 +33,7 @@ typedef enum {
     CDirectiveMax,
 } CDirective;
 
-
-static char const *c_directives[CDirectiveMax+1] = {
+static char const *c_directives[CDirectiveMax + 1] = {
     [CDirectiveElse] = "else",
     [CDirectiveElif] = "elif",
     [CDirectiveElifdef] = "elifdef",

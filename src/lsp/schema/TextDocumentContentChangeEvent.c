@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/TextDocumentContentChangeEvent.h>
 
 DA_IMPL(TextDocumentContentChangeEvent)
-
-OptionalJSONValue OptionalTextDocumentContentChangeEvent_encode(OptionalTextDocumentContentChangeEvent value)
-{
-    if (value.has_value) {
-        return TextDocumentContentChangeEvent_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalTextDocumentContentChangeEvent OptionalTextDocumentContentChangeEvent_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalTextDocumentContentChangeEvent);
-    }
-    RETURN_VALUE(OptionalTextDocumentContentChangeEvent, TextDocumentContentChangeEvent_decode(json));
-}
 
 OptionalJSONValue TextDocumentContentChangeEvents_encode(TextDocumentContentChangeEvents value)
 {
@@ -74,11 +58,7 @@ OptionalTextDocumentContentChangeEvent TextDocumentContentChangeEvent_decode(Opt
                 }
                 value._0.range = opt2_0_range.value;
                 v3 = json_get(&json.value, "rangeLength");
-                OptionalOptionalUInt32 opt2_0_rangeLength = OptionalUInt32_decode(v3);
-                if (!opt2_0_rangeLength.has_value) {
-                    break;
-                }
-                value._0.rangeLength = opt2_0_rangeLength.value;
+                value._0.rangeLength = UInt32_decode(v3);
                 v3 = json_get(&json.value, "text");
                 OptionalStringView opt2_0_text = StringView_decode(v3);
                 if (!opt2_0_text.has_value) {
@@ -116,13 +96,31 @@ OptionalJSONValue TextDocumentContentChangeEvent_encode(TextDocumentContentChang
     switch (value.tag) {
     case 0: {
         v2 = json_object();
-        json_optional_set(&v2, "range", Range_encode(value._0.range));
-        json_optional_set(&v2, "rangeLength", OptionalUInt32_encode(value._0.rangeLength));
-        json_optional_set(&v2, "text", StringView_encode(value._0.text));
+        {
+            OptionalJSONValue _encoded_maybe = { 0 };
+            _encoded_maybe = Range_encode(value._0.range);
+            json_optional_set(&v2, "range", _encoded_maybe);
+        }
+        {
+            OptionalJSONValue _encoded_maybe = { 0 };
+            if (value._0.rangeLength.has_value) {
+                _encoded_maybe = UInt32_encode(value._0.rangeLength.value);
+            }
+            json_optional_set(&v2, "rangeLength", _encoded_maybe);
+        }
+        {
+            OptionalJSONValue _encoded_maybe = { 0 };
+            _encoded_maybe = StringView_encode(value._0.text);
+            json_optional_set(&v2, "text", _encoded_maybe);
+        }
     } break;
     case 1: {
         v2 = json_object();
-        json_optional_set(&v2, "text", StringView_encode(value._1.text));
+        {
+            OptionalJSONValue _encoded_maybe = { 0 };
+            _encoded_maybe = StringView_encode(value._1.text);
+            json_optional_set(&v2, "text", _encoded_maybe);
+        }
     } break;
     default:
         UNREACHABLE();

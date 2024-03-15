@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/DidSaveTextDocumentParams.h>
 
 DA_IMPL(DidSaveTextDocumentParams)
-
-OptionalJSONValue OptionalDidSaveTextDocumentParams_encode(OptionalDidSaveTextDocumentParams value)
-{
-    if (value.has_value) {
-        return DidSaveTextDocumentParams_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalDidSaveTextDocumentParams OptionalDidSaveTextDocumentParams_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalDidSaveTextDocumentParams);
-    }
-    RETURN_VALUE(OptionalDidSaveTextDocumentParams, DidSaveTextDocumentParams_decode(json));
-}
 
 OptionalJSONValue DidSaveTextDocumentParamss_encode(DidSaveTextDocumentParamss value)
 {
@@ -53,6 +37,7 @@ OptionalDidSaveTextDocumentParamss DidSaveTextDocumentParamss_decode(OptionalJSO
     }
     RETURN_VALUE(DidSaveTextDocumentParamss, ret);
 }
+
 OptionalDidSaveTextDocumentParams DidSaveTextDocumentParams_decode(OptionalJSONValue json)
 {
     if (!json.has_value || json.value.type != JSON_TYPE_OBJECT) {
@@ -65,14 +50,25 @@ OptionalDidSaveTextDocumentParams DidSaveTextDocumentParams_decode(OptionalJSONV
     }
     {
         OptionalJSONValue v0 = json_get(&json.value, "text");
-        value.text = FORWARD_OPTIONAL(OptionalStringView, DidSaveTextDocumentParams, OptionalStringView_decode(v0));
+        value.text = StringView_decode(v0);
     }
     RETURN_VALUE(DidSaveTextDocumentParams, value);
 }
+
 OptionalJSONValue DidSaveTextDocumentParams_encode(DidSaveTextDocumentParams value)
 {
     JSONValue v1 = json_object();
-    json_optional_set(&v1, "textDocument", TextDocumentIdentifier_encode(value.textDocument));
-    json_optional_set(&v1, "text", OptionalStringView_encode(value.text));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = TextDocumentIdentifier_encode(value.textDocument);
+        json_optional_set(&v1, "textDocument", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        if (value.text.has_value) {
+            _encoded_maybe = StringView_encode(value.text.value);
+        }
+        json_optional_set(&v1, "text", _encoded_maybe);
+    }
     RETURN_VALUE(JSONValue, v1);
 }

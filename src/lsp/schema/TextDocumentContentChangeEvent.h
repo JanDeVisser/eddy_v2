@@ -31,17 +31,11 @@ typedef struct {
 } TextDocumentContentChangeEvent;
 
 OPTIONAL(TextDocumentContentChangeEvent);
-OPTIONAL(OptionalTextDocumentContentChangeEvent);
 DA_WITH_NAME(TextDocumentContentChangeEvent, TextDocumentContentChangeEvents);
 OPTIONAL(TextDocumentContentChangeEvents);
-OPTIONAL(OptionalTextDocumentContentChangeEvents);
 
-extern OptionalJSONValue                               TextDocumentContentChangeEvent_encode(TextDocumentContentChangeEvent value);
-extern OptionalTextDocumentContentChangeEvent          TextDocumentContentChangeEvent_decode(OptionalJSONValue json);
-extern OptionalJSONValue                               OptionalTextDocumentContentChangeEvent_encode(OptionalTextDocumentContentChangeEvent value);
-extern OptionalOptionalTextDocumentContentChangeEvent  OptionalTextDocumentContentChangeEvent_decode(OptionalJSONValue json);
-extern OptionalJSONValue                               TextDocumentContentChangeEvents_encode(TextDocumentContentChangeEvents value);
-extern OptionalTextDocumentContentChangeEvents         TextDocumentContentChangeEvents_decode(OptionalJSONValue json);
-extern OptionalJSONValue                               OptionalTextDocumentContentChangeEvents_encode(OptionalTextDocumentContentChangeEvents value);
-extern OptionalOptionalTextDocumentContentChangeEvents OptionalTextDocumentContentChangeEvents_decode(OptionalJSONValue json);
+extern OptionalJSONValue                       TextDocumentContentChangeEvent_encode(TextDocumentContentChangeEvent value);
+extern OptionalTextDocumentContentChangeEvent  TextDocumentContentChangeEvent_decode(OptionalJSONValue json);
+extern OptionalJSONValue                       TextDocumentContentChangeEvents_encode(TextDocumentContentChangeEvents value);
+extern OptionalTextDocumentContentChangeEvents TextDocumentContentChangeEvents_decode(OptionalJSONValue json);
 #endif /* __LSP_TEXTDOCUMENTCONTENTCHANGEEVENT_H__ */

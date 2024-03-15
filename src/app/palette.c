@@ -21,7 +21,7 @@ PaletteDefinition palettes[PALETTE_MAX] = {
         [PI_IDENTIFIER] = (Color) { .a = 0xff, .b = 0xda, .g = 0xda, .r = 0xda },                 // Identifier.
         [PI_KNOWN_IDENTIFIER] = (Color) { .a = 0xff, .b = 0xb0, .g = 0xc9, .r = 0x4e },           // Known identifier.
         [PI_PREPROC_IDENTIFIER] = (Color) { .a = 0xff, .b = 0xc0, .g = 0x40, .r = 0xa0 },         // Preproc identifier.
-        [PI_FUNCTION] = (Color) { .a = 0xff, .b = 0x60, .g = 0xc6, .r = 0xff },                    // Comment (single line).
+        [PI_FUNCTION] = (Color) { .a = 0xff, .b = 0x60, .g = 0xc6, .r = 0xff },                   // Comment (single line).
         [PI_COMMENT] = (Color) { .a = 0xff, .b = 0x4a, .g = 0xa6, .r = 0x57 },                    // Comment (single line).
         [PI_MULTI_LINE_COMMENT] = (Color) { .a = 0xff, .b = 0x4a, .g = 0xa6, .r = 0x57 },         // Comment (multi line).
         [PI_BACKGROUND] = (Color) { .a = 0xff, .b = 0x2c, .g = 0x2c, .r = 0x2c },                 // Background.
@@ -50,7 +50,7 @@ PaletteDefinition palettes[PALETTE_MAX] = {
         [PI_IDENTIFIER] = (Color) { .a = 0xff, .b = 0x40, .g = 0x40, .r = 0x40 },                 // Identifier.
         [PI_KNOWN_IDENTIFIER] = (Color) { .a = 0xff, .b = 0x60, .g = 0x60, .r = 0x10 },           // Known identifier.
         [PI_PREPROC_IDENTIFIER] = (Color) { .a = 0xff, .b = 0xc0, .g = 0x40, .r = 0xa0 },         // Preproc identifier.
-        [PI_FUNCTION] = (Color) { .a = 0xff, .b = 0x40, .g = 0x40, .r = 0x40 },                 // Identifier.
+        [PI_FUNCTION] = (Color) { .a = 0xff, .b = 0x40, .g = 0x40, .r = 0x40 },                   // Identifier.
         [PI_COMMENT] = (Color) { .a = 0xff, .b = 0x20, .g = 0x50, .r = 0x20 },                    // Comment (single line).
         [PI_MULTI_LINE_COMMENT] = (Color) { .a = 0xff, .b = 0x40, .g = 0x50, .r = 0x20 },         // Comment (multi line).
         [PI_BACKGROUND] = (Color) { .a = 0xff, .b = 0xff, .g = 0xff, .r = 0xff },                 // Background.
@@ -77,7 +77,7 @@ PaletteDefinition palettes[PALETTE_MAX] = {
         [PI_PREPROCESSOR] = (Color) { .a = 0xff, .b = 0x00, .g = 0x80, .r = 0x00 },               // Preprocessor.
         [PI_PREPROCESSOR_ARG] = (Color) { .a = 0xff, .b = 0x00, .g = 0x80, .r = 0x00 },           // Preprocessor argument.
         [PI_IDENTIFIER] = (Color) { .a = 0xff, .b = 0x00, .g = 0xff, .r = 0xff },                 // Identifier.
-        [PI_FUNCTION] = (Color) { .a = 0xff, .b = 0x00, .g = 0xff, .r = 0xff },                 // Identifier.
+        [PI_FUNCTION] = (Color) { .a = 0xff, .b = 0x00, .g = 0xff, .r = 0xff },                   // Identifier.
         [PI_KNOWN_IDENTIFIER] = (Color) { .a = 0xff, .b = 0xff, .g = 0xff, .r = 0xff },           // Known identifier.
         [PI_PREPROC_IDENTIFIER] = (Color) { .a = 0xff, .b = 0xff, .g = 0x00, .r = 0xff },         // Preproc identifier.
         [PI_COMMENT] = (Color) { .a = 0xff, .b = 0x80, .g = 0x80, .r = 0x80 },                    // Comment (single line).

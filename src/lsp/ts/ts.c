@@ -5,8 +5,8 @@
  */
 
 #include "config.h"
-#include <base/json.h>
 #include <base/io.h>
+#include <base/json.h>
 #include <base/options.h>
 #include <base/sv.h>
 #include <lsp/ts/ts.h>
@@ -38,8 +38,8 @@ DA_IMPL(Enumeration);
 DA_IMPL(TypeDef);
 DA_IMPL(Module);
 
-TypeDefs   typedefs = { 0 };
-Modules    modules = { 0 };
+TypeDefs typedefs = { 0 };
+Modules  modules = { 0 };
 
 TypeDef *get_typedef(StringView name)
 {
@@ -74,11 +74,14 @@ char const *basic_type_name(BasicType basic_type)
 char const *type_def_kind_name(TypeDefKind kind)
 {
     switch (kind) {
-        case TypeDefKindInterface: return "interface";
-        case TypeDefKindAlias: return "alias";
-        case TypeDefKindEnumeration: return "enumeration";
-        default:
-            UNREACHABLE();
+    case TypeDefKindInterface:
+        return "interface";
+    case TypeDefKindAlias:
+        return "alias";
+    case TypeDefKindEnumeration:
+        return "enumeration";
+    default:
+        UNREACHABLE();
     }
 }
 
@@ -119,7 +122,8 @@ int main(int argc, char **argv)
             type = argv[ix];
         }
     }
-    set_option(sv_from("eddy-dir"), sv_from(EDDY_DIR));    log_init();
+    set_option(sv_from("eddy-dir"), sv_from(EDDY_DIR));
+    log_init();
 
     printf("Reading %s\n", ts_module);
     Module module = ts_parse(sv_from(ts_module));

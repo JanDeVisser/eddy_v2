@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/TextDocumentClientCapabilities.h>
 
 DA_IMPL(TextDocumentClientCapabilities)
-
-OptionalJSONValue OptionalTextDocumentClientCapabilities_encode(OptionalTextDocumentClientCapabilities value)
-{
-    if (value.has_value) {
-        return TextDocumentClientCapabilities_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalTextDocumentClientCapabilities OptionalTextDocumentClientCapabilities_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalTextDocumentClientCapabilities);
-    }
-    RETURN_VALUE(OptionalTextDocumentClientCapabilities, TextDocumentClientCapabilities_decode(json));
-}
 
 OptionalJSONValue TextDocumentClientCapabilitiess_encode(TextDocumentClientCapabilitiess value)
 {
@@ -53,6 +37,7 @@ OptionalTextDocumentClientCapabilitiess TextDocumentClientCapabilitiess_decode(O
     }
     RETURN_VALUE(TextDocumentClientCapabilitiess, ret);
 }
+
 OptionalTextDocumentClientCapabilities TextDocumentClientCapabilities_decode(OptionalJSONValue json)
 {
     if (!json.has_value || json.value.type != JSON_TYPE_OBJECT) {
@@ -61,18 +46,31 @@ OptionalTextDocumentClientCapabilities TextDocumentClientCapabilities_decode(Opt
     TextDocumentClientCapabilities value = { 0 };
     {
         OptionalJSONValue v0 = json_get(&json.value, "synchronization");
-        value.synchronization = FORWARD_OPTIONAL(OptionalTextDocumentSyncClientCapabilities, TextDocumentClientCapabilities, OptionalTextDocumentSyncClientCapabilities_decode(v0));
+        value.synchronization = TextDocumentSyncClientCapabilities_decode(v0);
     }
     {
         OptionalJSONValue v0 = json_get(&json.value, "semanticTokens");
-        value.semanticTokens = FORWARD_OPTIONAL(OptionalSemanticTokensClientCapabilities, TextDocumentClientCapabilities, OptionalSemanticTokensClientCapabilities_decode(v0));
+        value.semanticTokens = SemanticTokensClientCapabilities_decode(v0);
     }
     RETURN_VALUE(TextDocumentClientCapabilities, value);
 }
+
 OptionalJSONValue TextDocumentClientCapabilities_encode(TextDocumentClientCapabilities value)
 {
     JSONValue v1 = json_object();
-    json_optional_set(&v1, "synchronization", OptionalTextDocumentSyncClientCapabilities_encode(value.synchronization));
-    json_optional_set(&v1, "semanticTokens", OptionalSemanticTokensClientCapabilities_encode(value.semanticTokens));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        if (value.synchronization.has_value) {
+            _encoded_maybe = TextDocumentSyncClientCapabilities_encode(value.synchronization.value);
+        }
+        json_optional_set(&v1, "synchronization", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        if (value.semanticTokens.has_value) {
+            _encoded_maybe = SemanticTokensClientCapabilities_encode(value.semanticTokens.value);
+        }
+        json_optional_set(&v1, "semanticTokens", _encoded_maybe);
+    }
     RETURN_VALUE(JSONValue, v1);
 }

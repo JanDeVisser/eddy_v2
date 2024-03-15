@@ -4,16 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "log.h"
 #include "optional.h"
 #include "schema/DocumentUri.h"
+#include "sv.h"
 #include <sys/syslimits.h>
 #include <unistd.h>
 
 #include <eddy.h>
 #include <json.h>
-#include <palette.h>
-#include <process.h>
-#include <lsp/schema/lsp_base.h>
 #include <lsp/schema/DidChangeTextDocumentParams.h>
 #include <lsp/schema/DidCloseTextDocumentParams.h>
 #include <lsp/schema/DidOpenTextDocumentParams.h>
@@ -21,15 +20,18 @@
 #include <lsp/schema/DocumentFormattingParams.h>
 #include <lsp/schema/InitializeParams.h>
 #include <lsp/schema/InitializeResult.h>
-#include <lsp/schema/ServerCapabilities.h>
+#include <lsp/schema/SemanticTokenTypes.h>
 #include <lsp/schema/SemanticTokens.h>
 #include <lsp/schema/SemanticTokensParams.h>
-#include <lsp/schema/SemanticTokenTypes.h>
+#include <lsp/schema/ServerCapabilities.h>
 #include <lsp/schema/TextEdit.h>
+#include <lsp/schema/lsp_base.h>
+#include <palette.h>
+#include <process.h>
 
 static Process           *lsp = NULL;
 static ServerCapabilities server_capabilties;
-static PaletteIndex colors[30];
+static PaletteIndex       colors[30];
 
 ErrorOrResponse lsp_message(char const *method, OptionalJSONValue params)
 {
@@ -37,15 +39,16 @@ ErrorOrResponse lsp_message(char const *method, OptionalJSONValue params)
     Request    req = { .id = ++id, method, OptionalJSONValue_empty() };
     req.params = params;
     assert(lsp);
-    StringView request_json = json_encode(request_encode(&req));
-    // trace(CAT_LSP, "==> %.*s", SV_ARG(request_json));
+    JSONValue json = request_encode(&req);
+    trace(CAT_LSP, "==> %.*s", SV_ARG(json_to_string(json)));
+    StringView request_json = json_encode(json);
     StringView req_content_length = sv_printf("Content-Length: %zu\r\n\r\n", request_json.length + 2);
     TRY_TO(Size, Response, write_pipe_write(&lsp->in, req_content_length));
     sv_free(req_content_length);
     TRY_TO(Size, Response, write_pipe_write(&lsp->in, request_json));
     TRY_TO(Size, Response, write_pipe_write(&lsp->in, sv_from("\r\n")));
 
-    StringView buf = {0};
+    StringView buf = { 0 };
     while (true) {
         read_pipe_expect(&lsp->out);
         StringView out = read_pipe_current(&lsp->out);
@@ -71,12 +74,12 @@ ErrorOrResponse lsp_message(char const *method, OptionalJSONValue params)
         if (response_json.length < resp_content_length) {
             continue;
         }
-        // trace(CAT_LSP, "<== %.*s", SV_ARG(response_json));
-        buf = (StringView) {0};
+        trace(CAT_LSP, "<== %.*s", SV_ARG(response_json));
+        buf = (StringView) { 0 };
         ErrorOrJSONValue ret_maybe = json_decode(response_json);
         if (ErrorOrJSONValue_is_error(ret_maybe)) {
             trace(CAT_LSP, "==> %.*s", SV_ARG(request_json));
-            trace(CAT_LSP, "<== %.*s", SV_ARG(response_json));
+            trace(CAT_LSP, "****** <== %.*s", SV_ARG(response_json));
             return ErrorOrResponse_copy(ret_maybe.error);
         }
         JSONValue ret = ret_maybe.value;
@@ -132,11 +135,12 @@ void lsp_initialize()
     char prj[PATH_MAX + 8];
     memset(prj, '\0', PATH_MAX + 8);
     snprintf(prj, PATH_MAX + 7, "file://%.*s", SV_ARG(eddy.project_dir));
+    params.rootUri.has_value = true;
     params.rootUri.tag = 0;
     params.rootUri._0 = sv_from(prj);
     params.capabilities.textDocument.has_value = true;
 
-    StringList tokenTypes = {0};
+    StringList tokenTypes = { 0 };
     da_append_StringView(&tokenTypes, SemanticTokenTypes_to_string(SemanticTokenTypesComment));
     da_append_StringView(&tokenTypes, SemanticTokenTypes_to_string(SemanticTokenTypesKeyword));
     da_append_StringView(&tokenTypes, SemanticTokenTypes_to_string(SemanticTokenTypesVariable));
@@ -170,34 +174,83 @@ void lsp_initialize()
         assert(server_capabilties.semanticTokensProvider.has_value);
         // trace(CAT_LSP, "#Token types: %zu", server_capabilties.semanticTokensProvider.value.legend.tokenTypes.size);
         for (int i = 0; i < server_capabilties.semanticTokensProvider.value.legend.tokenTypes.size; ++i) {
-            StringView tokenType = server_capabilties.semanticTokensProvider.value.legend.tokenTypes.strings[i];
-            SemanticTokenTypes semantic_token_type = MUST_OPTIONAL(SemanticTokenTypes, SemanticTokenTypes_parse(tokenType));
-            // trace(CAT_LSP, "%d: '%.*s' %d", i, SV_ARG(tokenType), semantic_token_type);
-            switch (semantic_token_type) {
-                case SemanticTokenTypesNamespace: colors[i] = PI_KNOWN_IDENTIFIER; break;
-                case SemanticTokenTypesType: colors[i] = PI_KNOWN_IDENTIFIER; break;
-                case SemanticTokenTypesClass: colors[i] = PI_KNOWN_IDENTIFIER; break;
-                case SemanticTokenTypesEnum: colors[i] = PI_KNOWN_IDENTIFIER; break;
-                case SemanticTokenTypesInterface: colors[i] = PI_KNOWN_IDENTIFIER; break;
-                case SemanticTokenTypesStruct: colors[i] = PI_KNOWN_IDENTIFIER; break;
-                case SemanticTokenTypesTypeParameter: colors[i] = PI_KNOWN_IDENTIFIER; break;
-                case SemanticTokenTypesParameter: colors[i] = PI_KNOWN_IDENTIFIER; break;
-                case SemanticTokenTypesVariable: colors[i] = PI_KNOWN_IDENTIFIER; break;
-                case SemanticTokenTypesProperty: colors[i] = PI_KNOWN_IDENTIFIER; break;
-                case SemanticTokenTypesEnumMember: colors[i] = PI_KNOWN_IDENTIFIER; break;
-                case SemanticTokenTypesEvent: colors[i] = PI_DEFAULT; break;
-                case SemanticTokenTypesFunction: colors[i] = PI_FUNCTION; break;
-                case SemanticTokenTypesMethod: colors[i] = PI_KNOWN_IDENTIFIER; break;
-                case SemanticTokenTypesMacro: colors[i] = PI_KNOWN_IDENTIFIER; break;
-                case SemanticTokenTypesKeyword: colors[i] = PI_KEYWORD; break;
-                case SemanticTokenTypesModifier: colors[i] = PI_KEYWORD; break;
-                case SemanticTokenTypesComment: colors[i] = PI_COMMENT; break;
-                case SemanticTokenTypesString: colors[i] = PI_STRING; break;
-                case SemanticTokenTypesNumber: colors[i] = PI_NUMBER; break;
-                case SemanticTokenTypesRegexp: colors[i] = PI_STRING; break;
-                case SemanticTokenTypesOperator: colors[i] = PI_DEFAULT; break;
-                case SemanticTokenTypesDecorator: colors[i] = PI_KNOWN_IDENTIFIER; break;
-                default: colors[i] = PI_STRING;
+            StringView                 tokenType = server_capabilties.semanticTokensProvider.value.legend.tokenTypes.strings[i];
+            OptionalSemanticTokenTypes semantic_token_type_maybe = SemanticTokenTypes_parse(tokenType);
+            if (semantic_token_type_maybe.has_value) {
+                // trace(CAT_LSP, "%d: '%.*s' %d", i, SV_ARG(tokenType), semantic_token_type);
+                switch (semantic_token_type_maybe.value) {
+                case SemanticTokenTypesNamespace:
+                    colors[i] = PI_KNOWN_IDENTIFIER;
+                    break;
+                case SemanticTokenTypesType:
+                    colors[i] = PI_KNOWN_IDENTIFIER;
+                    break;
+                case SemanticTokenTypesClass:
+                    colors[i] = PI_KNOWN_IDENTIFIER;
+                    break;
+                case SemanticTokenTypesEnum:
+                    colors[i] = PI_KNOWN_IDENTIFIER;
+                    break;
+                case SemanticTokenTypesInterface:
+                    colors[i] = PI_KNOWN_IDENTIFIER;
+                    break;
+                case SemanticTokenTypesStruct:
+                    colors[i] = PI_KNOWN_IDENTIFIER;
+                    break;
+                case SemanticTokenTypesTypeParameter:
+                    colors[i] = PI_KNOWN_IDENTIFIER;
+                    break;
+                case SemanticTokenTypesParameter:
+                    colors[i] = PI_KNOWN_IDENTIFIER;
+                    break;
+                case SemanticTokenTypesVariable:
+                    colors[i] = PI_KNOWN_IDENTIFIER;
+                    break;
+                case SemanticTokenTypesProperty:
+                    colors[i] = PI_KNOWN_IDENTIFIER;
+                    break;
+                case SemanticTokenTypesEnumMember:
+                    colors[i] = PI_KNOWN_IDENTIFIER;
+                    break;
+                case SemanticTokenTypesEvent:
+                    colors[i] = PI_DEFAULT;
+                    break;
+                case SemanticTokenTypesFunction:
+                    colors[i] = PI_FUNCTION;
+                    break;
+                case SemanticTokenTypesMethod:
+                    colors[i] = PI_KNOWN_IDENTIFIER;
+                    break;
+                case SemanticTokenTypesMacro:
+                    colors[i] = PI_KNOWN_IDENTIFIER;
+                    break;
+                case SemanticTokenTypesKeyword:
+                    colors[i] = PI_KEYWORD;
+                    break;
+                case SemanticTokenTypesModifier:
+                    colors[i] = PI_KEYWORD;
+                    break;
+                case SemanticTokenTypesComment:
+                    colors[i] = PI_COMMENT;
+                    break;
+                case SemanticTokenTypesString:
+                    colors[i] = PI_STRING;
+                    break;
+                case SemanticTokenTypesNumber:
+                    colors[i] = PI_NUMBER;
+                    break;
+                case SemanticTokenTypesRegexp:
+                    colors[i] = PI_STRING;
+                    break;
+                case SemanticTokenTypesOperator:
+                    colors[i] = PI_DEFAULT;
+                    break;
+                case SemanticTokenTypesDecorator:
+                    colors[i] = PI_KNOWN_IDENTIFIER;
+                    break;
+                default:
+                    colors[i] = PI_STRING;
+                }
             }
         }
     }
@@ -236,27 +289,37 @@ void lsp_semantic_tokens(int buffer_num)
     };
     OptionalJSONValue semantic_tokens_params_json = SemanticTokensParams_encode(semantic_tokens_params);
     Response          response = MUST(Response, lsp_message("textDocument/semanticTokens/full", semantic_tokens_params_json));
-    if (response_success(&response)) {
-        SemanticTokens result = MUST_OPTIONAL(SemanticTokens, SemanticTokens_decode(response.result));
-        size_t lineno = 0;
-        Index *line = buffer->lines.elements + lineno;
-        size_t offset = 0;
-        UInt32s data = result.data;
-        for (size_t ix = 0; ix < result.data.size; ix += 5) {
-            if (data.elements[ix] > 0) {
-                lineno += data.elements[ix];
-                assert(lineno < buffer->lines.size);
-                line = buffer->lines.elements + lineno;
-                offset = 0;
-            }
-            offset += data.elements[ix+1];
-            size_t length = data.elements[ix+2];
-            for (size_t token_ix = 0; token_ix < line->num_tokens; ++token_ix) {
-                assert(line->first_token + token_ix < buffer->tokens.size);
-                DisplayToken *t = buffer->tokens.elements + line->first_token + token_ix;
-                if (t->index == line->index_of + offset && t->length == length) {
-                    t->color = colors[data.elements[ix+3]];
-                }
+    if (!response_success(&response)) {
+        return;
+    }
+    if (!response.result.has_value) {
+        trace(CAT_LSP, "No response to textDocument/semanticTokens/full");
+        return;
+    }
+    OptionalSemanticTokens result_maybe = SemanticTokens_decode(response.result);
+    if (!result_maybe.has_value) {
+        trace(CAT_LSP, "Couldn't decode response to textDocument/semanticTokens/full");
+        return;
+    }
+    SemanticTokens result = result_maybe.value;
+    size_t         lineno = 0;
+    Index         *line = buffer->lines.elements + lineno;
+    size_t         offset = 0;
+    UInt32s        data = result.data;
+    for (size_t ix = 0; ix < result.data.size; ix += 5) {
+        if (data.elements[ix] > 0) {
+            lineno += data.elements[ix];
+            assert(lineno < buffer->lines.size);
+            line = buffer->lines.elements + lineno;
+            offset = 0;
+        }
+        offset += data.elements[ix + 1];
+        size_t length = data.elements[ix + 2];
+        for (size_t token_ix = 0; token_ix < line->num_tokens; ++token_ix) {
+            assert(line->first_token + token_ix < buffer->tokens.size);
+            DisplayToken *t = buffer->tokens.elements + line->first_token + token_ix;
+            if (t->index == line->index_of + offset && t->length == length) {
+                t->color = colors[data.elements[ix + 3]];
             }
         }
     }
@@ -303,10 +366,10 @@ void lsp_did_change(int buffer_num, IntVector2 start, IntVector2 end, StringView
     if (sv_empty(buffer->name)) {
         return;
     }
-    DidChangeTextDocumentParams did_change = {0};
+    DidChangeTextDocumentParams did_change = { 0 };
     did_change.textDocument.uri = buffer_uri(buffer);
     did_change.textDocument.version = buffer->version;
-    TextDocumentContentChangeEvent contentChange = {0};
+    TextDocumentContentChangeEvent contentChange = { 0 };
     contentChange._0.range.start.line = start.line;
     contentChange._0.range.start.character = start.column;
     contentChange._0.range.end.line = end.line;
@@ -326,13 +389,13 @@ int lsp_format(int buffer_num)
         return -1;
     }
 
-    DocumentFormattingParams params = {0};
+    DocumentFormattingParams params = { 0 };
     params.textDocument.uri = buffer_uri(buffer);
     params.options.insertSpaces = true;
     params.options.tabSize = 4;
-    params.options.trimTrailingWhitespace = (OptionalBool) {.has_value = true, .value = true};
-    params.options.insertFinalNewline = (OptionalBool) {.has_value = true, .value = true};
-    params.options.trimFinalNewlines = (OptionalBool) {.has_value = true, .value = true};
+    params.options.trimTrailingWhitespace = (OptionalBool) { .has_value = true, .value = true };
+    params.options.insertFinalNewline = (OptionalBool) { .has_value = true, .value = true };
+    params.options.trimFinalNewlines = (OptionalBool) { .has_value = true, .value = true };
 
     OptionalJSONValue params_json = DocumentFormattingParams_encode(params);
     Response          response = MUST(Response, lsp_message("textDocument/formatting", params_json));
@@ -348,11 +411,11 @@ int lsp_format(int buffer_num)
     }
     TextEdits edits = MUST_OPTIONAL(TextEdits, TextEdits_decode(response.result));
     for (size_t ix = 0; ix < edits.size; ++ix) {
-        TextEdit edit = edits.elements[ix];
+        TextEdit   edit = edits.elements[ix];
         IntVector2 start = { edit.range.start.character, edit.range.start.line };
         IntVector2 end = { edit.range.end.character, edit.range.end.line };
-        size_t offset = buffer_position_to_index(buffer, start);
-        size_t length = buffer_position_to_index(buffer, end) - offset;
+        size_t     offset = buffer_position_to_index(buffer, start);
+        size_t     length = buffer_position_to_index(buffer, end) - offset;
 
         if (sv_empty(edit.newText)) {
             buffer_delete(buffer, offset, length);

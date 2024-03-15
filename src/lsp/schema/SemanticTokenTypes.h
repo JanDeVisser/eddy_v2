@@ -38,19 +38,13 @@ typedef enum {
 } SemanticTokenTypes;
 
 OPTIONAL(SemanticTokenTypes);
-OPTIONAL(OptionalSemanticTokenTypes);
 DA_WITH_NAME(SemanticTokenTypes, SemanticTokenTypess);
 OPTIONAL(SemanticTokenTypess);
-OPTIONAL(OptionalSemanticTokenTypess);
 
-extern OptionalJSONValue                   SemanticTokenTypes_encode(SemanticTokenTypes value);
-extern OptionalSemanticTokenTypes          SemanticTokenTypes_decode(OptionalJSONValue json);
-extern OptionalJSONValue                   OptionalSemanticTokenTypes_encode(OptionalSemanticTokenTypes value);
-extern OptionalOptionalSemanticTokenTypes  OptionalSemanticTokenTypes_decode(OptionalJSONValue json);
-extern OptionalJSONValue                   SemanticTokenTypess_encode(SemanticTokenTypess value);
-extern OptionalSemanticTokenTypess         SemanticTokenTypess_decode(OptionalJSONValue json);
-extern OptionalJSONValue                   OptionalSemanticTokenTypess_encode(OptionalSemanticTokenTypess value);
-extern OptionalOptionalSemanticTokenTypess OptionalSemanticTokenTypess_decode(OptionalJSONValue json);
-extern StringView                          SemanticTokenTypes_to_string(SemanticTokenTypes value);
-extern OptionalSemanticTokenTypes          SemanticTokenTypes_parse(StringView s);
+extern OptionalJSONValue           SemanticTokenTypes_encode(SemanticTokenTypes value);
+extern OptionalSemanticTokenTypes  SemanticTokenTypes_decode(OptionalJSONValue json);
+extern OptionalJSONValue           SemanticTokenTypess_encode(SemanticTokenTypess value);
+extern OptionalSemanticTokenTypess SemanticTokenTypess_decode(OptionalJSONValue json);
+extern StringView                  SemanticTokenTypes_to_string(SemanticTokenTypes value);
+extern OptionalSemanticTokenTypes  SemanticTokenTypes_parse(StringView s);
 #endif /* __LSP_SEMANTICTOKENTYPES_H__ */

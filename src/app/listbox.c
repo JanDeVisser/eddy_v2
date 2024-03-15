@@ -309,7 +309,7 @@ StringView file_selector_to_string_view(ListBoxEntry entry)
     return sv_printf("  %.*s", SV_ARG(dir_entry.name));
 }
 
-int file_selector_compare(ListBox *, ListBoxEntry const* e1, ListBoxEntry const *e2)
+int file_selector_compare(ListBox *, ListBoxEntry const *e1, ListBoxEntry const *e2)
 {
     DirEntry *d1 = e1->payload;
     DirEntry *d2 = e2->payload;
@@ -326,7 +326,7 @@ void file_selector_process_input(ListBox *listbox)
 {
     FileSelectorStatus *status = listbox->memo;
     DirListing         *dir = (DirListing *) listbox->memo;
-    StringView filename = {0};
+    StringView          filename = { 0 };
     if (IsKeyPressed(KEY_LEFT)) {
         filename = sv_from(TextFormat("%.*s/..", SV_ARG(dir->directory)));
     }

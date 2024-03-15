@@ -819,7 +819,7 @@ void editor_cmd_close_buffer(CommandContext *ctx)
         prompt = sv_printf("File '%.*s' is modified. Do you want to save it before closing?", SV_ARG(buffer->name));
     }
     if (sv_not_empty(prompt)) {
-        ListBox   *are_you_sure = listbox_create_query(prompt, editor_are_you_sure_handler, QueryOptionYesNoCancel);
+        ListBox *are_you_sure = listbox_create_query(prompt, editor_are_you_sure_handler, QueryOptionYesNoCancel);
         listbox_show(are_you_sure);
         return;
     }

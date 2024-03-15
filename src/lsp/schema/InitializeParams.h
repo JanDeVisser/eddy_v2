@@ -61,16 +61,12 @@ typedef struct {
 } InitializeParams;
 
 OPTIONAL(InitializeParams);
-OPTIONAL(OptionalInitializeParams);
 DA_WITH_NAME(InitializeParams, InitializeParamss);
 OPTIONAL(InitializeParamss);
-OPTIONAL(OptionalInitializeParamss);
 
-extern OptionalJSONValue                InitializeParams_encode(InitializeParams value);
-extern OptionalInitializeParams         InitializeParams_decode(OptionalJSONValue json);
-extern OptionalJSONValue                OptionalInitializeParams_encode(OptionalInitializeParams value);
-extern OptionalOptionalInitializeParams OptionalInitializeParams_decode(OptionalJSONValue json);
-extern OptionalJSONValue                InitializeParamss_encode(InitializeParamss value);
-extern OptionalInitializeParamss        InitializeParamss_decode(OptionalJSONValue json);
+extern OptionalJSONValue         InitializeParams_encode(InitializeParams value);
+extern OptionalInitializeParams  InitializeParams_decode(OptionalJSONValue json);
+extern OptionalJSONValue         InitializeParamss_encode(InitializeParamss value);
+extern OptionalInitializeParamss InitializeParamss_decode(OptionalJSONValue json);
 
 #endif /* __LSP_INITIALIZEPARAMS_H__ */

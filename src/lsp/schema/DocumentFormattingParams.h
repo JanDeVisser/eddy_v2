@@ -21,16 +21,12 @@ typedef struct {
 } DocumentFormattingParams;
 
 OPTIONAL(DocumentFormattingParams);
-OPTIONAL(OptionalDocumentFormattingParams);
 DA_WITH_NAME(DocumentFormattingParams, DocumentFormattingParamss);
 OPTIONAL(DocumentFormattingParamss);
-OPTIONAL(OptionalDocumentFormattingParamss);
 
-extern OptionalJSONValue                        DocumentFormattingParams_encode(DocumentFormattingParams value);
-extern OptionalDocumentFormattingParams         DocumentFormattingParams_decode(OptionalJSONValue json);
-extern OptionalJSONValue                        OptionalDocumentFormattingParams_encode(OptionalDocumentFormattingParams value);
-extern OptionalOptionalDocumentFormattingParams OptionalDocumentFormattingParams_decode(OptionalJSONValue json);
-extern OptionalJSONValue                        DocumentFormattingParamss_encode(DocumentFormattingParamss value);
-extern OptionalDocumentFormattingParamss        DocumentFormattingParamss_decode(OptionalJSONValue json);
+extern OptionalJSONValue                 DocumentFormattingParams_encode(DocumentFormattingParams value);
+extern OptionalDocumentFormattingParams  DocumentFormattingParams_decode(OptionalJSONValue json);
+extern OptionalJSONValue                 DocumentFormattingParamss_encode(DocumentFormattingParamss value);
+extern OptionalDocumentFormattingParamss DocumentFormattingParamss_decode(OptionalJSONValue json);
 
 #endif /* __LSP_DOCUMENTFORMATTINGPARAMS_H__ */

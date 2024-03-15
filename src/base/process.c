@@ -48,7 +48,7 @@ void read_pipe_connect_parent(ReadPipe *pipe)
 
     pthread_t thread;
     int       ret;
-    pipe->current = (StringView) {0};
+    pipe->current = (StringView) { 0 };
     if ((ret = pthread_create(&thread, NULL, (void *(*) (void *) ) read_pipe_read, (void *) pipe)) != 0) {
         fatal("Could not start IPC service thread: %s", strerror(ret));
     }
@@ -100,7 +100,7 @@ void read_pipe_read(ReadPipe *pipe)
     read_pipe_close(pipe);
 }
 
-#define DRAIN_SIZE 64*1024
+#define DRAIN_SIZE 64 * 1024
 
 void read_pipe_drain(ReadPipe *pipe)
 {

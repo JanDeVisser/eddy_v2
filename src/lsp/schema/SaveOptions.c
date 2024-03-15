@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/SaveOptions.h>
 
 DA_IMPL(SaveOptions)
-
-OptionalJSONValue OptionalSaveOptions_encode(OptionalSaveOptions value)
-{
-    if (value.has_value) {
-        return SaveOptions_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalSaveOptions OptionalSaveOptions_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalSaveOptions);
-    }
-    RETURN_VALUE(OptionalSaveOptions, SaveOptions_decode(json));
-}
 
 OptionalJSONValue SaveOptionss_encode(SaveOptionss value)
 {
@@ -53,6 +37,7 @@ OptionalSaveOptionss SaveOptionss_decode(OptionalJSONValue json)
     }
     RETURN_VALUE(SaveOptionss, ret);
 }
+
 OptionalSaveOptions SaveOptions_decode(OptionalJSONValue json)
 {
     if (!json.has_value || json.value.type != JSON_TYPE_OBJECT) {
@@ -61,13 +46,20 @@ OptionalSaveOptions SaveOptions_decode(OptionalJSONValue json)
     SaveOptions value = { 0 };
     {
         OptionalJSONValue v0 = json_get(&json.value, "includeText");
-        value.includeText = FORWARD_OPTIONAL(OptionalBool, SaveOptions, OptionalBool_decode(v0));
+        value.includeText = Bool_decode(v0);
     }
     RETURN_VALUE(SaveOptions, value);
 }
+
 OptionalJSONValue SaveOptions_encode(SaveOptions value)
 {
     JSONValue v1 = json_object();
-    json_optional_set(&v1, "includeText", OptionalBool_encode(value.includeText));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        if (value.includeText.has_value) {
+            _encoded_maybe = Bool_encode(value.includeText.value);
+        }
+        json_optional_set(&v1, "includeText", _encoded_maybe);
+    }
     RETURN_VALUE(JSONValue, v1);
 }

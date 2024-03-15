@@ -9,7 +9,7 @@ add_executable(
         tostring.c
 )
 
-target_link_libraries(ts template base)
+target_link_libraries(ts base)
 target_compile_definitions(ts PUBLIC TS_PARSER)
 
 install(TARGETS ts

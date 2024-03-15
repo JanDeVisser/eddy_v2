@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/WorkDoneProgressParams.h>
 
 DA_IMPL(WorkDoneProgressParams)
-
-OptionalJSONValue OptionalWorkDoneProgressParams_encode(OptionalWorkDoneProgressParams value)
-{
-    if (value.has_value) {
-        return WorkDoneProgressParams_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalWorkDoneProgressParams OptionalWorkDoneProgressParams_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalWorkDoneProgressParams);
-    }
-    RETURN_VALUE(OptionalWorkDoneProgressParams, WorkDoneProgressParams_decode(json));
-}
 
 OptionalJSONValue WorkDoneProgressParamss_encode(WorkDoneProgressParamss value)
 {
@@ -53,14 +37,16 @@ OptionalWorkDoneProgressParamss WorkDoneProgressParamss_decode(OptionalJSONValue
     }
     RETURN_VALUE(WorkDoneProgressParamss, ret);
 }
+
 OptionalWorkDoneProgressParams WorkDoneProgressParams_decode(OptionalJSONValue json)
 {
     if (!json.has_value || json.value.type != JSON_TYPE_OBJECT) {
         RETURN_EMPTY(WorkDoneProgressParams);
     }
-    WorkDoneProgressParams value = { 0 };
+    WorkDoneProgressParams value = {};
     RETURN_VALUE(WorkDoneProgressParams, value);
 }
+
 OptionalJSONValue WorkDoneProgressParams_encode(WorkDoneProgressParams value)
 {
     JSONValue v1 = json_object();

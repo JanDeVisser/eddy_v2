@@ -170,7 +170,7 @@ JSONValue enumeration_serialize(Enumeration enumeration)
     JSONValue values = json_array();
     for (size_t ix = 0; ix < enumeration.values.size; ++ix) {
         EnumerationValue *value = enumeration.values.elements + ix;
-        JSONValue       val = json_object();
+        JSONValue         val = json_object();
         json_set_string(&val, "name", value->name);
         char first = value->name.ptr[0];
         ((char *) value->name.ptr)[0] = toupper(first);

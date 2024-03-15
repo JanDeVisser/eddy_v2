@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/SemanticTokenTypes.h>
 
 DA_IMPL(SemanticTokenTypes)
-
-OptionalJSONValue OptionalSemanticTokenTypes_encode(OptionalSemanticTokenTypes value)
-{
-    if (value.has_value) {
-        return SemanticTokenTypes_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalSemanticTokenTypes OptionalSemanticTokenTypes_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalSemanticTokenTypes);
-    }
-    RETURN_VALUE(OptionalSemanticTokenTypes, SemanticTokenTypes_decode(json));
-}
 
 OptionalJSONValue SemanticTokenTypess_encode(SemanticTokenTypess value)
 {
@@ -53,6 +37,7 @@ OptionalSemanticTokenTypess SemanticTokenTypess_decode(OptionalJSONValue json)
     }
     RETURN_VALUE(SemanticTokenTypess, ret);
 }
+
 StringView SemanticTokenTypes_to_string(SemanticTokenTypes value)
 {
     switch (value) {
@@ -157,12 +142,16 @@ OptionalSemanticTokenTypes SemanticTokenTypes_parse(StringView s)
         RETURN_VALUE(SemanticTokenTypes, SemanticTokenTypesDecorator);
     RETURN_EMPTY(SemanticTokenTypes);
 }
+
 OptionalSemanticTokenTypes SemanticTokenTypes_decode(OptionalJSONValue json)
 {
-    assert(json.has_value);
+    if (!json.has_value) {
+        RETURN_EMPTY(SemanticTokenTypes);
+    }
     assert(json.value.type == JSON_TYPE_STRING);
     return SemanticTokenTypes_parse(json.value.string);
 }
+
 OptionalJSONValue SemanticTokenTypes_encode(SemanticTokenTypes value)
 {
     RETURN_VALUE(JSONValue, json_string(SemanticTokenTypes_to_string(value)));

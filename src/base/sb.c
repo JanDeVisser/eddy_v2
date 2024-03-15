@@ -159,7 +159,7 @@ StringBuilder sb_copy_cstr(char const *s)
 StringRef sb_append_chars(StringBuilder *sb, char const *ptr, size_t len)
 {
     if (ptr == NULL || len == 0) {
-        return (StringRef) {0};
+        return (StringRef) { 0 };
     }
     sb_reallocate(sb, sb->view.length + len + 1);
     char *p = (char *) sb->view.ptr;
@@ -273,7 +273,7 @@ StringRef sb_insert_chars(StringBuilder *sb, char const *ptr, size_t len, size_t
     sb->view.length += len;
     p[sb->view.length] = '\0';
     trace(CAT_SV, "SBAPC:0x%08llx:%5zu:%.60s", (uint64_t) sb->view.ptr, buffer_capacity(sb->view.ptr), sb->view.ptr);
-    return (StringRef) {at, len};
+    return (StringRef) { at, len };
 }
 
 StringRef sb_insert_cstr(StringBuilder *sb, char const *str, size_t at)

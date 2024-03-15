@@ -51,13 +51,13 @@ int test(StringView name)
     }
     StringView json = json_maybe.value;
 
-    ErrorOrJSONValue  test_maybe = json_decode(json);
+    ErrorOrJSONValue test_maybe = json_decode(json);
     if (ErrorOrStringView_is_error(json_maybe)) {
         printf(SV_SPEC_LALIGN ": " RED "FAIL" RESET "\n", SV_ARG_LALIGN(name, 20));
         printf("%s\n", Error_to_string(test_maybe.error));
         return 1;
     }
-    JSONValue  test = test_maybe.value;
+    JSONValue test = test_maybe.value;
 
     OptionalJSONValue skipped_maybe = json_get(&test, "skip");
     if (skipped_maybe.has_value) {
@@ -67,7 +67,7 @@ int test(StringView name)
             return 0;
         }
     }
-    JSONValue  context = json_get_default(&test, "ctx", json_object());
+    JSONValue         context = json_get_default(&test, "ctx", json_object());
     OptionalJSONValue template_json_maybe = json_get(&test, "template");
     if (!template_json_maybe.has_value) {
         printf(SV_SPEC_LALIGN ": " RED "FAIL" RESET "\n", SV_ARG_LALIGN(name, 20));
@@ -97,7 +97,7 @@ int test(StringView name)
 
 int run_all_tests()
 {
-    StringView tests_name = sv_from("tests.json");
+    StringView        tests_name = sv_from("tests.json");
     ErrorOrStringView json_maybe = read_file_by_name(sv_from("tests.json"));
     if (ErrorOrStringView_is_error(json_maybe)) {
         printf(SV_SPEC_LALIGN ": " RED "FAIL" RESET "\n", SV_ARG_LALIGN(tests_name, 20));
@@ -106,14 +106,14 @@ int run_all_tests()
     }
     StringView json = json_maybe.value;
 
-    ErrorOrJSONValue  tests_maybe = json_decode(json);
+    ErrorOrJSONValue tests_maybe = json_decode(json);
     if (ErrorOrStringView_is_error(json_maybe)) {
         printf(SV_SPEC_LALIGN ": " RED "FAIL" RESET "\n", SV_ARG_LALIGN(tests_name, 20));
         printf("%s\n", Error_to_string(tests_maybe.error));
         return 1;
     }
 
-    JSONValue  tests = tests_maybe.value;
+    JSONValue tests = tests_maybe.value;
     if (tests.type != JSON_TYPE_ARRAY) {
         printf(SV_SPEC_LALIGN ": " RED "FAIL" RESET "\n", SV_ARG_LALIGN(tests_name, 20));
         printf("%.*s should contain a single array\n", SV_ARG(tests_name));

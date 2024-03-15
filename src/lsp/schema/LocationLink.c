@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/LocationLink.h>
 
 DA_IMPL(LocationLink)
-
-OptionalJSONValue OptionalLocationLink_encode(OptionalLocationLink value)
-{
-    if (value.has_value) {
-        return LocationLink_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalLocationLink OptionalLocationLink_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalLocationLink);
-    }
-    RETURN_VALUE(OptionalLocationLink, LocationLink_decode(json));
-}
 
 OptionalJSONValue LocationLinks_encode(LocationLinks value)
 {
@@ -53,6 +37,7 @@ OptionalLocationLinks LocationLinks_decode(OptionalJSONValue json)
     }
     RETURN_VALUE(LocationLinks, ret);
 }
+
 OptionalLocationLink LocationLink_decode(OptionalJSONValue json)
 {
     if (!json.has_value || json.value.type != JSON_TYPE_OBJECT) {
@@ -61,7 +46,7 @@ OptionalLocationLink LocationLink_decode(OptionalJSONValue json)
     LocationLink value = { 0 };
     {
         OptionalJSONValue v0 = json_get(&json.value, "originSelectionRange");
-        value.originSelectionRange = FORWARD_OPTIONAL(OptionalRange, LocationLink, OptionalRange_decode(v0));
+        value.originSelectionRange = Range_decode(v0);
     }
     {
         OptionalJSONValue v0 = json_get(&json.value, "targetUri");
@@ -77,12 +62,31 @@ OptionalLocationLink LocationLink_decode(OptionalJSONValue json)
     }
     RETURN_VALUE(LocationLink, value);
 }
+
 OptionalJSONValue LocationLink_encode(LocationLink value)
 {
     JSONValue v1 = json_object();
-    json_optional_set(&v1, "originSelectionRange", OptionalRange_encode(value.originSelectionRange));
-    json_optional_set(&v1, "targetUri", DocumentUri_encode(value.targetUri));
-    json_optional_set(&v1, "targetRange", Range_encode(value.targetRange));
-    json_optional_set(&v1, "targetSelectionRange", Range_encode(value.targetSelectionRange));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        if (value.originSelectionRange.has_value) {
+            _encoded_maybe = Range_encode(value.originSelectionRange.value);
+        }
+        json_optional_set(&v1, "originSelectionRange", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = DocumentUri_encode(value.targetUri);
+        json_optional_set(&v1, "targetUri", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = Range_encode(value.targetRange);
+        json_optional_set(&v1, "targetRange", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = Range_encode(value.targetSelectionRange);
+        json_optional_set(&v1, "targetSelectionRange", _encoded_maybe);
+    }
     RETURN_VALUE(JSONValue, v1);
 }

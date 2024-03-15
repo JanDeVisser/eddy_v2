@@ -15,16 +15,12 @@ typedef struct {
 } WorkDoneProgressParams;
 
 OPTIONAL(WorkDoneProgressParams);
-OPTIONAL(OptionalWorkDoneProgressParams);
 DA_WITH_NAME(WorkDoneProgressParams, WorkDoneProgressParamss);
 OPTIONAL(WorkDoneProgressParamss);
-OPTIONAL(OptionalWorkDoneProgressParamss);
 
-extern OptionalJSONValue                      WorkDoneProgressParams_encode(WorkDoneProgressParams value);
-extern OptionalWorkDoneProgressParams         WorkDoneProgressParams_decode(OptionalJSONValue json);
-extern OptionalJSONValue                      OptionalWorkDoneProgressParams_encode(OptionalWorkDoneProgressParams value);
-extern OptionalOptionalWorkDoneProgressParams OptionalWorkDoneProgressParams_decode(OptionalJSONValue json);
-extern OptionalJSONValue                      WorkDoneProgressParamss_encode(WorkDoneProgressParamss value);
-extern OptionalWorkDoneProgressParamss        WorkDoneProgressParamss_decode(OptionalJSONValue json);
+extern OptionalJSONValue               WorkDoneProgressParams_encode(WorkDoneProgressParams value);
+extern OptionalWorkDoneProgressParams  WorkDoneProgressParams_decode(OptionalJSONValue json);
+extern OptionalJSONValue               WorkDoneProgressParamss_encode(WorkDoneProgressParamss value);
+extern OptionalWorkDoneProgressParamss WorkDoneProgressParamss_decode(OptionalJSONValue json);
 
 #endif /* __LSP_WORKDONEPROGRESSPARAMS_H__ */

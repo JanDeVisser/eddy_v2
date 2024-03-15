@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/DidChangeTextDocumentParams.h>
 
 DA_IMPL(DidChangeTextDocumentParams)
-
-OptionalJSONValue OptionalDidChangeTextDocumentParams_encode(OptionalDidChangeTextDocumentParams value)
-{
-    if (value.has_value) {
-        return DidChangeTextDocumentParams_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalDidChangeTextDocumentParams OptionalDidChangeTextDocumentParams_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalDidChangeTextDocumentParams);
-    }
-    RETURN_VALUE(OptionalDidChangeTextDocumentParams, DidChangeTextDocumentParams_decode(json));
-}
 
 OptionalJSONValue DidChangeTextDocumentParamss_encode(DidChangeTextDocumentParamss value)
 {
@@ -53,6 +37,7 @@ OptionalDidChangeTextDocumentParamss DidChangeTextDocumentParamss_decode(Optiona
     }
     RETURN_VALUE(DidChangeTextDocumentParamss, ret);
 }
+
 OptionalDidChangeTextDocumentParams DidChangeTextDocumentParams_decode(OptionalJSONValue json)
 {
     if (!json.has_value || json.value.type != JSON_TYPE_OBJECT) {
@@ -69,10 +54,19 @@ OptionalDidChangeTextDocumentParams DidChangeTextDocumentParams_decode(OptionalJ
     }
     RETURN_VALUE(DidChangeTextDocumentParams, value);
 }
+
 OptionalJSONValue DidChangeTextDocumentParams_encode(DidChangeTextDocumentParams value)
 {
     JSONValue v1 = json_object();
-    json_optional_set(&v1, "textDocument", VersionedTextDocumentIdentifier_encode(value.textDocument));
-    json_optional_set(&v1, "contentChanges", TextDocumentContentChangeEvents_encode(value.contentChanges));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = VersionedTextDocumentIdentifier_encode(value.textDocument);
+        json_optional_set(&v1, "textDocument", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = TextDocumentContentChangeEvents_encode(value.contentChanges);
+        json_optional_set(&v1, "contentChanges", _encoded_maybe);
+    }
     RETURN_VALUE(JSONValue, v1);
 }

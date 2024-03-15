@@ -23,16 +23,12 @@ typedef struct {
 } InitializeResult;
 
 OPTIONAL(InitializeResult);
-OPTIONAL(OptionalInitializeResult);
 DA_WITH_NAME(InitializeResult, InitializeResults);
 OPTIONAL(InitializeResults);
-OPTIONAL(OptionalInitializeResults);
 
-extern OptionalJSONValue                InitializeResult_encode(InitializeResult value);
-extern OptionalInitializeResult         InitializeResult_decode(OptionalJSONValue json);
-extern OptionalJSONValue                OptionalInitializeResult_encode(OptionalInitializeResult value);
-extern OptionalOptionalInitializeResult OptionalInitializeResult_decode(OptionalJSONValue json);
-extern OptionalJSONValue                InitializeResults_encode(InitializeResults value);
-extern OptionalInitializeResults        InitializeResults_decode(OptionalJSONValue json);
+extern OptionalJSONValue         InitializeResult_encode(InitializeResult value);
+extern OptionalInitializeResult  InitializeResult_decode(OptionalJSONValue json);
+extern OptionalJSONValue         InitializeResults_encode(InitializeResults value);
+extern OptionalInitializeResults InitializeResults_decode(OptionalJSONValue json);
 
 #endif /* __LSP_INITIALIZERESULT_H__ */

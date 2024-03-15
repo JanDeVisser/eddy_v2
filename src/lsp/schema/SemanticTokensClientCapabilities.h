@@ -49,16 +49,12 @@ typedef struct {
 } SemanticTokensClientCapabilities;
 
 OPTIONAL(SemanticTokensClientCapabilities);
-OPTIONAL(OptionalSemanticTokensClientCapabilities);
 DA_WITH_NAME(SemanticTokensClientCapabilities, SemanticTokensClientCapabilitiess);
 OPTIONAL(SemanticTokensClientCapabilitiess);
-OPTIONAL(OptionalSemanticTokensClientCapabilitiess);
 
-extern OptionalJSONValue                                SemanticTokensClientCapabilities_encode(SemanticTokensClientCapabilities value);
-extern OptionalSemanticTokensClientCapabilities         SemanticTokensClientCapabilities_decode(OptionalJSONValue json);
-extern OptionalJSONValue                                OptionalSemanticTokensClientCapabilities_encode(OptionalSemanticTokensClientCapabilities value);
-extern OptionalOptionalSemanticTokensClientCapabilities OptionalSemanticTokensClientCapabilities_decode(OptionalJSONValue json);
-extern OptionalJSONValue                                SemanticTokensClientCapabilitiess_encode(SemanticTokensClientCapabilitiess value);
-extern OptionalSemanticTokensClientCapabilitiess        SemanticTokensClientCapabilitiess_decode(OptionalJSONValue json);
+extern OptionalJSONValue                         SemanticTokensClientCapabilities_encode(SemanticTokensClientCapabilities value);
+extern OptionalSemanticTokensClientCapabilities  SemanticTokensClientCapabilities_decode(OptionalJSONValue json);
+extern OptionalJSONValue                         SemanticTokensClientCapabilitiess_encode(SemanticTokensClientCapabilitiess value);
+extern OptionalSemanticTokensClientCapabilitiess SemanticTokensClientCapabilitiess_decode(OptionalJSONValue json);
 
 #endif /* __LSP_SEMANTICTOKENSCLIENTCAPABILITIES_H__ */

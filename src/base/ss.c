@@ -169,7 +169,7 @@ bool ss_is_one_of(StringScanner *ss, char const *expect)
 bool ss_expect_one_of_with_offset(StringScanner *ss, char const *expect, size_t offset)
 {
     if (ss_is_one_of_with_offset(ss, expect, offset)) {
-        ss_skip(ss, offset+1);
+        ss_skip(ss, offset + 1);
         return true;
     }
     return false;

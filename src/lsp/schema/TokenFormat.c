@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/TokenFormat.h>
 
 DA_IMPL(TokenFormat)
-
-OptionalJSONValue OptionalTokenFormat_encode(OptionalTokenFormat value)
-{
-    if (value.has_value) {
-        return TokenFormat_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalTokenFormat OptionalTokenFormat_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalTokenFormat);
-    }
-    RETURN_VALUE(OptionalTokenFormat, TokenFormat_decode(json));
-}
 
 OptionalJSONValue TokenFormats_encode(TokenFormats value)
 {
@@ -53,6 +37,7 @@ OptionalTokenFormats TokenFormats_decode(OptionalJSONValue json)
     }
     RETURN_VALUE(TokenFormats, ret);
 }
+
 StringView TokenFormat_to_string(TokenFormat value)
 {
     switch (value) {
@@ -69,12 +54,16 @@ OptionalTokenFormat TokenFormat_parse(StringView s)
         RETURN_VALUE(TokenFormat, TokenFormatRelative);
     RETURN_EMPTY(TokenFormat);
 }
+
 OptionalTokenFormat TokenFormat_decode(OptionalJSONValue json)
 {
-    assert(json.has_value);
+    if (!json.has_value) {
+        RETURN_EMPTY(TokenFormat);
+    }
     assert(json.value.type == JSON_TYPE_STRING);
     return TokenFormat_parse(json.value.string);
 }
+
 OptionalJSONValue TokenFormat_encode(TokenFormat value)
 {
     RETURN_VALUE(JSONValue, json_string(TokenFormat_to_string(value)));

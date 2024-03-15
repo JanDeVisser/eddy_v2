@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/DocumentFormattingParams.h>
 
 DA_IMPL(DocumentFormattingParams)
-
-OptionalJSONValue OptionalDocumentFormattingParams_encode(OptionalDocumentFormattingParams value)
-{
-    if (value.has_value) {
-        return DocumentFormattingParams_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalDocumentFormattingParams OptionalDocumentFormattingParams_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalDocumentFormattingParams);
-    }
-    RETURN_VALUE(OptionalDocumentFormattingParams, DocumentFormattingParams_decode(json));
-}
 
 OptionalJSONValue DocumentFormattingParamss_encode(DocumentFormattingParamss value)
 {
@@ -53,6 +37,7 @@ OptionalDocumentFormattingParamss DocumentFormattingParamss_decode(OptionalJSONV
     }
     RETURN_VALUE(DocumentFormattingParamss, ret);
 }
+
 OptionalDocumentFormattingParams DocumentFormattingParams_decode(OptionalJSONValue json)
 {
     if (!json.has_value || json.value.type != JSON_TYPE_OBJECT) {
@@ -69,10 +54,19 @@ OptionalDocumentFormattingParams DocumentFormattingParams_decode(OptionalJSONVal
     }
     RETURN_VALUE(DocumentFormattingParams, value);
 }
+
 OptionalJSONValue DocumentFormattingParams_encode(DocumentFormattingParams value)
 {
     JSONValue v1 = json_object();
-    json_optional_set(&v1, "textDocument", TextDocumentIdentifier_encode(value.textDocument));
-    json_optional_set(&v1, "options", FormattingOptions_encode(value.options));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = TextDocumentIdentifier_encode(value.textDocument);
+        json_optional_set(&v1, "textDocument", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = FormattingOptions_encode(value.options);
+        json_optional_set(&v1, "options", _encoded_maybe);
+    }
     RETURN_VALUE(JSONValue, v1);
 }

@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/RegularExpressionsClientCapabilities.h>
 
 DA_IMPL(RegularExpressionsClientCapabilities)
-
-OptionalJSONValue OptionalRegularExpressionsClientCapabilities_encode(OptionalRegularExpressionsClientCapabilities value)
-{
-    if (value.has_value) {
-        return RegularExpressionsClientCapabilities_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalRegularExpressionsClientCapabilities OptionalRegularExpressionsClientCapabilities_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalRegularExpressionsClientCapabilities);
-    }
-    RETURN_VALUE(OptionalRegularExpressionsClientCapabilities, RegularExpressionsClientCapabilities_decode(json));
-}
 
 OptionalJSONValue RegularExpressionsClientCapabilitiess_encode(RegularExpressionsClientCapabilitiess value)
 {
@@ -53,6 +37,7 @@ OptionalRegularExpressionsClientCapabilitiess RegularExpressionsClientCapabiliti
     }
     RETURN_VALUE(RegularExpressionsClientCapabilitiess, ret);
 }
+
 OptionalRegularExpressionsClientCapabilities RegularExpressionsClientCapabilities_decode(OptionalJSONValue json)
 {
     if (!json.has_value || json.value.type != JSON_TYPE_OBJECT) {
@@ -65,14 +50,25 @@ OptionalRegularExpressionsClientCapabilities RegularExpressionsClientCapabilitie
     }
     {
         OptionalJSONValue v0 = json_get(&json.value, "version");
-        value.version = FORWARD_OPTIONAL(OptionalStringView, RegularExpressionsClientCapabilities, OptionalStringView_decode(v0));
+        value.version = StringView_decode(v0);
     }
     RETURN_VALUE(RegularExpressionsClientCapabilities, value);
 }
+
 OptionalJSONValue RegularExpressionsClientCapabilities_encode(RegularExpressionsClientCapabilities value)
 {
     JSONValue v1 = json_object();
-    json_optional_set(&v1, "engine", StringView_encode(value.engine));
-    json_optional_set(&v1, "version", OptionalStringView_encode(value.version));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = StringView_encode(value.engine);
+        json_optional_set(&v1, "engine", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        if (value.version.has_value) {
+            _encoded_maybe = StringView_encode(value.version.value);
+        }
+        json_optional_set(&v1, "version", _encoded_maybe);
+    }
     RETURN_VALUE(JSONValue, v1);
 }

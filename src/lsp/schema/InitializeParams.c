@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/InitializeParams.h>
 
 DA_IMPL(InitializeParams)
-
-OptionalJSONValue OptionalInitializeParams_encode(OptionalInitializeParams value)
-{
-    if (value.has_value) {
-        return InitializeParams_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalInitializeParams OptionalInitializeParams_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalInitializeParams);
-    }
-    RETURN_VALUE(OptionalInitializeParams, InitializeParams_decode(json));
-}
 
 OptionalJSONValue InitializeParamss_encode(InitializeParamss value)
 {
@@ -53,6 +37,7 @@ OptionalInitializeParamss InitializeParamss_decode(OptionalJSONValue json)
     }
     RETURN_VALUE(InitializeParamss, ret);
 }
+
 OptionalInitializeParams InitializeParams_decode(OptionalJSONValue json)
 {
     if (!json.has_value || json.value.type != JSON_TYPE_OBJECT) {
@@ -94,13 +79,13 @@ OptionalInitializeParams InitializeParams_decode(OptionalJSONValue json)
 
             {
                 OptionalJSONValue v1 = json_get(&v0.value, "version");
-                value.clientInfo.version = FORWARD_OPTIONAL(OptionalStringView, InitializeParams, OptionalStringView_decode(v1));
+                value.clientInfo.version = StringView_decode(v1);
             }
         }
     }
     {
         OptionalJSONValue v0 = json_get(&json.value, "locale");
-        value.locale = FORWARD_OPTIONAL(OptionalStringView, InitializeParams, OptionalStringView_decode(v0));
+        value.locale = StringView_decode(v0);
     }
     {
         OptionalJSONValue v0 = json_get(&json.value, "rootPath");
@@ -153,7 +138,7 @@ OptionalInitializeParams InitializeParams_decode(OptionalJSONValue json)
     }
     {
         OptionalJSONValue v0 = json_get(&json.value, "initializationOptions");
-        value.initializationOptions = FORWARD_OPTIONAL(OptionalJSONValue, InitializeParams, OptionalJSONValue_decode(v0));
+        value.initializationOptions = JSONValue_decode(v0);
     }
     {
         OptionalJSONValue v0 = json_get(&json.value, "capabilities");
@@ -161,7 +146,7 @@ OptionalInitializeParams InitializeParams_decode(OptionalJSONValue json)
     }
     {
         OptionalJSONValue v0 = json_get(&json.value, "trace");
-        value.trace = FORWARD_OPTIONAL(OptionalTraceValue, InitializeParams, OptionalTraceValue_decode(v0));
+        value.trace = TraceValue_decode(v0);
     }
     {
         OptionalJSONValue v0 = json_get(&json.value, "workspaceFolders");
@@ -190,6 +175,7 @@ OptionalInitializeParams InitializeParams_decode(OptionalJSONValue json)
     }
     RETURN_VALUE(InitializeParams, value);
 }
+
 OptionalJSONValue InitializeParams_encode(InitializeParams value)
 {
     JSONValue v1 = json_object();
@@ -214,11 +200,27 @@ OptionalJSONValue InitializeParams_encode(InitializeParams value)
 
     if (value.clientInfo.has_value) {
         JSONValue v2 = json_object();
-        json_optional_set(&v2, "name", StringView_encode(value.clientInfo.name));
-        json_optional_set(&v2, "version", OptionalStringView_encode(value.clientInfo.version));
+        {
+            OptionalJSONValue _encoded_maybe = { 0 };
+            _encoded_maybe = StringView_encode(value.clientInfo.name);
+            json_optional_set(&v2, "name", _encoded_maybe);
+        }
+        {
+            OptionalJSONValue _encoded_maybe = { 0 };
+            if (value.clientInfo.version.has_value) {
+                _encoded_maybe = StringView_encode(value.clientInfo.version.value);
+            }
+            json_optional_set(&v2, "version", _encoded_maybe);
+        }
         json_set(&v1, "clientInfo", v2);
     }
-    json_optional_set(&v1, "locale", OptionalStringView_encode(value.locale));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        if (value.locale.has_value) {
+            _encoded_maybe = StringView_encode(value.locale.value);
+        }
+        json_optional_set(&v1, "locale", _encoded_maybe);
+    }
     if (value.rootPath.has_value) {
         JSONValue v2 = { 0 };
         switch (value.rootPath.tag) {
@@ -256,9 +258,25 @@ OptionalJSONValue InitializeParams_encode(InitializeParams value)
         json_set(&v1, "rootUri", v2);
     }
 
-    json_optional_set(&v1, "initializationOptions", OptionalJSONValue_encode(value.initializationOptions));
-    json_optional_set(&v1, "capabilities", ClientCapabilities_encode(value.capabilities));
-    json_optional_set(&v1, "trace", OptionalTraceValue_encode(value.trace));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        if (value.initializationOptions.has_value) {
+            _encoded_maybe = JSONValue_encode(value.initializationOptions.value);
+        }
+        json_optional_set(&v1, "initializationOptions", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = ClientCapabilities_encode(value.capabilities);
+        json_optional_set(&v1, "capabilities", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        if (value.trace.has_value) {
+            _encoded_maybe = TraceValue_encode(value.trace.value);
+        }
+        json_optional_set(&v1, "trace", _encoded_maybe);
+    }
     if (value.workspaceFolders.has_value) {
         JSONValue v2 = { 0 };
         switch (value.workspaceFolders.tag) {

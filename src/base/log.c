@@ -46,7 +46,7 @@ TraceCategory trace_category_from_string(StringView category)
 #undef S
 #define S(c)                                    \
     if (sv_eq_ignore_case_cstr(category, #c)) { \
-        return CAT_##c;                             \
+        return CAT_##c;                         \
     }
     TRACECATEGORIES(S)
 #undef S
@@ -152,9 +152,10 @@ void log_init()
             break;
         }
 #undef TRACECATEGORY
-#define TRACECATEGORY(c)                                      \
-    if (sv_eq_ignore_case_cstr(categories.strings[ix], #c)) { \
-        s_categories[CAT_##c] = true;                         \
+#define TRACECATEGORY(c)                                           \
+    if (sv_eq_ignore_case_cstr(categories.strings[ix], #c)) {      \
+        fprintf(stderr, "Turning on tracing category '%s'\n", #c); \
+        s_categories[CAT_##c] = true;                              \
     }
         TRACECATEGORIES(TRACECATEGORY)
 #undef TRACECATEGORY

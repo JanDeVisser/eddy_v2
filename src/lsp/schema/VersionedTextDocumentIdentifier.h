@@ -19,16 +19,12 @@ typedef struct {
 } VersionedTextDocumentIdentifier;
 
 OPTIONAL(VersionedTextDocumentIdentifier);
-OPTIONAL(OptionalVersionedTextDocumentIdentifier);
 DA_WITH_NAME(VersionedTextDocumentIdentifier, VersionedTextDocumentIdentifiers);
 OPTIONAL(VersionedTextDocumentIdentifiers);
-OPTIONAL(OptionalVersionedTextDocumentIdentifiers);
 
-extern OptionalJSONValue                               VersionedTextDocumentIdentifier_encode(VersionedTextDocumentIdentifier value);
-extern OptionalVersionedTextDocumentIdentifier         VersionedTextDocumentIdentifier_decode(OptionalJSONValue json);
-extern OptionalJSONValue                               OptionalVersionedTextDocumentIdentifier_encode(OptionalVersionedTextDocumentIdentifier value);
-extern OptionalOptionalVersionedTextDocumentIdentifier OptionalVersionedTextDocumentIdentifier_decode(OptionalJSONValue json);
-extern OptionalJSONValue                               VersionedTextDocumentIdentifiers_encode(VersionedTextDocumentIdentifiers value);
-extern OptionalVersionedTextDocumentIdentifiers        VersionedTextDocumentIdentifiers_decode(OptionalJSONValue json);
+extern OptionalJSONValue                        VersionedTextDocumentIdentifier_encode(VersionedTextDocumentIdentifier value);
+extern OptionalVersionedTextDocumentIdentifier  VersionedTextDocumentIdentifier_decode(OptionalJSONValue json);
+extern OptionalJSONValue                        VersionedTextDocumentIdentifiers_encode(VersionedTextDocumentIdentifiers value);
+extern OptionalVersionedTextDocumentIdentifiers VersionedTextDocumentIdentifiers_decode(OptionalJSONValue json);
 
 #endif /* __LSP_VERSIONEDTEXTDOCUMENTIDENTIFIER_H__ */

@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/TextDocumentPositionParams.h>
 
 DA_IMPL(TextDocumentPositionParams)
-
-OptionalJSONValue OptionalTextDocumentPositionParams_encode(OptionalTextDocumentPositionParams value)
-{
-    if (value.has_value) {
-        return TextDocumentPositionParams_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalTextDocumentPositionParams OptionalTextDocumentPositionParams_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalTextDocumentPositionParams);
-    }
-    RETURN_VALUE(OptionalTextDocumentPositionParams, TextDocumentPositionParams_decode(json));
-}
 
 OptionalJSONValue TextDocumentPositionParamss_encode(TextDocumentPositionParamss value)
 {
@@ -53,6 +37,7 @@ OptionalTextDocumentPositionParamss TextDocumentPositionParamss_decode(OptionalJ
     }
     RETURN_VALUE(TextDocumentPositionParamss, ret);
 }
+
 OptionalTextDocumentPositionParams TextDocumentPositionParams_decode(OptionalJSONValue json)
 {
     if (!json.has_value || json.value.type != JSON_TYPE_OBJECT) {
@@ -69,10 +54,19 @@ OptionalTextDocumentPositionParams TextDocumentPositionParams_decode(OptionalJSO
     }
     RETURN_VALUE(TextDocumentPositionParams, value);
 }
+
 OptionalJSONValue TextDocumentPositionParams_encode(TextDocumentPositionParams value)
 {
     JSONValue v1 = json_object();
-    json_optional_set(&v1, "textDocument", TextDocumentIdentifier_encode(value.textDocument));
-    json_optional_set(&v1, "position", Position_encode(value.position));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = TextDocumentIdentifier_encode(value.textDocument);
+        json_optional_set(&v1, "textDocument", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = Position_encode(value.position);
+        json_optional_set(&v1, "position", _encoded_maybe);
+    }
     RETURN_VALUE(JSONValue, v1);
 }

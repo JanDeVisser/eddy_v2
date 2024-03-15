@@ -137,9 +137,9 @@ typedef struct {
 
 DA_WITH_NAME(Module, Modules);
 
-extern Keyword      ts_keywords[];
-extern TypeDefs     typedefs;
-extern Modules      modules;
+extern Keyword  ts_keywords[];
+extern TypeDefs typedefs;
+extern Modules  modules;
 
 extern BasicType   get_basic_type_for(Type *type);
 extern TypeDef    *get_typedef(StringView name);

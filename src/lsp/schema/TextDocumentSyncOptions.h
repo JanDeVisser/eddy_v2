@@ -30,16 +30,12 @@ typedef struct {
 } TextDocumentSyncOptions;
 
 OPTIONAL(TextDocumentSyncOptions);
-OPTIONAL(OptionalTextDocumentSyncOptions);
 DA_WITH_NAME(TextDocumentSyncOptions, TextDocumentSyncOptionss);
 OPTIONAL(TextDocumentSyncOptionss);
-OPTIONAL(OptionalTextDocumentSyncOptionss);
 
-extern OptionalJSONValue                       TextDocumentSyncOptions_encode(TextDocumentSyncOptions value);
-extern OptionalTextDocumentSyncOptions         TextDocumentSyncOptions_decode(OptionalJSONValue json);
-extern OptionalJSONValue                       OptionalTextDocumentSyncOptions_encode(OptionalTextDocumentSyncOptions value);
-extern OptionalOptionalTextDocumentSyncOptions OptionalTextDocumentSyncOptions_decode(OptionalJSONValue json);
-extern OptionalJSONValue                       TextDocumentSyncOptionss_encode(TextDocumentSyncOptionss value);
-extern OptionalTextDocumentSyncOptionss        TextDocumentSyncOptionss_decode(OptionalJSONValue json);
+extern OptionalJSONValue                TextDocumentSyncOptions_encode(TextDocumentSyncOptions value);
+extern OptionalTextDocumentSyncOptions  TextDocumentSyncOptions_decode(OptionalJSONValue json);
+extern OptionalJSONValue                TextDocumentSyncOptionss_encode(TextDocumentSyncOptionss value);
+extern OptionalTextDocumentSyncOptionss TextDocumentSyncOptionss_decode(OptionalJSONValue json);
 
 #endif /* __LSP_TEXTDOCUMENTSYNCOPTIONS_H__ */

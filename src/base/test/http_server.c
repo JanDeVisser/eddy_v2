@@ -23,8 +23,8 @@ int main(int argc, char **argv)
 {
     set_option(sv_from("trace"), sv_from("IPC"));
     log_init();
-    StringView path = sv_printf("/tmp/http-test-%d", getpid());
-    socket_t const  listen_fd = MUST(Socket, unix_socket_listen(path));
+    StringView     path = sv_printf("/tmp/http-test-%d", getpid());
+    socket_t const listen_fd = MUST(Socket, unix_socket_listen(path));
     printf("[S] Listening to socket\n");
 
     Process *client = process_create(sv_from("http_client"), sv_cstr(path));
@@ -49,7 +49,7 @@ int main(int argc, char **argv)
             response.status = HTTP_STATUS_NOW_CLIENT;
             http_response_send(conn_fd, &response);
             printf("[S] Sending /callback... ");
-            HttpResponse callback_response = http_get_request(conn_fd, sv_from("/callback"), (StringList) {0});
+            HttpResponse callback_response = http_get_request(conn_fd, sv_from("/callback"), (StringList) { 0 });
             printf("Sent. Got back %s\n", http_status_to_string(callback_response.status));
             continue;
         }

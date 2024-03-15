@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/ServerCapabilities.h>
 
 DA_IMPL(ServerCapabilities)
-
-OptionalJSONValue OptionalServerCapabilities_encode(OptionalServerCapabilities value)
-{
-    if (value.has_value) {
-        return ServerCapabilities_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalServerCapabilities OptionalServerCapabilities_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalServerCapabilities);
-    }
-    RETURN_VALUE(OptionalServerCapabilities, ServerCapabilities_decode(json));
-}
 
 OptionalJSONValue ServerCapabilitiess_encode(ServerCapabilitiess value)
 {
@@ -53,6 +37,7 @@ OptionalServerCapabilitiess ServerCapabilitiess_decode(OptionalJSONValue json)
     }
     RETURN_VALUE(ServerCapabilitiess, ret);
 }
+
 OptionalServerCapabilities ServerCapabilities_decode(OptionalJSONValue json)
 {
     if (!json.has_value || json.value.type != JSON_TYPE_OBJECT) {
@@ -61,7 +46,7 @@ OptionalServerCapabilities ServerCapabilities_decode(OptionalJSONValue json)
     ServerCapabilities value = { 0 };
     {
         OptionalJSONValue v0 = json_get(&json.value, "positionEncoding");
-        value.positionEncoding = FORWARD_OPTIONAL(OptionalPositionEncodingKind, ServerCapabilities, OptionalPositionEncodingKind_decode(v0));
+        value.positionEncoding = PositionEncodingKind_decode(v0);
     }
     {
         OptionalJSONValue v0 = json_get(&json.value, "textDocumentSync");
@@ -90,14 +75,21 @@ OptionalServerCapabilities ServerCapabilities_decode(OptionalJSONValue json)
     }
     {
         OptionalJSONValue v0 = json_get(&json.value, "semanticTokensProvider");
-        value.semanticTokensProvider = FORWARD_OPTIONAL(OptionalSemanticTokensOptions, ServerCapabilities, OptionalSemanticTokensOptions_decode(v0));
+        value.semanticTokensProvider = SemanticTokensOptions_decode(v0);
     }
     RETURN_VALUE(ServerCapabilities, value);
 }
+
 OptionalJSONValue ServerCapabilities_encode(ServerCapabilities value)
 {
     JSONValue v1 = json_object();
-    json_optional_set(&v1, "positionEncoding", OptionalPositionEncodingKind_encode(value.positionEncoding));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        if (value.positionEncoding.has_value) {
+            _encoded_maybe = PositionEncodingKind_encode(value.positionEncoding.value);
+        }
+        json_optional_set(&v1, "positionEncoding", _encoded_maybe);
+    }
     if (value.textDocumentSync.has_value) {
         JSONValue v2 = { 0 };
         switch (value.textDocumentSync.tag) {
@@ -116,6 +108,12 @@ OptionalJSONValue ServerCapabilities_encode(ServerCapabilities value)
         json_set(&v1, "textDocumentSync", v2);
     }
 
-    json_optional_set(&v1, "semanticTokensProvider", OptionalSemanticTokensOptions_encode(value.semanticTokensProvider));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        if (value.semanticTokensProvider.has_value) {
+            _encoded_maybe = SemanticTokensOptions_encode(value.semanticTokensProvider.value);
+        }
+        json_optional_set(&v1, "semanticTokensProvider", _encoded_maybe);
+    }
     RETURN_VALUE(JSONValue, v1);
 }

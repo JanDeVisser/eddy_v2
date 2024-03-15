@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/InitializeResult.h>
 
 DA_IMPL(InitializeResult)
-
-OptionalJSONValue OptionalInitializeResult_encode(OptionalInitializeResult value)
-{
-    if (value.has_value) {
-        return InitializeResult_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalInitializeResult OptionalInitializeResult_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalInitializeResult);
-    }
-    RETURN_VALUE(OptionalInitializeResult, InitializeResult_decode(json));
-}
 
 OptionalJSONValue InitializeResults_encode(InitializeResults value)
 {
@@ -53,6 +37,7 @@ OptionalInitializeResults InitializeResults_decode(OptionalJSONValue json)
     }
     RETURN_VALUE(InitializeResults, ret);
 }
+
 OptionalInitializeResult InitializeResult_decode(OptionalJSONValue json)
 {
     if (!json.has_value || json.value.type != JSON_TYPE_OBJECT) {
@@ -74,20 +59,35 @@ OptionalInitializeResult InitializeResult_decode(OptionalJSONValue json)
 
             {
                 OptionalJSONValue v1 = json_get(&v0.value, "version");
-                value.serverInfo.version = FORWARD_OPTIONAL(OptionalStringView, InitializeResult, OptionalStringView_decode(v1));
+                value.serverInfo.version = StringView_decode(v1);
             }
         }
     }
     RETURN_VALUE(InitializeResult, value);
 }
+
 OptionalJSONValue InitializeResult_encode(InitializeResult value)
 {
     JSONValue v1 = json_object();
-    json_optional_set(&v1, "capabilities", ServerCapabilities_encode(value.capabilities));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = ServerCapabilities_encode(value.capabilities);
+        json_optional_set(&v1, "capabilities", _encoded_maybe);
+    }
     if (value.serverInfo.has_value) {
         JSONValue v2 = json_object();
-        json_optional_set(&v2, "name", StringView_encode(value.serverInfo.name));
-        json_optional_set(&v2, "version", OptionalStringView_encode(value.serverInfo.version));
+        {
+            OptionalJSONValue _encoded_maybe = { 0 };
+            _encoded_maybe = StringView_encode(value.serverInfo.name);
+            json_optional_set(&v2, "name", _encoded_maybe);
+        }
+        {
+            OptionalJSONValue _encoded_maybe = { 0 };
+            if (value.serverInfo.version.has_value) {
+                _encoded_maybe = StringView_encode(value.serverInfo.version.value);
+            }
+            json_optional_set(&v2, "version", _encoded_maybe);
+        }
         json_set(&v1, "serverInfo", v2);
     }
     RETURN_VALUE(JSONValue, v1);

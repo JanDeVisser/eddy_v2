@@ -12,7 +12,7 @@
 #include <sv.h>
 
 typedef struct _read_pipe ReadPipe;
-typedef void              (*OnPipeRead)(ReadPipe *);
+typedef void (*OnPipeRead)(ReadPipe *);
 
 struct _read_pipe {
     int           pipe[2];

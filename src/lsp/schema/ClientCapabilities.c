@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/ClientCapabilities.h>
 
 DA_IMPL(ClientCapabilities)
-
-OptionalJSONValue OptionalClientCapabilities_encode(OptionalClientCapabilities value)
-{
-    if (value.has_value) {
-        return ClientCapabilities_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalClientCapabilities OptionalClientCapabilities_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalClientCapabilities);
-    }
-    RETURN_VALUE(OptionalClientCapabilities, ClientCapabilities_decode(json));
-}
 
 OptionalJSONValue ClientCapabilitiess_encode(ClientCapabilitiess value)
 {
@@ -53,6 +37,7 @@ OptionalClientCapabilitiess ClientCapabilitiess_decode(OptionalJSONValue json)
     }
     RETURN_VALUE(ClientCapabilitiess, ret);
 }
+
 OptionalClientCapabilities ClientCapabilities_decode(OptionalJSONValue json)
 {
     if (!json.has_value || json.value.type != JSON_TYPE_OBJECT) {
@@ -61,13 +46,20 @@ OptionalClientCapabilities ClientCapabilities_decode(OptionalJSONValue json)
     ClientCapabilities value = { 0 };
     {
         OptionalJSONValue v0 = json_get(&json.value, "textDocument");
-        value.textDocument = FORWARD_OPTIONAL(OptionalTextDocumentClientCapabilities, ClientCapabilities, OptionalTextDocumentClientCapabilities_decode(v0));
+        value.textDocument = TextDocumentClientCapabilities_decode(v0);
     }
     RETURN_VALUE(ClientCapabilities, value);
 }
+
 OptionalJSONValue ClientCapabilities_encode(ClientCapabilities value)
 {
     JSONValue v1 = json_object();
-    json_optional_set(&v1, "textDocument", OptionalTextDocumentClientCapabilities_encode(value.textDocument));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        if (value.textDocument.has_value) {
+            _encoded_maybe = TextDocumentClientCapabilities_encode(value.textDocument.value);
+        }
+        json_optional_set(&v1, "textDocument", _encoded_maybe);
+    }
     RETURN_VALUE(JSONValue, v1);
 }

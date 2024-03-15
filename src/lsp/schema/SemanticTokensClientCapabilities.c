@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/SemanticTokensClientCapabilities.h>
 
 DA_IMPL(SemanticTokensClientCapabilities)
-
-OptionalJSONValue OptionalSemanticTokensClientCapabilities_encode(OptionalSemanticTokensClientCapabilities value)
-{
-    if (value.has_value) {
-        return SemanticTokensClientCapabilities_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalSemanticTokensClientCapabilities OptionalSemanticTokensClientCapabilities_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalSemanticTokensClientCapabilities);
-    }
-    RETURN_VALUE(OptionalSemanticTokensClientCapabilities, SemanticTokensClientCapabilities_decode(json));
-}
 
 OptionalJSONValue SemanticTokensClientCapabilitiess_encode(SemanticTokensClientCapabilitiess value)
 {
@@ -53,6 +37,7 @@ OptionalSemanticTokensClientCapabilitiess SemanticTokensClientCapabilitiess_deco
     }
     RETURN_VALUE(SemanticTokensClientCapabilitiess, ret);
 }
+
 OptionalSemanticTokensClientCapabilities SemanticTokensClientCapabilities_decode(OptionalJSONValue json)
 {
     if (!json.has_value || json.value.type != JSON_TYPE_OBJECT) {
@@ -61,7 +46,7 @@ OptionalSemanticTokensClientCapabilities SemanticTokensClientCapabilities_decode
     SemanticTokensClientCapabilities value = { 0 };
     {
         OptionalJSONValue v0 = json_get(&json.value, "dynamicRegistration");
-        value.dynamicRegistration = FORWARD_OPTIONAL(OptionalBool, SemanticTokensClientCapabilities, OptionalBool_decode(v0));
+        value.dynamicRegistration = Bool_decode(v0);
     }
     {
         OptionalJSONValue v0 = json_get(&json.value, "requests");
@@ -112,11 +97,7 @@ OptionalSemanticTokensClientCapabilities SemanticTokensClientCapabilities_decode
                         OptionalJSONValue v3 = { 0 };
                         do {
                             v3 = json_get(&v1.value, "delta");
-                            OptionalOptionalBool opt2_1_delta = OptionalBool_decode(v3);
-                            if (!opt2_1_delta.has_value) {
-                                break;
-                            }
-                            value.requests.full._1.delta = opt2_1_delta.value;
+                            value.requests.full._1.delta = Bool_decode(v3);
                             decoded2 = true;
                         } while (false);
                         if (decoded2)
@@ -141,26 +122,33 @@ OptionalSemanticTokensClientCapabilities SemanticTokensClientCapabilities_decode
     }
     {
         OptionalJSONValue v0 = json_get(&json.value, "overlappingTokenSupport");
-        value.overlappingTokenSupport = FORWARD_OPTIONAL(OptionalBool, SemanticTokensClientCapabilities, OptionalBool_decode(v0));
+        value.overlappingTokenSupport = Bool_decode(v0);
     }
     {
         OptionalJSONValue v0 = json_get(&json.value, "multilineTokenSupport");
-        value.multilineTokenSupport = FORWARD_OPTIONAL(OptionalBool, SemanticTokensClientCapabilities, OptionalBool_decode(v0));
+        value.multilineTokenSupport = Bool_decode(v0);
     }
     {
         OptionalJSONValue v0 = json_get(&json.value, "serverCancelSupport");
-        value.serverCancelSupport = FORWARD_OPTIONAL(OptionalBool, SemanticTokensClientCapabilities, OptionalBool_decode(v0));
+        value.serverCancelSupport = Bool_decode(v0);
     }
     {
         OptionalJSONValue v0 = json_get(&json.value, "augmentsSyntaxTokens");
-        value.augmentsSyntaxTokens = FORWARD_OPTIONAL(OptionalBool, SemanticTokensClientCapabilities, OptionalBool_decode(v0));
+        value.augmentsSyntaxTokens = Bool_decode(v0);
     }
     RETURN_VALUE(SemanticTokensClientCapabilities, value);
 }
+
 OptionalJSONValue SemanticTokensClientCapabilities_encode(SemanticTokensClientCapabilities value)
 {
     JSONValue v1 = json_object();
-    json_optional_set(&v1, "dynamicRegistration", OptionalBool_encode(value.dynamicRegistration));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        if (value.dynamicRegistration.has_value) {
+            _encoded_maybe = Bool_encode(value.dynamicRegistration.value);
+        }
+        json_optional_set(&v1, "dynamicRegistration", _encoded_maybe);
+    }
     assert(value.requests.has_value);
     {
         JSONValue v2 = json_object();
@@ -190,7 +178,13 @@ OptionalJSONValue SemanticTokensClientCapabilities_encode(SemanticTokensClientCa
                 break;
             case 1: {
                 v3 = json_object();
-                json_optional_set(&v3, "delta", OptionalBool_encode(value.requests.full._1.delta));
+                {
+                    OptionalJSONValue _encoded_maybe = { 0 };
+                    if (value.requests.full._1.delta.has_value) {
+                        _encoded_maybe = Bool_encode(value.requests.full._1.delta.value);
+                    }
+                    json_optional_set(&v3, "delta", _encoded_maybe);
+                }
             } break;
             default:
                 UNREACHABLE();
@@ -201,12 +195,48 @@ OptionalJSONValue SemanticTokensClientCapabilities_encode(SemanticTokensClientCa
 
         json_set(&v1, "requests", v2);
     }
-    json_optional_set(&v1, "tokenTypes", StringViews_encode(value.tokenTypes));
-    json_optional_set(&v1, "tokenModifiers", StringViews_encode(value.tokenModifiers));
-    json_optional_set(&v1, "formats", TokenFormats_encode(value.formats));
-    json_optional_set(&v1, "overlappingTokenSupport", OptionalBool_encode(value.overlappingTokenSupport));
-    json_optional_set(&v1, "multilineTokenSupport", OptionalBool_encode(value.multilineTokenSupport));
-    json_optional_set(&v1, "serverCancelSupport", OptionalBool_encode(value.serverCancelSupport));
-    json_optional_set(&v1, "augmentsSyntaxTokens", OptionalBool_encode(value.augmentsSyntaxTokens));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = StringViews_encode(value.tokenTypes);
+        json_optional_set(&v1, "tokenTypes", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = StringViews_encode(value.tokenModifiers);
+        json_optional_set(&v1, "tokenModifiers", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = TokenFormats_encode(value.formats);
+        json_optional_set(&v1, "formats", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        if (value.overlappingTokenSupport.has_value) {
+            _encoded_maybe = Bool_encode(value.overlappingTokenSupport.value);
+        }
+        json_optional_set(&v1, "overlappingTokenSupport", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        if (value.multilineTokenSupport.has_value) {
+            _encoded_maybe = Bool_encode(value.multilineTokenSupport.value);
+        }
+        json_optional_set(&v1, "multilineTokenSupport", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        if (value.serverCancelSupport.has_value) {
+            _encoded_maybe = Bool_encode(value.serverCancelSupport.value);
+        }
+        json_optional_set(&v1, "serverCancelSupport", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        if (value.augmentsSyntaxTokens.has_value) {
+            _encoded_maybe = Bool_encode(value.augmentsSyntaxTokens.value);
+        }
+        json_optional_set(&v1, "augmentsSyntaxTokens", _encoded_maybe);
+    }
     RETURN_VALUE(JSONValue, v1);
 }

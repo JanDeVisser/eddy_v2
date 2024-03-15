@@ -50,15 +50,11 @@ typedef struct {
 } {{ name }};
 
 OPTIONAL({{ name }});
-OPTIONAL(Optional{{ name }});
 DA_WITH_NAME({{ name }}, {{ name }}s);
 OPTIONAL({{ name }}s);
-OPTIONAL(Optional{{ name }}s);
 
 extern OptionalJSONValue {{name}}_encode({{name}} value);
 extern Optional{{name}} {{name}}_decode(OptionalJSONValue json);
-extern OptionalJSONValue Optional{{name}}_encode(Optional{{name}} value);
-extern OptionalOptional{{name}} Optional{{name}}_decode(OptionalJSONValue json);
 extern OptionalJSONValue {{name}}s_encode({{name}}s value);
 extern Optional{{name}}s {{name}}s_decode(OptionalJSONValue json);
 

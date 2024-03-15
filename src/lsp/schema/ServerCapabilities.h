@@ -30,16 +30,12 @@ typedef struct {
 } ServerCapabilities;
 
 OPTIONAL(ServerCapabilities);
-OPTIONAL(OptionalServerCapabilities);
 DA_WITH_NAME(ServerCapabilities, ServerCapabilitiess);
 OPTIONAL(ServerCapabilitiess);
-OPTIONAL(OptionalServerCapabilitiess);
 
-extern OptionalJSONValue                  ServerCapabilities_encode(ServerCapabilities value);
-extern OptionalServerCapabilities         ServerCapabilities_decode(OptionalJSONValue json);
-extern OptionalJSONValue                  OptionalServerCapabilities_encode(OptionalServerCapabilities value);
-extern OptionalOptionalServerCapabilities OptionalServerCapabilities_decode(OptionalJSONValue json);
-extern OptionalJSONValue                  ServerCapabilitiess_encode(ServerCapabilitiess value);
-extern OptionalServerCapabilitiess        ServerCapabilitiess_decode(OptionalJSONValue json);
+extern OptionalJSONValue           ServerCapabilities_encode(ServerCapabilities value);
+extern OptionalServerCapabilities  ServerCapabilities_decode(OptionalJSONValue json);
+extern OptionalJSONValue           ServerCapabilitiess_encode(ServerCapabilitiess value);
+extern OptionalServerCapabilitiess ServerCapabilitiess_decode(OptionalJSONValue json);
 
 #endif /* __LSP_SERVERCAPABILITIES_H__ */

@@ -31,8 +31,8 @@ typedef struct {
 } ListBoxEntry;
 
 typedef struct listbox ListBox;
-typedef void           (*FileSelectorResult)(ListBox *listbox, DirEntry entry);
-typedef void           (*QueryResult)(ListBox *listbox, QueryOption selected);
+typedef void (*FileSelectorResult)(ListBox *listbox, DirEntry entry);
+typedef void (*QueryResult)(ListBox *listbox, QueryOption selected);
 
 typedef struct {
     QueryResult handler;
@@ -47,10 +47,10 @@ typedef struct {
 
 DA_WITH_NAME(ListBoxEntry, ListBoxEntries);
 
-typedef int        (*ListBoxEntryCompare)(ListBox *, ListBoxEntry const *, ListBoxEntry const *);
+typedef int (*ListBoxEntryCompare)(ListBox *, ListBoxEntry const *, ListBoxEntry const *);
 typedef StringView (*ToStringView)(ListBoxEntry);
-typedef void       (*ListBoxSubmit)(ListBox *listbox, ListBoxEntry selection);
-typedef void       (*ListBoxDismiss)(ListBox *listbox);
+typedef void (*ListBoxSubmit)(ListBox *listbox, ListBoxEntry selection);
+typedef void (*ListBoxDismiss)(ListBox *listbox);
 
 typedef struct listbox {
     _W;

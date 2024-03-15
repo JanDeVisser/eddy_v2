@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/SemanticTokensLegend.h>
 
 DA_IMPL(SemanticTokensLegend)
-
-OptionalJSONValue OptionalSemanticTokensLegend_encode(OptionalSemanticTokensLegend value)
-{
-    if (value.has_value) {
-        return SemanticTokensLegend_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalSemanticTokensLegend OptionalSemanticTokensLegend_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalSemanticTokensLegend);
-    }
-    RETURN_VALUE(OptionalSemanticTokensLegend, SemanticTokensLegend_decode(json));
-}
 
 OptionalJSONValue SemanticTokensLegends_encode(SemanticTokensLegends value)
 {
@@ -53,6 +37,7 @@ OptionalSemanticTokensLegends SemanticTokensLegends_decode(OptionalJSONValue jso
     }
     RETURN_VALUE(SemanticTokensLegends, ret);
 }
+
 OptionalSemanticTokensLegend SemanticTokensLegend_decode(OptionalJSONValue json)
 {
     if (!json.has_value || json.value.type != JSON_TYPE_OBJECT) {
@@ -69,10 +54,19 @@ OptionalSemanticTokensLegend SemanticTokensLegend_decode(OptionalJSONValue json)
     }
     RETURN_VALUE(SemanticTokensLegend, value);
 }
+
 OptionalJSONValue SemanticTokensLegend_encode(SemanticTokensLegend value)
 {
     JSONValue v1 = json_object();
-    json_optional_set(&v1, "tokenTypes", StringViews_encode(value.tokenTypes));
-    json_optional_set(&v1, "tokenModifiers", StringViews_encode(value.tokenModifiers));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = StringViews_encode(value.tokenTypes);
+        json_optional_set(&v1, "tokenTypes", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = StringViews_encode(value.tokenModifiers);
+        json_optional_set(&v1, "tokenModifiers", _encoded_maybe);
+    }
     RETURN_VALUE(JSONValue, v1);
 }

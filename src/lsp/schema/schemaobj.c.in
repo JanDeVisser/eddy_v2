@@ -1,3 +1,4 @@
+#include "json.h"
 {% macro dunno_man(p) %} Dunno man {% endmacro -%}
 {% macro decode_variant_struct_option(s, var, value, tag, lvl) -%}
     {%- set fld_var = "v%d" % (lvl + 1) -%}
@@ -8,13 +9,17 @@
     {% for p in s.properties -%}
         {{fld_var}} = json_get(&{{var}}.value, "{{ p.name }}");
         {%- if p.type.kind == "basic_type" or p.type.kind == "constant" or p.type.kind == "typeref" -%}
-            {%- set ctype = "%s%s%s" % ("Optional" if p.optional else "", p.type[p.type.kind].alias, "s" if p.type.array else "") -%}
+            {%- set ctype = "%s%s" % (p.type[p.type.kind].alias, "s" if p.type.array else "") -%}
             {%- set opt_var = "opt%d_%d_%s" % (lvl, tag, p.name) -%}
-            Optional{{ctype}} {{opt_var}} = {{ctype}}_decode({{fld_var}});
-            if (!{{opt_var}}.has_value) {
-                break;
-            }
-            {{value}}._{{tag}}.{{p.name}} = {{opt_var}}.value;
+            {% if p.optional -%}
+                {{value}}._{{tag}}.{{p.name}} = {{ctype}}_decode({{fld_var}});
+            {% else -%}
+                Optional{{ctype}} {{opt_var}} = {{ctype}}_decode({{fld_var}});
+                if (!{{opt_var}}.has_value) {
+                    break;
+                }
+                {{value}}._{{tag}}.{{p.name}} = {{opt_var}}.value;
+            {% endif -%}
         {% elif p.type.kind == "struct" -%}
             NYI("Struct in a struct in a variant");
         {%- elif p.type.kind == "variant" -%}
@@ -63,9 +68,13 @@
     {%- set var = "v%d" % lvl -%}
     {
         OptionalJSONValue {{var}} = json_get(&{{json_var}}.value, "{{ p.name }}");
-        {%- if p.type.kind == "basic_type" or p.type.kind == "constant" or p.type.kind == "typeref" -%}
-            {%- set ctype = "%s%s%s" % ("Optional" if p.optional else "", p.type[p.type.kind].alias, "s" if p.type.array else "") -%}
-            {{value}} = FORWARD_OPTIONAL({{ctype}}, {{ name }}, {{ctype}}_decode({{var}}));
+        {% if p.type.kind == "basic_type" or p.type.kind == "constant" or p.type.kind == "typeref" -%}
+            {%- set ctype = "%s%s" % (p.type[p.type.kind].alias, "s" if p.type.array else "") -%}
+            {% if p.optional -%}
+                {{value}} = {{ctype}}_decode({{var}});
+            {% else -%}
+                {{value}} = FORWARD_OPTIONAL({{ctype}}, {{name}}, {{ctype}}_decode({{var}}));
+            {% endif -%}
         {% elif p.type.kind == "struct" -%}
             {% if p.optional -%}
                 if ({{var}}.has_value) {
@@ -129,8 +138,19 @@
 {% macro encode_property(p, value, lvl) -%}
     {%- set enclosing = "v%d" % lvl -%}
     {%- if p.type.kind == "basic_type" or p.type.kind == "constant" or p.type.kind == "typeref" -%}
-        {%- set decorated_type = "%s%s%s" % ("Optional" if p.optional else "", p.type[p.type.kind].alias, "s" if p.type.array else "") -%}
-        json_optional_set(&{{ enclosing }}, "{{ p.name }}", {{ decorated_type }}_encode({{value}}.{{ p.name }}));
+        {%- set ctype = "%s%s" % (p.type[p.type.kind].alias, "s" if p.type.array else "") -%}
+        {%- set decorated_type = "%s%s" % ("Optional" if p.optional else "", ctype) -%}
+        {
+            OptionalJSONValue _encoded_maybe = {0};
+            {% if p.optional -%}
+                if ({{value}}.{{p.name}}.has_value) {
+                    _encoded_maybe = {{ ctype }}_encode({{value}}.{{ p.name }}.value);
+                }
+            {% else -%}
+                _encoded_maybe = {{ ctype }}_encode({{value}}.{{ p.name }});
+            {% endif -%}
+            json_optional_set(&{{ enclosing }}, "{{ p.name }}", _encoded_maybe);
+        }
     {%- elif p.type.kind == "struct" -%}
         {%- set val = value + "." + p.name -%}
         {% if p.optional -%}
@@ -160,26 +180,9 @@
 
 #include <lsp/schema/{{ name }}.h>
 
-{% block boilerplate_impls -%}
+{% block boilerplate_impls %}
 
 DA_IMPL({{name}})
-
-OptionalJSONValue Optional{{name}}_encode(Optional{{name}} value)
-{
-    if (value.has_value) {
-        return {{name}}_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptional{{name}} Optional{{name}}_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(Optional{{name}});
-    }
-    RETURN_VALUE(Optional{{name}}, {{name}}_decode(json));
-}
 
 OptionalJSONValue {{name}}s_encode({{name}}s value)
 {
@@ -207,23 +210,23 @@ Optional{{name}}s {{name}}s_decode(OptionalJSONValue json)
     }
     RETURN_VALUE({{name}}s, ret);
 }
-{% endblock -%}
+{% endblock %}
 
-{% block custom_code -%}
-{% endblock -%}
+{% block custom_code %}
+{% endblock %}
 
-{% block decode_impl -%}
+{% block decode_impl %}
 Optional{{ name }} {{ name }}_decode(OptionalJSONValue json)
 {
     {% block decode -%}
     {% endblock -%}
 }
-{% endblock -%}
+{% endblock %}
 
-{% block encode_impl -%}
+{% block encode_impl %}
 OptionalJSONValue {{ name }}_encode({{ name }} value)
 {
     {% block encode -%}
     {% endblock -%}
 }
-{% endblock -%}
+{% endblock %}

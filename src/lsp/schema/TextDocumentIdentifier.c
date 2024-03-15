@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/TextDocumentIdentifier.h>
 
 DA_IMPL(TextDocumentIdentifier)
-
-OptionalJSONValue OptionalTextDocumentIdentifier_encode(OptionalTextDocumentIdentifier value)
-{
-    if (value.has_value) {
-        return TextDocumentIdentifier_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalTextDocumentIdentifier OptionalTextDocumentIdentifier_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalTextDocumentIdentifier);
-    }
-    RETURN_VALUE(OptionalTextDocumentIdentifier, TextDocumentIdentifier_decode(json));
-}
 
 OptionalJSONValue TextDocumentIdentifiers_encode(TextDocumentIdentifiers value)
 {
@@ -53,6 +37,7 @@ OptionalTextDocumentIdentifiers TextDocumentIdentifiers_decode(OptionalJSONValue
     }
     RETURN_VALUE(TextDocumentIdentifiers, ret);
 }
+
 OptionalTextDocumentIdentifier TextDocumentIdentifier_decode(OptionalJSONValue json)
 {
     if (!json.has_value || json.value.type != JSON_TYPE_OBJECT) {
@@ -65,9 +50,14 @@ OptionalTextDocumentIdentifier TextDocumentIdentifier_decode(OptionalJSONValue j
     }
     RETURN_VALUE(TextDocumentIdentifier, value);
 }
+
 OptionalJSONValue TextDocumentIdentifier_encode(TextDocumentIdentifier value)
 {
     JSONValue v1 = json_object();
-    json_optional_set(&v1, "uri", DocumentUri_encode(value.uri));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = DocumentUri_encode(value.uri);
+        json_optional_set(&v1, "uri", _encoded_maybe);
+    }
     RETURN_VALUE(JSONValue, v1);
 }

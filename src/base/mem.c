@@ -20,7 +20,7 @@ void *malloc_fatal(size_t size, char const *where, ...)
     if (!ret) {
         if (where) {
             va_list args;
-            char strbuf[256];
+            char    strbuf[256];
             strbuf[0] = 0;
             va_start(args, where);
             vsnprintf(strbuf, 255, where, args);
@@ -36,7 +36,7 @@ void *malloc_fatal(size_t size, char const *where, ...)
 
 Allocator allocator_new()
 {
-    Allocator ret = {0};
+    Allocator ret = { 0 };
     ret.sentinel = SENTINEL;
     return ret;
 }

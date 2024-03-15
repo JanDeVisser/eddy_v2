@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/Range.h>
 
 DA_IMPL(Range)
-
-OptionalJSONValue OptionalRange_encode(OptionalRange value)
-{
-    if (value.has_value) {
-        return Range_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalRange OptionalRange_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalRange);
-    }
-    RETURN_VALUE(OptionalRange, Range_decode(json));
-}
 
 OptionalJSONValue Ranges_encode(Ranges value)
 {
@@ -53,6 +37,7 @@ OptionalRanges Ranges_decode(OptionalJSONValue json)
     }
     RETURN_VALUE(Ranges, ret);
 }
+
 OptionalRange Range_decode(OptionalJSONValue json)
 {
     if (!json.has_value || json.value.type != JSON_TYPE_OBJECT) {
@@ -69,10 +54,19 @@ OptionalRange Range_decode(OptionalJSONValue json)
     }
     RETURN_VALUE(Range, value);
 }
+
 OptionalJSONValue Range_encode(Range value)
 {
     JSONValue v1 = json_object();
-    json_optional_set(&v1, "start", Position_encode(value.start));
-    json_optional_set(&v1, "end", Position_encode(value.end));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = Position_encode(value.start);
+        json_optional_set(&v1, "start", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = Position_encode(value.end);
+        json_optional_set(&v1, "end", _encoded_maybe);
+    }
     RETURN_VALUE(JSONValue, v1);
 }

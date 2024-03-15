@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/DocumentFilter.h>
 
 DA_IMPL(DocumentFilter)
-
-OptionalJSONValue OptionalDocumentFilter_encode(OptionalDocumentFilter value)
-{
-    if (value.has_value) {
-        return DocumentFilter_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalDocumentFilter OptionalDocumentFilter_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalDocumentFilter);
-    }
-    RETURN_VALUE(OptionalDocumentFilter, DocumentFilter_decode(json));
-}
 
 OptionalJSONValue DocumentFilters_encode(DocumentFilters value)
 {
@@ -53,6 +37,7 @@ OptionalDocumentFilters DocumentFilters_decode(OptionalJSONValue json)
     }
     RETURN_VALUE(DocumentFilters, ret);
 }
+
 OptionalDocumentFilter DocumentFilter_decode(OptionalJSONValue json)
 {
     if (!json.has_value || json.value.type != JSON_TYPE_OBJECT) {
@@ -61,23 +46,42 @@ OptionalDocumentFilter DocumentFilter_decode(OptionalJSONValue json)
     DocumentFilter value = { 0 };
     {
         OptionalJSONValue v0 = json_get(&json.value, "language");
-        value.language = FORWARD_OPTIONAL(OptionalStringView, DocumentFilter, OptionalStringView_decode(v0));
+        value.language = StringView_decode(v0);
     }
     {
         OptionalJSONValue v0 = json_get(&json.value, "scheme");
-        value.scheme = FORWARD_OPTIONAL(OptionalStringView, DocumentFilter, OptionalStringView_decode(v0));
+        value.scheme = StringView_decode(v0);
     }
     {
         OptionalJSONValue v0 = json_get(&json.value, "pattern");
-        value.pattern = FORWARD_OPTIONAL(OptionalStringView, DocumentFilter, OptionalStringView_decode(v0));
+        value.pattern = StringView_decode(v0);
     }
     RETURN_VALUE(DocumentFilter, value);
 }
+
 OptionalJSONValue DocumentFilter_encode(DocumentFilter value)
 {
     JSONValue v1 = json_object();
-    json_optional_set(&v1, "language", OptionalStringView_encode(value.language));
-    json_optional_set(&v1, "scheme", OptionalStringView_encode(value.scheme));
-    json_optional_set(&v1, "pattern", OptionalStringView_encode(value.pattern));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        if (value.language.has_value) {
+            _encoded_maybe = StringView_encode(value.language.value);
+        }
+        json_optional_set(&v1, "language", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        if (value.scheme.has_value) {
+            _encoded_maybe = StringView_encode(value.scheme.value);
+        }
+        json_optional_set(&v1, "scheme", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        if (value.pattern.has_value) {
+            _encoded_maybe = StringView_encode(value.pattern.value);
+        }
+        json_optional_set(&v1, "pattern", _encoded_maybe);
+    }
     RETURN_VALUE(JSONValue, v1);
 }

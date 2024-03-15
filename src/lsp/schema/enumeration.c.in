@@ -24,7 +24,9 @@ Optional{{ name }} {{ name }}_parse(StringView s)
 
 
 {% block decode -%}
-    assert(json.has_value);
+    if (!json.has_value) {
+        RETURN_EMPTY({{name}});
+    }
 {% if enumeration.type == "string" -%}
     assert(json.value.type == JSON_TYPE_STRING);
     return {{name}}_parse(json.value.string);

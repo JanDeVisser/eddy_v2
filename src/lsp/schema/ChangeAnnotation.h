@@ -18,16 +18,12 @@ typedef struct {
 } ChangeAnnotation;
 
 OPTIONAL(ChangeAnnotation);
-OPTIONAL(OptionalChangeAnnotation);
 DA_WITH_NAME(ChangeAnnotation, ChangeAnnotations);
 OPTIONAL(ChangeAnnotations);
-OPTIONAL(OptionalChangeAnnotations);
 
-extern OptionalJSONValue                ChangeAnnotation_encode(ChangeAnnotation value);
-extern OptionalChangeAnnotation         ChangeAnnotation_decode(OptionalJSONValue json);
-extern OptionalJSONValue                OptionalChangeAnnotation_encode(OptionalChangeAnnotation value);
-extern OptionalOptionalChangeAnnotation OptionalChangeAnnotation_decode(OptionalJSONValue json);
-extern OptionalJSONValue                ChangeAnnotations_encode(ChangeAnnotations value);
-extern OptionalChangeAnnotations        ChangeAnnotations_decode(OptionalJSONValue json);
+extern OptionalJSONValue         ChangeAnnotation_encode(ChangeAnnotation value);
+extern OptionalChangeAnnotation  ChangeAnnotation_decode(OptionalJSONValue json);
+extern OptionalJSONValue         ChangeAnnotations_encode(ChangeAnnotations value);
+extern OptionalChangeAnnotations ChangeAnnotations_decode(OptionalJSONValue json);
 
 #endif /* __LSP_CHANGEANNOTATION_H__ */

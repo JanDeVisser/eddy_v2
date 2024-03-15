@@ -310,14 +310,13 @@ void parse_namespace(Lexer *lexer)
     }
 }
 
-
 void parse_enum(Lexer *lexer)
 {
     lexer_lex(lexer);
     Token       name = MUST(Token, lexer_expect(lexer, TK_IDENTIFIER, TC_IDENTIFIER, "Expected enum name"));
     Enumeration enumeration = { name.text };
     MUST(Token, lexer_expect(lexer, TK_SYMBOL, '{', "Expected '{"));
-    Token token = {0};
+    Token token = { 0 };
     while (true) {
         token = lexer_next(lexer);
         if (!token_matches(token, TK_IDENTIFIER, TC_IDENTIFIER) && token.kind != TK_KEYWORD) {

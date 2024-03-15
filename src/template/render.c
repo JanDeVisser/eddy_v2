@@ -476,9 +476,9 @@ ErrorOrInt render_node(TemplateRenderContext *ctx, TemplateNode *node)
             break;
         case TNKSetVariable: {
             JSONValue *scope = get_variable_scope(ctx, node->set_statement.variable);
-            JSONValue value = TRY_TO(JSONValue, Int, evaluate_expression(ctx, node->set_statement.value));
+            JSONValue  value = TRY_TO(JSONValue, Int, evaluate_expression(ctx, node->set_statement.value));
             if (scope == NULL) {
-                scope=&ctx->scope->scope;
+                scope = &ctx->scope->scope;
             }
             json_set_sv(scope, node->set_statement.variable, value);
             trace(CAT_TEMPLATE, "Setting variable '%.*s' to '%.*s'", SV_ARG(node->for_statement.variable), SV_ARG(json_to_string(value)));

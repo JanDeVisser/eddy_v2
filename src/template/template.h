@@ -254,7 +254,7 @@ typedef struct template_node {
             struct template_node *cases;
         } switch_statement;
         struct {
-            bool literal;            
+            bool literal;
         } text_node;
     };
     struct template_node *next;

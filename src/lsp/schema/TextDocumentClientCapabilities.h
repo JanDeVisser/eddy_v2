@@ -20,16 +20,12 @@ typedef struct {
 } TextDocumentClientCapabilities;
 
 OPTIONAL(TextDocumentClientCapabilities);
-OPTIONAL(OptionalTextDocumentClientCapabilities);
 DA_WITH_NAME(TextDocumentClientCapabilities, TextDocumentClientCapabilitiess);
 OPTIONAL(TextDocumentClientCapabilitiess);
-OPTIONAL(OptionalTextDocumentClientCapabilitiess);
 
-extern OptionalJSONValue                              TextDocumentClientCapabilities_encode(TextDocumentClientCapabilities value);
-extern OptionalTextDocumentClientCapabilities         TextDocumentClientCapabilities_decode(OptionalJSONValue json);
-extern OptionalJSONValue                              OptionalTextDocumentClientCapabilities_encode(OptionalTextDocumentClientCapabilities value);
-extern OptionalOptionalTextDocumentClientCapabilities OptionalTextDocumentClientCapabilities_decode(OptionalJSONValue json);
-extern OptionalJSONValue                              TextDocumentClientCapabilitiess_encode(TextDocumentClientCapabilitiess value);
-extern OptionalTextDocumentClientCapabilitiess        TextDocumentClientCapabilitiess_decode(OptionalJSONValue json);
+extern OptionalJSONValue                       TextDocumentClientCapabilities_encode(TextDocumentClientCapabilities value);
+extern OptionalTextDocumentClientCapabilities  TextDocumentClientCapabilities_decode(OptionalJSONValue json);
+extern OptionalJSONValue                       TextDocumentClientCapabilitiess_encode(TextDocumentClientCapabilitiess value);
+extern OptionalTextDocumentClientCapabilitiess TextDocumentClientCapabilitiess_decode(OptionalJSONValue json);
 
 #endif /* __LSP_TEXTDOCUMENTCLIENTCAPABILITIES_H__ */

@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/AnnotatedTextEdit.h>
 
 DA_IMPL(AnnotatedTextEdit)
-
-OptionalJSONValue OptionalAnnotatedTextEdit_encode(OptionalAnnotatedTextEdit value)
-{
-    if (value.has_value) {
-        return AnnotatedTextEdit_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalAnnotatedTextEdit OptionalAnnotatedTextEdit_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalAnnotatedTextEdit);
-    }
-    RETURN_VALUE(OptionalAnnotatedTextEdit, AnnotatedTextEdit_decode(json));
-}
 
 OptionalJSONValue AnnotatedTextEdits_encode(AnnotatedTextEdits value)
 {
@@ -53,6 +37,7 @@ OptionalAnnotatedTextEdits AnnotatedTextEdits_decode(OptionalJSONValue json)
     }
     RETURN_VALUE(AnnotatedTextEdits, ret);
 }
+
 OptionalAnnotatedTextEdit AnnotatedTextEdit_decode(OptionalJSONValue json)
 {
     if (!json.has_value || json.value.type != JSON_TYPE_OBJECT) {
@@ -73,11 +58,24 @@ OptionalAnnotatedTextEdit AnnotatedTextEdit_decode(OptionalJSONValue json)
     }
     RETURN_VALUE(AnnotatedTextEdit, value);
 }
+
 OptionalJSONValue AnnotatedTextEdit_encode(AnnotatedTextEdit value)
 {
     JSONValue v1 = json_object();
-    json_optional_set(&v1, "range", Range_encode(value.range));
-    json_optional_set(&v1, "newText", StringView_encode(value.newText));
-    json_optional_set(&v1, "annotationId", ChangeAnnotationIdentifier_encode(value.annotationId));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = Range_encode(value.range);
+        json_optional_set(&v1, "range", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = StringView_encode(value.newText);
+        json_optional_set(&v1, "newText", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = ChangeAnnotationIdentifier_encode(value.annotationId);
+        json_optional_set(&v1, "annotationId", _encoded_maybe);
+    }
     RETURN_VALUE(JSONValue, v1);
 }

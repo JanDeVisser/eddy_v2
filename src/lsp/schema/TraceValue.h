@@ -18,19 +18,13 @@ typedef enum {
 } TraceValue;
 
 OPTIONAL(TraceValue);
-OPTIONAL(OptionalTraceValue);
 DA_WITH_NAME(TraceValue, TraceValues);
 OPTIONAL(TraceValues);
-OPTIONAL(OptionalTraceValues);
 
-extern OptionalJSONValue           TraceValue_encode(TraceValue value);
-extern OptionalTraceValue          TraceValue_decode(OptionalJSONValue json);
-extern OptionalJSONValue           OptionalTraceValue_encode(OptionalTraceValue value);
-extern OptionalOptionalTraceValue  OptionalTraceValue_decode(OptionalJSONValue json);
-extern OptionalJSONValue           TraceValues_encode(TraceValues value);
-extern OptionalTraceValues         TraceValues_decode(OptionalJSONValue json);
-extern OptionalJSONValue           OptionalTraceValues_encode(OptionalTraceValues value);
-extern OptionalOptionalTraceValues OptionalTraceValues_decode(OptionalJSONValue json);
-extern StringView                  TraceValue_to_string(TraceValue value);
-extern OptionalTraceValue          TraceValue_parse(StringView s);
+extern OptionalJSONValue   TraceValue_encode(TraceValue value);
+extern OptionalTraceValue  TraceValue_decode(OptionalJSONValue json);
+extern OptionalJSONValue   TraceValues_encode(TraceValues value);
+extern OptionalTraceValues TraceValues_decode(OptionalJSONValue json);
+extern StringView          TraceValue_to_string(TraceValue value);
+extern OptionalTraceValue  TraceValue_parse(StringView s);
 #endif /* __LSP_TRACEVALUE_H__ */

@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/Location.h>
 
 DA_IMPL(Location)
-
-OptionalJSONValue OptionalLocation_encode(OptionalLocation value)
-{
-    if (value.has_value) {
-        return Location_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalLocation OptionalLocation_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalLocation);
-    }
-    RETURN_VALUE(OptionalLocation, Location_decode(json));
-}
 
 OptionalJSONValue Locations_encode(Locations value)
 {
@@ -53,6 +37,7 @@ OptionalLocations Locations_decode(OptionalJSONValue json)
     }
     RETURN_VALUE(Locations, ret);
 }
+
 OptionalLocation Location_decode(OptionalJSONValue json)
 {
     if (!json.has_value || json.value.type != JSON_TYPE_OBJECT) {
@@ -69,10 +54,19 @@ OptionalLocation Location_decode(OptionalJSONValue json)
     }
     RETURN_VALUE(Location, value);
 }
+
 OptionalJSONValue Location_encode(Location value)
 {
     JSONValue v1 = json_object();
-    json_optional_set(&v1, "uri", DocumentUri_encode(value.uri));
-    json_optional_set(&v1, "range", Range_encode(value.range));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = DocumentUri_encode(value.uri);
+        json_optional_set(&v1, "uri", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = Range_encode(value.range);
+        json_optional_set(&v1, "range", _encoded_maybe);
+    }
     RETURN_VALUE(JSONValue, v1);
 }

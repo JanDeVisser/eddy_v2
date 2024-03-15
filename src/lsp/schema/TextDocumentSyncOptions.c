@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/TextDocumentSyncOptions.h>
 
 DA_IMPL(TextDocumentSyncOptions)
-
-OptionalJSONValue OptionalTextDocumentSyncOptions_encode(OptionalTextDocumentSyncOptions value)
-{
-    if (value.has_value) {
-        return TextDocumentSyncOptions_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalTextDocumentSyncOptions OptionalTextDocumentSyncOptions_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalTextDocumentSyncOptions);
-    }
-    RETURN_VALUE(OptionalTextDocumentSyncOptions, TextDocumentSyncOptions_decode(json));
-}
 
 OptionalJSONValue TextDocumentSyncOptionss_encode(TextDocumentSyncOptionss value)
 {
@@ -53,6 +37,7 @@ OptionalTextDocumentSyncOptionss TextDocumentSyncOptionss_decode(OptionalJSONVal
     }
     RETURN_VALUE(TextDocumentSyncOptionss, ret);
 }
+
 OptionalTextDocumentSyncOptions TextDocumentSyncOptions_decode(OptionalJSONValue json)
 {
     if (!json.has_value || json.value.type != JSON_TYPE_OBJECT) {
@@ -61,19 +46,19 @@ OptionalTextDocumentSyncOptions TextDocumentSyncOptions_decode(OptionalJSONValue
     TextDocumentSyncOptions value = { 0 };
     {
         OptionalJSONValue v0 = json_get(&json.value, "openClose");
-        value.openClose = FORWARD_OPTIONAL(OptionalBool, TextDocumentSyncOptions, OptionalBool_decode(v0));
+        value.openClose = Bool_decode(v0);
     }
     {
         OptionalJSONValue v0 = json_get(&json.value, "change");
-        value.change = FORWARD_OPTIONAL(OptionalTextDocumentSyncKind, TextDocumentSyncOptions, OptionalTextDocumentSyncKind_decode(v0));
+        value.change = TextDocumentSyncKind_decode(v0);
     }
     {
         OptionalJSONValue v0 = json_get(&json.value, "willSave");
-        value.willSave = FORWARD_OPTIONAL(OptionalBool, TextDocumentSyncOptions, OptionalBool_decode(v0));
+        value.willSave = Bool_decode(v0);
     }
     {
         OptionalJSONValue v0 = json_get(&json.value, "willSaveWaitUntil");
-        value.willSaveWaitUntil = FORWARD_OPTIONAL(OptionalBool, TextDocumentSyncOptions, OptionalBool_decode(v0));
+        value.willSaveWaitUntil = Bool_decode(v0);
     }
     {
         OptionalJSONValue v0 = json_get(&json.value, "save");
@@ -102,13 +87,38 @@ OptionalTextDocumentSyncOptions TextDocumentSyncOptions_decode(OptionalJSONValue
     }
     RETURN_VALUE(TextDocumentSyncOptions, value);
 }
+
 OptionalJSONValue TextDocumentSyncOptions_encode(TextDocumentSyncOptions value)
 {
     JSONValue v1 = json_object();
-    json_optional_set(&v1, "openClose", OptionalBool_encode(value.openClose));
-    json_optional_set(&v1, "change", OptionalTextDocumentSyncKind_encode(value.change));
-    json_optional_set(&v1, "willSave", OptionalBool_encode(value.willSave));
-    json_optional_set(&v1, "willSaveWaitUntil", OptionalBool_encode(value.willSaveWaitUntil));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        if (value.openClose.has_value) {
+            _encoded_maybe = Bool_encode(value.openClose.value);
+        }
+        json_optional_set(&v1, "openClose", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        if (value.change.has_value) {
+            _encoded_maybe = TextDocumentSyncKind_encode(value.change.value);
+        }
+        json_optional_set(&v1, "change", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        if (value.willSave.has_value) {
+            _encoded_maybe = Bool_encode(value.willSave.value);
+        }
+        json_optional_set(&v1, "willSave", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        if (value.willSaveWaitUntil.has_value) {
+            _encoded_maybe = Bool_encode(value.willSaveWaitUntil.value);
+        }
+        json_optional_set(&v1, "willSaveWaitUntil", _encoded_maybe);
+    }
     if (value.save.has_value) {
         JSONValue v2 = { 0 };
         switch (value.save.tag) {

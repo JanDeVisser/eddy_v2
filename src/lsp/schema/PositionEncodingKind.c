@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/PositionEncodingKind.h>
 
 DA_IMPL(PositionEncodingKind)
-
-OptionalJSONValue OptionalPositionEncodingKind_encode(OptionalPositionEncodingKind value)
-{
-    if (value.has_value) {
-        return PositionEncodingKind_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalPositionEncodingKind OptionalPositionEncodingKind_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalPositionEncodingKind);
-    }
-    RETURN_VALUE(OptionalPositionEncodingKind, PositionEncodingKind_decode(json));
-}
 
 OptionalJSONValue PositionEncodingKinds_encode(PositionEncodingKinds value)
 {
@@ -53,6 +37,7 @@ OptionalPositionEncodingKinds PositionEncodingKinds_decode(OptionalJSONValue jso
     }
     RETURN_VALUE(PositionEncodingKinds, ret);
 }
+
 StringView PositionEncodingKind_to_string(PositionEncodingKind value)
 {
     switch (value) {
@@ -77,12 +62,16 @@ OptionalPositionEncodingKind PositionEncodingKind_parse(StringView s)
         RETURN_VALUE(PositionEncodingKind, PositionEncodingKindUTF32);
     RETURN_EMPTY(PositionEncodingKind);
 }
+
 OptionalPositionEncodingKind PositionEncodingKind_decode(OptionalJSONValue json)
 {
-    assert(json.has_value);
+    if (!json.has_value) {
+        RETURN_EMPTY(PositionEncodingKind);
+    }
     assert(json.value.type == JSON_TYPE_STRING);
     return PositionEncodingKind_parse(json.value.string);
 }
+
 OptionalJSONValue PositionEncodingKind_encode(PositionEncodingKind value)
 {
     RETURN_VALUE(JSONValue, json_string(PositionEncodingKind_to_string(value)));

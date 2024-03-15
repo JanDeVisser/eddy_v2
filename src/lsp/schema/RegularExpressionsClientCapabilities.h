@@ -17,16 +17,12 @@ typedef struct {
 } RegularExpressionsClientCapabilities;
 
 OPTIONAL(RegularExpressionsClientCapabilities);
-OPTIONAL(OptionalRegularExpressionsClientCapabilities);
 DA_WITH_NAME(RegularExpressionsClientCapabilities, RegularExpressionsClientCapabilitiess);
 OPTIONAL(RegularExpressionsClientCapabilitiess);
-OPTIONAL(OptionalRegularExpressionsClientCapabilitiess);
 
-extern OptionalJSONValue                                    RegularExpressionsClientCapabilities_encode(RegularExpressionsClientCapabilities value);
-extern OptionalRegularExpressionsClientCapabilities         RegularExpressionsClientCapabilities_decode(OptionalJSONValue json);
-extern OptionalJSONValue                                    OptionalRegularExpressionsClientCapabilities_encode(OptionalRegularExpressionsClientCapabilities value);
-extern OptionalOptionalRegularExpressionsClientCapabilities OptionalRegularExpressionsClientCapabilities_decode(OptionalJSONValue json);
-extern OptionalJSONValue                                    RegularExpressionsClientCapabilitiess_encode(RegularExpressionsClientCapabilitiess value);
-extern OptionalRegularExpressionsClientCapabilitiess        RegularExpressionsClientCapabilitiess_decode(OptionalJSONValue json);
+extern OptionalJSONValue                             RegularExpressionsClientCapabilities_encode(RegularExpressionsClientCapabilities value);
+extern OptionalRegularExpressionsClientCapabilities  RegularExpressionsClientCapabilities_decode(OptionalJSONValue json);
+extern OptionalJSONValue                             RegularExpressionsClientCapabilitiess_encode(RegularExpressionsClientCapabilitiess value);
+extern OptionalRegularExpressionsClientCapabilitiess RegularExpressionsClientCapabilitiess_decode(OptionalJSONValue json);
 
 #endif /* __LSP_REGULAREXPRESSIONSCLIENTCAPABILITIES_H__ */

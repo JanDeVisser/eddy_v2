@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/DidCloseTextDocumentParams.h>
 
 DA_IMPL(DidCloseTextDocumentParams)
-
-OptionalJSONValue OptionalDidCloseTextDocumentParams_encode(OptionalDidCloseTextDocumentParams value)
-{
-    if (value.has_value) {
-        return DidCloseTextDocumentParams_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalDidCloseTextDocumentParams OptionalDidCloseTextDocumentParams_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalDidCloseTextDocumentParams);
-    }
-    RETURN_VALUE(OptionalDidCloseTextDocumentParams, DidCloseTextDocumentParams_decode(json));
-}
 
 OptionalJSONValue DidCloseTextDocumentParamss_encode(DidCloseTextDocumentParamss value)
 {
@@ -53,6 +37,7 @@ OptionalDidCloseTextDocumentParamss DidCloseTextDocumentParamss_decode(OptionalJ
     }
     RETURN_VALUE(DidCloseTextDocumentParamss, ret);
 }
+
 OptionalDidCloseTextDocumentParams DidCloseTextDocumentParams_decode(OptionalJSONValue json)
 {
     if (!json.has_value || json.value.type != JSON_TYPE_OBJECT) {
@@ -65,9 +50,14 @@ OptionalDidCloseTextDocumentParams DidCloseTextDocumentParams_decode(OptionalJSO
     }
     RETURN_VALUE(DidCloseTextDocumentParams, value);
 }
+
 OptionalJSONValue DidCloseTextDocumentParams_encode(DidCloseTextDocumentParams value)
 {
     JSONValue v1 = json_object();
-    json_optional_set(&v1, "textDocument", TextDocumentIdentifier_encode(value.textDocument));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = TextDocumentIdentifier_encode(value.textDocument);
+        json_optional_set(&v1, "textDocument", _encoded_maybe);
+    }
     RETURN_VALUE(JSONValue, v1);
 }

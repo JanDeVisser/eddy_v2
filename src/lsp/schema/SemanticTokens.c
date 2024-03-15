@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/SemanticTokens.h>
 
 DA_IMPL(SemanticTokens)
-
-OptionalJSONValue OptionalSemanticTokens_encode(OptionalSemanticTokens value)
-{
-    if (value.has_value) {
-        return SemanticTokens_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalSemanticTokens OptionalSemanticTokens_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalSemanticTokens);
-    }
-    RETURN_VALUE(OptionalSemanticTokens, SemanticTokens_decode(json));
-}
 
 OptionalJSONValue SemanticTokenss_encode(SemanticTokenss value)
 {
@@ -53,6 +37,7 @@ OptionalSemanticTokenss SemanticTokenss_decode(OptionalJSONValue json)
     }
     RETURN_VALUE(SemanticTokenss, ret);
 }
+
 OptionalSemanticTokens SemanticTokens_decode(OptionalJSONValue json)
 {
     if (!json.has_value || json.value.type != JSON_TYPE_OBJECT) {
@@ -61,7 +46,7 @@ OptionalSemanticTokens SemanticTokens_decode(OptionalJSONValue json)
     SemanticTokens value = { 0 };
     {
         OptionalJSONValue v0 = json_get(&json.value, "resultId");
-        value.resultId = FORWARD_OPTIONAL(OptionalStringView, SemanticTokens, OptionalStringView_decode(v0));
+        value.resultId = StringView_decode(v0);
     }
     {
         OptionalJSONValue v0 = json_get(&json.value, "data");
@@ -69,10 +54,21 @@ OptionalSemanticTokens SemanticTokens_decode(OptionalJSONValue json)
     }
     RETURN_VALUE(SemanticTokens, value);
 }
+
 OptionalJSONValue SemanticTokens_encode(SemanticTokens value)
 {
     JSONValue v1 = json_object();
-    json_optional_set(&v1, "resultId", OptionalStringView_encode(value.resultId));
-    json_optional_set(&v1, "data", UInt32s_encode(value.data));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        if (value.resultId.has_value) {
+            _encoded_maybe = StringView_encode(value.resultId.value);
+        }
+        json_optional_set(&v1, "resultId", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = UInt32s_encode(value.data);
+        json_optional_set(&v1, "data", _encoded_maybe);
+    }
     RETURN_VALUE(JSONValue, v1);
 }

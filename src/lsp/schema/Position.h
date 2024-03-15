@@ -17,16 +17,12 @@ typedef struct {
 } Position;
 
 OPTIONAL(Position);
-OPTIONAL(OptionalPosition);
 DA_WITH_NAME(Position, Positions);
 OPTIONAL(Positions);
-OPTIONAL(OptionalPositions);
 
-extern OptionalJSONValue        Position_encode(Position value);
-extern OptionalPosition         Position_decode(OptionalJSONValue json);
-extern OptionalJSONValue        OptionalPosition_encode(OptionalPosition value);
-extern OptionalOptionalPosition OptionalPosition_decode(OptionalJSONValue json);
-extern OptionalJSONValue        Positions_encode(Positions value);
-extern OptionalPositions        Positions_decode(OptionalJSONValue json);
+extern OptionalJSONValue Position_encode(Position value);
+extern OptionalPosition  Position_decode(OptionalJSONValue json);
+extern OptionalJSONValue Positions_encode(Positions value);
+extern OptionalPositions Positions_decode(OptionalJSONValue json);
 
 #endif /* __LSP_POSITION_H__ */

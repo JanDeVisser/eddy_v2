@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "json.h"
 #include "sv.h"
 #include <allocate.h>
 #include <lsp/schema/lsp_base.h>
@@ -22,16 +23,6 @@ OptionalJSONValue JSONValue_decode(OptionalJSONValue value)
     return value;
 }
 
-OptionalJSONValue OptionalJSONValue_encode(OptionalJSONValue value)
-{
-    return value;
-}
-
-OptionalOptionalJSONValue OptionalJSONValue_decode(OptionalJSONValue value)
-{
-    RETURN_VALUE(OptionalJSONValue, value);
-}
-
 // -- Int -------------------------------------------------------------------
 
 OptionalJSONValue Int_encode(int value)
@@ -41,31 +32,13 @@ OptionalJSONValue Int_encode(int value)
 
 OptionalInt Int_decode(OptionalJSONValue json)
 {
-    if (!json.has_value) {
+    if (!json.has_value || json.value.type != JSON_TYPE_INT) {
         RETURN_EMPTY(Int);
     }
-    assert(json.value.type == JSON_TYPE_INT);
     if (json.value.type != I32) {
         RETURN_EMPTY(Int);
     }
     RETURN_VALUE(Int, json.value.int_number.i32);
-}
-
-OptionalJSONValue OptionalInt_encode(OptionalInt value)
-{
-    if (value.has_value) {
-        return Int_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalInt OptionalInt_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalInt);
-    }
-    RETURN_VALUE(OptionalInt, Int_decode(json));
 }
 
 OptionalJSONValue Ints_encode(Ints value)
@@ -104,31 +77,10 @@ OptionalJSONValue UInt32_encode(unsigned int value)
 
 OptionalUInt32 UInt32_decode(OptionalJSONValue json)
 {
-    if (!json.has_value) {
-        RETURN_EMPTY(UInt32);
-    }
-    assert(json.value.type == JSON_TYPE_INT);
-    if (json.value.type != U32) {
+    if (!json.has_value || json.value.type != JSON_TYPE_INT || json.value.int_number.type != U32) {
         RETURN_EMPTY(UInt32);
     }
     RETURN_VALUE(UInt32, json.value.int_number.u32);
-}
-
-OptionalJSONValue OptionalUInt32_encode(OptionalUInt value)
-{
-    if (value.has_value) {
-        return UInt32_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalUInt32 OptionalUInt32_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalUInt32);
-    }
-    RETURN_VALUE(OptionalUInt32, UInt32_decode(json));
 }
 
 OptionalJSONValue UInt32s_encode(UInt32s value)
@@ -142,10 +94,9 @@ OptionalJSONValue UInt32s_encode(UInt32s value)
 
 OptionalUInt32s UInt32s_decode(OptionalJSONValue json)
 {
-    if (!json.has_value) {
+    if (!json.has_value || json.value.type == JSON_TYPE_ARRAY) {
         RETURN_EMPTY(UInt32s);
     }
-    assert(json.value.type == JSON_TYPE_ARRAY);
     UInt32s ret = { 0 };
     for (size_t ix = 0; ix < json_len(&json.value); ++ix) {
         OptionalJSONValue elem = json_at(&json.value, ix);
@@ -167,28 +118,10 @@ OptionalJSONValue Bool_encode(bool value)
 
 OptionalBool Bool_decode(OptionalJSONValue json)
 {
-    if (!json.has_value) {
+    if (!json.has_value || json.value.type != JSON_TYPE_BOOLEAN) {
         RETURN_EMPTY(Bool);
     }
-    assert(json.value.type == JSON_TYPE_BOOLEAN);
     RETURN_VALUE(Bool, json.value.boolean);
-}
-
-OptionalJSONValue OptionalBool_encode(OptionalBool value)
-{
-    if (value.has_value) {
-        return Bool_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalBool OptionalBool_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalBool);
-    }
-    RETURN_VALUE(OptionalBool, Bool_decode(json));
 }
 
 // -- StringView ------------------------------------------------------------
@@ -200,28 +133,10 @@ OptionalJSONValue StringView_encode(StringView sv)
 
 OptionalStringView StringView_decode(OptionalJSONValue json)
 {
-    if (!json.has_value) {
+    if (!json.has_value || json.value.type != JSON_TYPE_STRING) {
         RETURN_EMPTY(StringView);
     }
-    assert(json.value.type == JSON_TYPE_STRING);
     RETURN_VALUE(StringView, json.value.string);
-}
-
-OptionalJSONValue OptionalStringView_encode(OptionalStringView value)
-{
-    if (value.has_value) {
-        return StringView_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalStringView OptionalStringView_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalStringView);
-    }
-    RETURN_VALUE(OptionalStringView, StringView_decode(json));
 }
 
 OptionalJSONValue StringViews_encode(StringViews value)

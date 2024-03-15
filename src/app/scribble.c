@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include <base/io.h>
 #include <app/scribble.h>
+#include <base/io.h>
 
 int scribble_handle_directive(Lexer *lexer, int directive)
 {

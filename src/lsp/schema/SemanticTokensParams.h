@@ -18,16 +18,12 @@ typedef struct {
 } SemanticTokensParams;
 
 OPTIONAL(SemanticTokensParams);
-OPTIONAL(OptionalSemanticTokensParams);
 DA_WITH_NAME(SemanticTokensParams, SemanticTokensParamss);
 OPTIONAL(SemanticTokensParamss);
-OPTIONAL(OptionalSemanticTokensParamss);
 
-extern OptionalJSONValue                    SemanticTokensParams_encode(SemanticTokensParams value);
-extern OptionalSemanticTokensParams         SemanticTokensParams_decode(OptionalJSONValue json);
-extern OptionalJSONValue                    OptionalSemanticTokensParams_encode(OptionalSemanticTokensParams value);
-extern OptionalOptionalSemanticTokensParams OptionalSemanticTokensParams_decode(OptionalJSONValue json);
-extern OptionalJSONValue                    SemanticTokensParamss_encode(SemanticTokensParamss value);
-extern OptionalSemanticTokensParamss        SemanticTokensParamss_decode(OptionalJSONValue json);
+extern OptionalJSONValue             SemanticTokensParams_encode(SemanticTokensParams value);
+extern OptionalSemanticTokensParams  SemanticTokensParams_decode(OptionalJSONValue json);
+extern OptionalJSONValue             SemanticTokensParamss_encode(SemanticTokensParamss value);
+extern OptionalSemanticTokensParamss SemanticTokensParamss_decode(OptionalJSONValue json);
 
 #endif /* __LSP_SEMANTICTOKENSPARAMS_H__ */

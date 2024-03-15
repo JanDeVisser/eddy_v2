@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/WorkspaceFolder.h>
 
 DA_IMPL(WorkspaceFolder)
-
-OptionalJSONValue OptionalWorkspaceFolder_encode(OptionalWorkspaceFolder value)
-{
-    if (value.has_value) {
-        return WorkspaceFolder_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalWorkspaceFolder OptionalWorkspaceFolder_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalWorkspaceFolder);
-    }
-    RETURN_VALUE(OptionalWorkspaceFolder, WorkspaceFolder_decode(json));
-}
 
 OptionalJSONValue WorkspaceFolders_encode(WorkspaceFolders value)
 {
@@ -53,6 +37,7 @@ OptionalWorkspaceFolders WorkspaceFolders_decode(OptionalJSONValue json)
     }
     RETURN_VALUE(WorkspaceFolders, ret);
 }
+
 OptionalWorkspaceFolder WorkspaceFolder_decode(OptionalJSONValue json)
 {
     if (!json.has_value || json.value.type != JSON_TYPE_OBJECT) {
@@ -69,10 +54,19 @@ OptionalWorkspaceFolder WorkspaceFolder_decode(OptionalJSONValue json)
     }
     RETURN_VALUE(WorkspaceFolder, value);
 }
+
 OptionalJSONValue WorkspaceFolder_encode(WorkspaceFolder value)
 {
     JSONValue v1 = json_object();
-    json_optional_set(&v1, "uri", URI_encode(value.uri));
-    json_optional_set(&v1, "name", StringView_encode(value.name));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = URI_encode(value.uri);
+        json_optional_set(&v1, "uri", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = StringView_encode(value.name);
+        json_optional_set(&v1, "name", _encoded_maybe);
+    }
     RETURN_VALUE(JSONValue, v1);
 }

@@ -68,7 +68,7 @@ StringView sl_pop_front(StringList *sl)
         return sv_null();
     }
     StringView ret = sl->strings[0];
-    memcpy(sl->strings, sl->strings + 1, (sl->size-1) * sizeof(StringView));
+    memcpy(sl->strings, sl->strings + 1, (sl->size - 1) * sizeof(StringView));
     --sl->size;
     return ret;
 }
@@ -76,11 +76,11 @@ StringView sl_pop_front(StringList *sl)
 StringList sl_split(StringList *sl, size_t at)
 {
     if (sl->size <= at) {
-        return (StringList) {0};
+        return (StringList) { 0 };
     }
-    StringList ret = {0};
+    StringList ret = { 0 };
     da_resize_StringView(&ret, sl->size - at);
-    memcpy(ret.strings, sl->strings + at, (sl->size-at) * sizeof(StringView));
+    memcpy(ret.strings, sl->strings + at, (sl->size - at) * sizeof(StringView));
     ret.size = sl->size - at;
     sl->size = at;
     return ret;

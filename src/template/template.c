@@ -12,7 +12,7 @@
 TemplateNode *template_find_macro(Template template, StringView name)
 {
     for (size_t ix = 0; ix < template.macros.size; ++ix) {
-        Macro     *macro = da_element_Macro(&template.macros, ix);
+        Macro *macro = da_element_Macro(&template.macros, ix);
         if (sv_eq(macro->key, name)) {
             return macro->value;
         }
@@ -25,7 +25,7 @@ ErrorOrStringView render_template(StringView template_text, JSONValue context)
     Template template = TRY_TO(Template, StringView, template_parse(template_text));
     if (log_category_on(CAT_TEMPLATE)) {
         StringView ast = json_encode(template_node_serialize(template, template.node));
-        printf("AST:\n%.*s\n\n",SV_ARG(ast));
+        printf("AST:\n%.*s\n\n", SV_ARG(ast));
     }
     return template_render(template, context);
 }

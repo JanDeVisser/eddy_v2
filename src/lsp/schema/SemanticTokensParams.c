@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/SemanticTokensParams.h>
 
 DA_IMPL(SemanticTokensParams)
-
-OptionalJSONValue OptionalSemanticTokensParams_encode(OptionalSemanticTokensParams value)
-{
-    if (value.has_value) {
-        return SemanticTokensParams_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalSemanticTokensParams OptionalSemanticTokensParams_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalSemanticTokensParams);
-    }
-    RETURN_VALUE(OptionalSemanticTokensParams, SemanticTokensParams_decode(json));
-}
 
 OptionalJSONValue SemanticTokensParamss_encode(SemanticTokensParamss value)
 {
@@ -53,6 +37,7 @@ OptionalSemanticTokensParamss SemanticTokensParamss_decode(OptionalJSONValue jso
     }
     RETURN_VALUE(SemanticTokensParamss, ret);
 }
+
 OptionalSemanticTokensParams SemanticTokensParams_decode(OptionalJSONValue json)
 {
     if (!json.has_value || json.value.type != JSON_TYPE_OBJECT) {
@@ -65,9 +50,14 @@ OptionalSemanticTokensParams SemanticTokensParams_decode(OptionalJSONValue json)
     }
     RETURN_VALUE(SemanticTokensParams, value);
 }
+
 OptionalJSONValue SemanticTokensParams_encode(SemanticTokensParams value)
 {
     JSONValue v1 = json_object();
-    json_optional_set(&v1, "textDocument", TextDocumentIdentifier_encode(value.textDocument));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = TextDocumentIdentifier_encode(value.textDocument);
+        json_optional_set(&v1, "textDocument", _encoded_maybe);
+    }
     RETURN_VALUE(JSONValue, v1);
 }

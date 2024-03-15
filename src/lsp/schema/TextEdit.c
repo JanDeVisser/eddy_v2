@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/TextEdit.h>
 
 DA_IMPL(TextEdit)
-
-OptionalJSONValue OptionalTextEdit_encode(OptionalTextEdit value)
-{
-    if (value.has_value) {
-        return TextEdit_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalTextEdit OptionalTextEdit_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalTextEdit);
-    }
-    RETURN_VALUE(OptionalTextEdit, TextEdit_decode(json));
-}
 
 OptionalJSONValue TextEdits_encode(TextEdits value)
 {
@@ -53,6 +37,7 @@ OptionalTextEdits TextEdits_decode(OptionalJSONValue json)
     }
     RETURN_VALUE(TextEdits, ret);
 }
+
 OptionalTextEdit TextEdit_decode(OptionalJSONValue json)
 {
     if (!json.has_value || json.value.type != JSON_TYPE_OBJECT) {
@@ -69,10 +54,19 @@ OptionalTextEdit TextEdit_decode(OptionalJSONValue json)
     }
     RETURN_VALUE(TextEdit, value);
 }
+
 OptionalJSONValue TextEdit_encode(TextEdit value)
 {
     JSONValue v1 = json_object();
-    json_optional_set(&v1, "range", Range_encode(value.range));
-    json_optional_set(&v1, "newText", StringView_encode(value.newText));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = Range_encode(value.range);
+        json_optional_set(&v1, "range", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = StringView_encode(value.newText);
+        json_optional_set(&v1, "newText", _encoded_maybe);
+    }
     RETURN_VALUE(JSONValue, v1);
 }

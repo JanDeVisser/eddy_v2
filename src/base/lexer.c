@@ -14,7 +14,7 @@ Token scan_number(char const *buffer)
 {
     TokenCode code = TC_INTEGER;
     int       ix = 0;
-    int       (*predicate)(int) = isdigit;
+    int (*predicate)(int) = isdigit;
     if (buffer[1] && buffer[0] == '0' && (buffer[1] == 'x' || buffer[1] == 'X')) {
         if (!buffer[2] || !isxdigit(buffer[2])) {
             return (Token) { TK_NUMBER, code, { buffer, 1 } };
@@ -218,8 +218,10 @@ Token lexer_peek_next(Lexer *lexer)
     case '`': {
         size_t ix = 1;
         while (buffer[ix] && buffer[ix] != buffer[0]) {
-            if (buffer[ix] == '\\') ++ix;
-            if (buffer[ix]) ++ix;
+            if (buffer[ix] == '\\')
+                ++ix;
+            if (buffer[ix])
+                ++ix;
         }
         TokenCode code;
         switch (buffer[0]) {

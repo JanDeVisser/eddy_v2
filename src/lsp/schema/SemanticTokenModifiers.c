@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/SemanticTokenModifiers.h>
 
 DA_IMPL(SemanticTokenModifiers)
-
-OptionalJSONValue OptionalSemanticTokenModifiers_encode(OptionalSemanticTokenModifiers value)
-{
-    if (value.has_value) {
-        return SemanticTokenModifiers_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalSemanticTokenModifiers OptionalSemanticTokenModifiers_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalSemanticTokenModifiers);
-    }
-    RETURN_VALUE(OptionalSemanticTokenModifiers, SemanticTokenModifiers_decode(json));
-}
 
 OptionalJSONValue SemanticTokenModifierss_encode(SemanticTokenModifierss value)
 {
@@ -53,6 +37,7 @@ OptionalSemanticTokenModifierss SemanticTokenModifierss_decode(OptionalJSONValue
     }
     RETURN_VALUE(SemanticTokenModifierss, ret);
 }
+
 StringView SemanticTokenModifiers_to_string(SemanticTokenModifiers value)
 {
     switch (value) {
@@ -105,12 +90,16 @@ OptionalSemanticTokenModifiers SemanticTokenModifiers_parse(StringView s)
         RETURN_VALUE(SemanticTokenModifiers, SemanticTokenModifiersDefaultLibrary);
     RETURN_EMPTY(SemanticTokenModifiers);
 }
+
 OptionalSemanticTokenModifiers SemanticTokenModifiers_decode(OptionalJSONValue json)
 {
-    assert(json.has_value);
+    if (!json.has_value) {
+        RETURN_EMPTY(SemanticTokenModifiers);
+    }
     assert(json.value.type == JSON_TYPE_STRING);
     return SemanticTokenModifiers_parse(json.value.string);
 }
+
 OptionalJSONValue SemanticTokenModifiers_encode(SemanticTokenModifiers value)
 {
     RETURN_VALUE(JSONValue, json_string(SemanticTokenModifiers_to_string(value)));

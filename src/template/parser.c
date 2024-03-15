@@ -493,7 +493,7 @@ ErrorOrInt build_text_node(TemplateParserContext *ctx, StringView text, bool tri
             }
             if (ix <= text.length) {
                 RETURN(Int, 0);
-            }        
+            }
         }
     }
     TemplateNode *node = MALLOC(TemplateNode);

@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/VersionedTextDocumentIdentifier.h>
 
 DA_IMPL(VersionedTextDocumentIdentifier)
-
-OptionalJSONValue OptionalVersionedTextDocumentIdentifier_encode(OptionalVersionedTextDocumentIdentifier value)
-{
-    if (value.has_value) {
-        return VersionedTextDocumentIdentifier_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalVersionedTextDocumentIdentifier OptionalVersionedTextDocumentIdentifier_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalVersionedTextDocumentIdentifier);
-    }
-    RETURN_VALUE(OptionalVersionedTextDocumentIdentifier, VersionedTextDocumentIdentifier_decode(json));
-}
 
 OptionalJSONValue VersionedTextDocumentIdentifiers_encode(VersionedTextDocumentIdentifiers value)
 {
@@ -53,6 +37,7 @@ OptionalVersionedTextDocumentIdentifiers VersionedTextDocumentIdentifiers_decode
     }
     RETURN_VALUE(VersionedTextDocumentIdentifiers, ret);
 }
+
 OptionalVersionedTextDocumentIdentifier VersionedTextDocumentIdentifier_decode(OptionalJSONValue json)
 {
     if (!json.has_value || json.value.type != JSON_TYPE_OBJECT) {
@@ -69,10 +54,19 @@ OptionalVersionedTextDocumentIdentifier VersionedTextDocumentIdentifier_decode(O
     }
     RETURN_VALUE(VersionedTextDocumentIdentifier, value);
 }
+
 OptionalJSONValue VersionedTextDocumentIdentifier_encode(VersionedTextDocumentIdentifier value)
 {
     JSONValue v1 = json_object();
-    json_optional_set(&v1, "uri", DocumentUri_encode(value.uri));
-    json_optional_set(&v1, "version", Int_encode(value.version));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = DocumentUri_encode(value.uri);
+        json_optional_set(&v1, "uri", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = Int_encode(value.version);
+        json_optional_set(&v1, "version", _encoded_maybe);
+    }
     RETURN_VALUE(JSONValue, v1);
 }

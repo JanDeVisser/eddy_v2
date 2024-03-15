@@ -87,8 +87,8 @@ char const *TplKeyword_name(TplKeyword keyword)
 {
     switch (keyword) {
 #undef S
-#define S(T, STR, ALT)  \
-    case TKW##T: \
+#define S(T, STR, ALT) \
+    case TKW##T:       \
         return #T;
         TPLKEYWORDS(S)
 #undef S
@@ -179,8 +179,8 @@ JSONValue template_node_serialize(Template tpl, TemplateNode *node)
         case TNKMacroCall: {
             JSONValue macro_call = json_object();
             json_set(&macro_call, "macro", json_string(node->macro_call.macro));
-            if (node->macro_call.condition != NULL) { 
-               json_set(&macro_call, "condition", template_expression_serialize(tpl, node->macro_call.condition));
+            if (node->macro_call.condition != NULL) {
+                json_set(&macro_call, "condition", template_expression_serialize(tpl, node->macro_call.condition));
             }
             JSONValue args = json_array();
             for (size_t ix = 0; ix < node->macro_call.arguments.size; ++ix) {

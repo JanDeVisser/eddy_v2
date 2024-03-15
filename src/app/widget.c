@@ -127,10 +127,10 @@ Rectangle widget_normalize(void *w, float left, float top, float width, float he
         top = widget->viewport.height + top;
     }
     if (width <= 0) {
-        width = widget->viewport.width + 2*width;
+        width = widget->viewport.width + 2 * width;
     }
     if (height <= 0) {
-        height = widget->viewport.height + 2*height;
+        height = widget->viewport.height + 2 * height;
     }
     left = fclamp(left, 0, widget->viewport.width);
     top = fclamp(top, 0, widget->viewport.height);
@@ -145,7 +145,7 @@ void widget_render_text(void *w, float x, float y, StringView text, Font font, C
     if (sv_empty(text)) {
         return;
     }
-    char    ch = text.ptr[text.length];
+    char ch = text.ptr[text.length];
     if (ch) {
         ((char *) text.ptr)[text.length] = 0;
     }
@@ -207,7 +207,6 @@ void widget_draw_line(void *w, float x0, float y0, float x1, float y1, Color col
     DrawLine(widget->viewport.x + x0, widget->viewport.y + y0,
         widget->viewport.x + x1, widget->viewport.y + y1,
         color);
-
 }
 
 void widget_draw_rectangle(void *w, float x, float y, float width, float height, Color color)
@@ -277,7 +276,7 @@ void layout_resize(Layout *layout)
     //     fixed_pos);
     for (size_t ix = 0; ix < layout->widgets.size; ++ix) {
         w = layout->widgets.elements[ix];
-        w->viewport.size[fixed_coord] = fixed_size - w->padding.coords[fixed_coord] - w->padding.coords[fixed_coord+2];
+        w->viewport.size[fixed_coord] = fixed_size - w->padding.coords[fixed_coord] - w->padding.coords[fixed_coord + 2];
         w->viewport.position[fixed_coord] = fixed_pos + w->padding.coords[fixed_coord];
         float sz = 0;
         // printf("Component widget %s has policy %d\n", w->classname, w->policy);
@@ -300,7 +299,7 @@ void layout_resize(Layout *layout)
         } break;
         }
         assert_msg(sz != 0, "Size Policy %d resulted in zero size", (int) w->policy);
-        w->viewport.size[var_coord] = sz - w->padding.coords[var_coord] - w->padding.coords[var_coord+2];
+        w->viewport.size[var_coord] = sz - w->padding.coords[var_coord] - w->padding.coords[var_coord + 2];
         if (sz > 0) {
             allocated += sz;
             // printf("Allocating %f, now allocated %f\n", sz, allocated);
@@ -315,7 +314,7 @@ void layout_resize(Layout *layout)
             w = layout->widgets.elements[ix];
             if (w->policy == SP_STRETCH) {
                 // printf("Allocating %f to stretchable %s\n", stretch, w->classname);
-                w->viewport.size[var_coord] = stretch - w->padding.coords[var_coord] - w->padding.coords[var_coord+2];
+                w->viewport.size[var_coord] = stretch - w->padding.coords[var_coord] - w->padding.coords[var_coord + 2];
             }
         }
     }
@@ -323,7 +322,7 @@ void layout_resize(Layout *layout)
     for (size_t ix = 0; ix < layout->widgets.size; ++ix) {
         w = layout->widgets.elements[ix];
         w->viewport.position[var_coord] = var_offset + w->padding.coords[var_coord];
-        var_offset += w->viewport.size[var_coord] + w->padding.coords[var_coord] + w->padding.coords[var_coord+2];
+        var_offset += w->viewport.size[var_coord] + w->padding.coords[var_coord] + w->padding.coords[var_coord + 2];
         // printf("Resizing %s to %s\n", w->classname, rect_tostring(w->viewport));
         if (w->handlers.resize) {
             w->handlers.resize(w);
@@ -579,9 +578,9 @@ void app_process_input(App *app)
         // Command command = *da_element_Command(&app->pending_commands, 0);
         // memmove(app->pending_commands.elements, app->pending_commands.elements + 1, sizeof(Command) * app->pending_commands.size);
         // --app->pending_commands.size;
-        Command command = da_pop_front_Command(&app->pending_commands);
+        Command        command = da_pop_front_Command(&app->pending_commands);
         CommandContext ctx = { 0 };
-        ctx.trigger = (KeyCombo) {.key = KEY_NULL, KMOD_NONE };
+        ctx.trigger = (KeyCombo) { .key = KEY_NULL, KMOD_NONE };
         ctx.called_as = command.name;
         ctx.target = command.target;
         command.handler(&ctx);

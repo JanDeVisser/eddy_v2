@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/OptionalVersionedTextDocumentIdentifier.h>
 
 DA_IMPL(OptionalVersionedTextDocumentIdentifier)
-
-OptionalJSONValue OptionalOptionalVersionedTextDocumentIdentifier_encode(OptionalOptionalVersionedTextDocumentIdentifier value)
-{
-    if (value.has_value) {
-        return OptionalVersionedTextDocumentIdentifier_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalOptionalVersionedTextDocumentIdentifier OptionalOptionalVersionedTextDocumentIdentifier_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalOptionalVersionedTextDocumentIdentifier);
-    }
-    RETURN_VALUE(OptionalOptionalVersionedTextDocumentIdentifier, OptionalVersionedTextDocumentIdentifier_decode(json));
-}
 
 OptionalJSONValue OptionalVersionedTextDocumentIdentifiers_encode(OptionalVersionedTextDocumentIdentifiers value)
 {
@@ -53,6 +37,7 @@ OptionalOptionalVersionedTextDocumentIdentifiers OptionalVersionedTextDocumentId
     }
     RETURN_VALUE(OptionalVersionedTextDocumentIdentifiers, ret);
 }
+
 OptionalOptionalVersionedTextDocumentIdentifier OptionalVersionedTextDocumentIdentifier_decode(OptionalJSONValue json)
 {
     if (!json.has_value || json.value.type != JSON_TYPE_OBJECT) {
@@ -89,10 +74,15 @@ OptionalOptionalVersionedTextDocumentIdentifier OptionalVersionedTextDocumentIde
     }
     RETURN_VALUE(OptionalVersionedTextDocumentIdentifier, value);
 }
+
 OptionalJSONValue OptionalVersionedTextDocumentIdentifier_encode(OptionalVersionedTextDocumentIdentifier value)
 {
     JSONValue v1 = json_object();
-    json_optional_set(&v1, "uri", DocumentUri_encode(value.uri));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = DocumentUri_encode(value.uri);
+        json_optional_set(&v1, "uri", _encoded_maybe);
+    }
     assert(value.version.has_value);
     {
         JSONValue v2 = { 0 };

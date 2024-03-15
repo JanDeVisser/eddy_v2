@@ -67,7 +67,7 @@ typedef struct {
 DA_WITH_NAME(Index, Indices);
 
 typedef struct buffer Buffer;
-typedef void          (*BufferEventListener)(Buffer *, BufferEvent);
+typedef void (*BufferEventListener)(Buffer *, BufferEvent);
 
 typedef struct _buffer_event_listener_list {
     BufferEventListener                 listener;

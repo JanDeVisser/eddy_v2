@@ -22,16 +22,12 @@ typedef struct {
 } LocationLink;
 
 OPTIONAL(LocationLink);
-OPTIONAL(OptionalLocationLink);
 DA_WITH_NAME(LocationLink, LocationLinks);
 OPTIONAL(LocationLinks);
-OPTIONAL(OptionalLocationLinks);
 
-extern OptionalJSONValue            LocationLink_encode(LocationLink value);
-extern OptionalLocationLink         LocationLink_decode(OptionalJSONValue json);
-extern OptionalJSONValue            OptionalLocationLink_encode(OptionalLocationLink value);
-extern OptionalOptionalLocationLink OptionalLocationLink_decode(OptionalJSONValue json);
-extern OptionalJSONValue            LocationLinks_encode(LocationLinks value);
-extern OptionalLocationLinks        LocationLinks_decode(OptionalJSONValue json);
+extern OptionalJSONValue     LocationLink_encode(LocationLink value);
+extern OptionalLocationLink  LocationLink_decode(OptionalJSONValue json);
+extern OptionalJSONValue     LocationLinks_encode(LocationLinks value);
+extern OptionalLocationLinks LocationLinks_decode(OptionalJSONValue json);
 
 #endif /* __LSP_LOCATIONLINK_H__ */

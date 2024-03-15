@@ -149,7 +149,7 @@ Condition condition_create_with_borrowed_mutex(Mutex mutex)
     condition.mutex = mutex;
     condition.borrowed_mutex = true;
 #ifdef HAVE_PTHREAD_H
-    condition.condition = (pthread_cond_t*) malloc(sizeof(pthread_cond_t));
+    condition.condition = (pthread_cond_t *) malloc(sizeof(pthread_cond_t));
     pthread_cond_init(condition.condition, NULL);
 #elif defined(HAVE_INITIALIZECRITICALSECTION)
     InitializeConditionVariable(&condition->condition);

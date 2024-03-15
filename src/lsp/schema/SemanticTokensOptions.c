@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/SemanticTokensOptions.h>
 
 DA_IMPL(SemanticTokensOptions)
-
-OptionalJSONValue OptionalSemanticTokensOptions_encode(OptionalSemanticTokensOptions value)
-{
-    if (value.has_value) {
-        return SemanticTokensOptions_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalSemanticTokensOptions OptionalSemanticTokensOptions_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalSemanticTokensOptions);
-    }
-    RETURN_VALUE(OptionalSemanticTokensOptions, SemanticTokensOptions_decode(json));
-}
 
 OptionalJSONValue SemanticTokensOptionss_encode(SemanticTokensOptionss value)
 {
@@ -53,6 +37,7 @@ OptionalSemanticTokensOptionss SemanticTokensOptionss_decode(OptionalJSONValue j
     }
     RETURN_VALUE(SemanticTokensOptionss, ret);
 }
+
 OptionalSemanticTokensOptions SemanticTokensOptions_decode(OptionalJSONValue json)
 {
     if (!json.has_value || json.value.type != JSON_TYPE_OBJECT) {
@@ -107,11 +92,7 @@ OptionalSemanticTokensOptions SemanticTokensOptions_decode(OptionalJSONValue jso
                     OptionalJSONValue v2 = { 0 };
                     do {
                         v2 = json_get(&v0.value, "delta");
-                        OptionalOptionalBool opt1_1_delta = OptionalBool_decode(v2);
-                        if (!opt1_1_delta.has_value) {
-                            break;
-                        }
-                        value.full._1.delta = opt1_1_delta.value;
+                        value.full._1.delta = Bool_decode(v2);
                         decoded1 = true;
                     } while (false);
                     if (decoded1)
@@ -123,10 +104,15 @@ OptionalSemanticTokensOptions SemanticTokensOptions_decode(OptionalJSONValue jso
     }
     RETURN_VALUE(SemanticTokensOptions, value);
 }
+
 OptionalJSONValue SemanticTokensOptions_encode(SemanticTokensOptions value)
 {
     JSONValue v1 = json_object();
-    json_optional_set(&v1, "legend", SemanticTokensLegend_encode(value.legend));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = SemanticTokensLegend_encode(value.legend);
+        json_optional_set(&v1, "legend", _encoded_maybe);
+    }
     if (value.range.has_value) {
         JSONValue v2 = { 0 };
         switch (value.range.tag) {
@@ -153,7 +139,13 @@ OptionalJSONValue SemanticTokensOptions_encode(SemanticTokensOptions value)
             break;
         case 1: {
             v2 = json_object();
-            json_optional_set(&v2, "delta", OptionalBool_encode(value.full._1.delta));
+            {
+                OptionalJSONValue _encoded_maybe = { 0 };
+                if (value.full._1.delta.has_value) {
+                    _encoded_maybe = Bool_encode(value.full._1.delta.value);
+                }
+                json_optional_set(&v2, "delta", _encoded_maybe);
+            }
         } break;
         default:
             UNREACHABLE();

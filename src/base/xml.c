@@ -565,7 +565,8 @@ ErrorOrStringView deserialize_attr_value(XMLDeserializer *deserializer)
     if (!ss_is_one_of(ss, "\"'")) {
         ERROR(StringView, XMLError, deserializer->ss.point.line, "Expected opening quote");
     }
-    StringView close = (StringView) ss_peek_sv(ss, 1);;
+    StringView close = (StringView) ss_peek_sv(ss, 1);
+    ;
     ss_skip_one(ss);
     OptionalStringView ret_maybe = TRY_TO(OptionalStringView, StringView, deserialize_text(deserializer, close));
     if (!ret_maybe.has_value) {

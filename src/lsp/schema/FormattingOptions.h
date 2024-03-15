@@ -20,16 +20,12 @@ typedef struct {
 } FormattingOptions;
 
 OPTIONAL(FormattingOptions);
-OPTIONAL(OptionalFormattingOptions);
 DA_WITH_NAME(FormattingOptions, FormattingOptionss);
 OPTIONAL(FormattingOptionss);
-OPTIONAL(OptionalFormattingOptionss);
 
-extern OptionalJSONValue                 FormattingOptions_encode(FormattingOptions value);
-extern OptionalFormattingOptions         FormattingOptions_decode(OptionalJSONValue json);
-extern OptionalJSONValue                 OptionalFormattingOptions_encode(OptionalFormattingOptions value);
-extern OptionalOptionalFormattingOptions OptionalFormattingOptions_decode(OptionalJSONValue json);
-extern OptionalJSONValue                 FormattingOptionss_encode(FormattingOptionss value);
-extern OptionalFormattingOptionss        FormattingOptionss_decode(OptionalJSONValue json);
+extern OptionalJSONValue          FormattingOptions_encode(FormattingOptions value);
+extern OptionalFormattingOptions  FormattingOptions_decode(OptionalJSONValue json);
+extern OptionalJSONValue          FormattingOptionss_encode(FormattingOptionss value);
+extern OptionalFormattingOptionss FormattingOptionss_decode(OptionalJSONValue json);
 
 #endif /* __LSP_FORMATTINGOPTIONS_H__ */

@@ -14,9 +14,9 @@ typedef enum {
     ScribbleDirectiveMax,
 } ScribbleDirective;
 
-static char const *scribble_directives[ScribbleDirectiveMax+1] = {
-    [ ScribbleDirectiveInclude ] = "include",
-    [ ScribbleDirectiveMax ] = NULL
+static char const *scribble_directives[ScribbleDirectiveMax + 1] = {
+    [ScribbleDirectiveInclude] = "include",
+    [ScribbleDirectiveMax] = NULL
 };
 
 #define KEYWORDS(S)                \

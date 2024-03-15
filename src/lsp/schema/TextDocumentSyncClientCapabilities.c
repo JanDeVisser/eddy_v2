@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/TextDocumentSyncClientCapabilities.h>
 
 DA_IMPL(TextDocumentSyncClientCapabilities)
-
-OptionalJSONValue OptionalTextDocumentSyncClientCapabilities_encode(OptionalTextDocumentSyncClientCapabilities value)
-{
-    if (value.has_value) {
-        return TextDocumentSyncClientCapabilities_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalTextDocumentSyncClientCapabilities OptionalTextDocumentSyncClientCapabilities_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalTextDocumentSyncClientCapabilities);
-    }
-    RETURN_VALUE(OptionalTextDocumentSyncClientCapabilities, TextDocumentSyncClientCapabilities_decode(json));
-}
 
 OptionalJSONValue TextDocumentSyncClientCapabilitiess_encode(TextDocumentSyncClientCapabilitiess value)
 {
@@ -53,6 +37,7 @@ OptionalTextDocumentSyncClientCapabilitiess TextDocumentSyncClientCapabilitiess_
     }
     RETURN_VALUE(TextDocumentSyncClientCapabilitiess, ret);
 }
+
 OptionalTextDocumentSyncClientCapabilities TextDocumentSyncClientCapabilities_decode(OptionalJSONValue json)
 {
     if (!json.has_value || json.value.type != JSON_TYPE_OBJECT) {
@@ -61,28 +46,53 @@ OptionalTextDocumentSyncClientCapabilities TextDocumentSyncClientCapabilities_de
     TextDocumentSyncClientCapabilities value = { 0 };
     {
         OptionalJSONValue v0 = json_get(&json.value, "dynamicRegistration");
-        value.dynamicRegistration = FORWARD_OPTIONAL(OptionalBool, TextDocumentSyncClientCapabilities, OptionalBool_decode(v0));
+        value.dynamicRegistration = Bool_decode(v0);
     }
     {
         OptionalJSONValue v0 = json_get(&json.value, "willSave");
-        value.willSave = FORWARD_OPTIONAL(OptionalBool, TextDocumentSyncClientCapabilities, OptionalBool_decode(v0));
+        value.willSave = Bool_decode(v0);
     }
     {
         OptionalJSONValue v0 = json_get(&json.value, "willSaveWaitUntil");
-        value.willSaveWaitUntil = FORWARD_OPTIONAL(OptionalBool, TextDocumentSyncClientCapabilities, OptionalBool_decode(v0));
+        value.willSaveWaitUntil = Bool_decode(v0);
     }
     {
         OptionalJSONValue v0 = json_get(&json.value, "didSave");
-        value.didSave = FORWARD_OPTIONAL(OptionalBool, TextDocumentSyncClientCapabilities, OptionalBool_decode(v0));
+        value.didSave = Bool_decode(v0);
     }
     RETURN_VALUE(TextDocumentSyncClientCapabilities, value);
 }
+
 OptionalJSONValue TextDocumentSyncClientCapabilities_encode(TextDocumentSyncClientCapabilities value)
 {
     JSONValue v1 = json_object();
-    json_optional_set(&v1, "dynamicRegistration", OptionalBool_encode(value.dynamicRegistration));
-    json_optional_set(&v1, "willSave", OptionalBool_encode(value.willSave));
-    json_optional_set(&v1, "willSaveWaitUntil", OptionalBool_encode(value.willSaveWaitUntil));
-    json_optional_set(&v1, "didSave", OptionalBool_encode(value.didSave));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        if (value.dynamicRegistration.has_value) {
+            _encoded_maybe = Bool_encode(value.dynamicRegistration.value);
+        }
+        json_optional_set(&v1, "dynamicRegistration", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        if (value.willSave.has_value) {
+            _encoded_maybe = Bool_encode(value.willSave.value);
+        }
+        json_optional_set(&v1, "willSave", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        if (value.willSaveWaitUntil.has_value) {
+            _encoded_maybe = Bool_encode(value.willSaveWaitUntil.value);
+        }
+        json_optional_set(&v1, "willSaveWaitUntil", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        if (value.didSave.has_value) {
+            _encoded_maybe = Bool_encode(value.didSave.value);
+        }
+        json_optional_set(&v1, "didSave", _encoded_maybe);
+    }
     RETURN_VALUE(JSONValue, v1);
 }

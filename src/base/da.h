@@ -7,8 +7,8 @@
 #ifndef __DA_H__
 #define __DA_H__
 
-#include <stdlib.h>
 #include <base/optional.h>
+#include <stdlib.h>
 
 #define DIA_ELEMENTS(T, E) \
     size_t size;           \

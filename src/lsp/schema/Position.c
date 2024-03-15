@@ -1,3 +1,4 @@
+#include "json.h"
 /**
  * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
  *
@@ -9,23 +10,6 @@
 #include <lsp/schema/Position.h>
 
 DA_IMPL(Position)
-
-OptionalJSONValue OptionalPosition_encode(OptionalPosition value)
-{
-    if (value.has_value) {
-        return Position_encode(value.value);
-    } else {
-        RETURN_EMPTY(JSONValue);
-    }
-}
-
-OptionalOptionalPosition OptionalPosition_decode(OptionalJSONValue json)
-{
-    if (!json.has_value) {
-        RETURN_EMPTY(OptionalPosition);
-    }
-    RETURN_VALUE(OptionalPosition, Position_decode(json));
-}
 
 OptionalJSONValue Positions_encode(Positions value)
 {
@@ -53,6 +37,7 @@ OptionalPositions Positions_decode(OptionalJSONValue json)
     }
     RETURN_VALUE(Positions, ret);
 }
+
 OptionalPosition Position_decode(OptionalJSONValue json)
 {
     if (!json.has_value || json.value.type != JSON_TYPE_OBJECT) {
@@ -69,10 +54,19 @@ OptionalPosition Position_decode(OptionalJSONValue json)
     }
     RETURN_VALUE(Position, value);
 }
+
 OptionalJSONValue Position_encode(Position value)
 {
     JSONValue v1 = json_object();
-    json_optional_set(&v1, "line", UInt32_encode(value.line));
-    json_optional_set(&v1, "character", UInt32_encode(value.character));
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = UInt32_encode(value.line);
+        json_optional_set(&v1, "line", _encoded_maybe);
+    }
+    {
+        OptionalJSONValue _encoded_maybe = { 0 };
+        _encoded_maybe = UInt32_encode(value.character);
+        json_optional_set(&v1, "character", _encoded_maybe);
+    }
     RETURN_VALUE(JSONValue, v1);
 }

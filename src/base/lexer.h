@@ -15,7 +15,7 @@
 #define NO_DIRECTIVE (-1)
 
 typedef struct lexer Lexer;
-typedef int          (*DirectiveHandler)(Lexer *lexer, int directive);
+typedef int (*DirectiveHandler)(Lexer *lexer, int directive);
 
 typedef struct {
     StringView       name;

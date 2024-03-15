@@ -99,7 +99,7 @@ OptionalTplOperatorMapping template_operator_mapping(TplOpToken token)
 void template_lexer_consume(TemplateParserContext *ctx)
 {
     if (ctx->token.type != TTTEndOfText) {
-        ctx->token = (TplToken) {0};
+        ctx->token = (TplToken) { 0 };
         return;
     }
 }

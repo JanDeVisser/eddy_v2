@@ -18,16 +18,12 @@ typedef struct {
 } DidCloseTextDocumentParams;
 
 OPTIONAL(DidCloseTextDocumentParams);
-OPTIONAL(OptionalDidCloseTextDocumentParams);
 DA_WITH_NAME(DidCloseTextDocumentParams, DidCloseTextDocumentParamss);
 OPTIONAL(DidCloseTextDocumentParamss);
-OPTIONAL(OptionalDidCloseTextDocumentParamss);
 
-extern OptionalJSONValue                          DidCloseTextDocumentParams_encode(DidCloseTextDocumentParams value);
-extern OptionalDidCloseTextDocumentParams         DidCloseTextDocumentParams_decode(OptionalJSONValue json);
-extern OptionalJSONValue                          OptionalDidCloseTextDocumentParams_encode(OptionalDidCloseTextDocumentParams value);
-extern OptionalOptionalDidCloseTextDocumentParams OptionalDidCloseTextDocumentParams_decode(OptionalJSONValue json);
-extern OptionalJSONValue                          DidCloseTextDocumentParamss_encode(DidCloseTextDocumentParamss value);
-extern OptionalDidCloseTextDocumentParamss        DidCloseTextDocumentParamss_decode(OptionalJSONValue json);
+extern OptionalJSONValue                   DidCloseTextDocumentParams_encode(DidCloseTextDocumentParams value);
+extern OptionalDidCloseTextDocumentParams  DidCloseTextDocumentParams_decode(OptionalJSONValue json);
+extern OptionalJSONValue                   DidCloseTextDocumentParamss_encode(DidCloseTextDocumentParamss value);
+extern OptionalDidCloseTextDocumentParamss DidCloseTextDocumentParamss_decode(OptionalJSONValue json);
 
 #endif /* __LSP_DIDCLOSETEXTDOCUMENTPARAMS_H__ */
