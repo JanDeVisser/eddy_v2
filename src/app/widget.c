@@ -22,6 +22,24 @@ LAYOUT_CLASS_DEF(App, app);
 
 App *app;
 
+char const *SizePolicy_name(SizePolicy policy)
+{
+    switch (policy) {
+    case SP_ABSOLUTE:
+        return "Absolute";
+    case SP_RELATIVE:
+        return "Relative";
+    case SP_CHARACTERS:
+        return "Characters";
+    case SP_CALCULATED:
+        return "Calculated";
+    case SP_STRETCH:
+        return "Stretch";
+    default:
+        UNREACHABLE();
+    }
+}
+
 int iclamp(int v, int min, int max)
 {
     return imin(imax(v, min), max);
@@ -279,7 +297,7 @@ void layout_resize(Layout *layout)
         w->viewport.size[fixed_coord] = fixed_size - w->padding.coords[fixed_coord] - w->padding.coords[fixed_coord + 2];
         w->viewport.position[fixed_coord] = fixed_pos + w->padding.coords[fixed_coord];
         float sz = 0;
-        // printf("Component widget %s has policy %d\n", w->classname, w->policy);
+        // printf("Component widget %s has policy %s\n", w->classname, SizePolicy_name(w->policy));
         switch (w->policy) {
         case SP_ABSOLUTE:
             sz = w->policy_size;
@@ -298,7 +316,7 @@ void layout_resize(Layout *layout)
             stretch_count++;
         } break;
         }
-        assert_msg(sz != 0, "Size Policy %d resulted in zero size", (int) w->policy);
+        assert_msg(sz != 0, "Size Policy %s resulted in zero size", SizePolicy_name(w->policy));
         w->viewport.size[var_coord] = sz - w->padding.coords[var_coord] - w->padding.coords[var_coord + 2];
         if (sz > 0) {
             allocated += sz;

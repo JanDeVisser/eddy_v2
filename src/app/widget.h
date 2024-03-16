@@ -383,6 +383,7 @@ typedef struct {
 
 typedef App *(*AppCreate)(void);
 
+extern char const *SizePolicy_name(SizePolicy policy);
 extern int         iclamp(int v, int min, int max);
 extern int         imin(int i1, int i2);
 extern int         imax(int i1, int i2);
