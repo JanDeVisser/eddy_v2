@@ -319,18 +319,18 @@ void lsp_semantic_tokens(int buffer_num)
     size_t         offset = 0;
     UInt32s        data = result.data;
     for (size_t ix = 0; ix < result.data.size; ix += 5) {
-        trace(CAT_LSP, "Semantic token[%zu]: [%du, %du, %du]", ix, data.elements[ix], data.elements[ix + 1], data.elements[ix + 2]);
+        // trace(CAT_LSP, "Semantic token[%zu]: [%du, %du, %du]", ix, data.elements[ix], data.elements[ix + 1], data.elements[ix + 2]);
         if (data.elements[ix] > 0) {
             lineno += data.elements[ix];
             if (lineno >= buffer->lines.size) {
-                trace(CAT_LSP, "Semantic token[%zu] lineno %zu > buffer->lines %zu", ix, lineno, buffer->lines.size);
+                // trace(CAT_LSP, "Semantic token[%zu] lineno %zu > buffer->lines %zu", ix, lineno, buffer->lines.size);
                 continue;
             }
             line = buffer->lines.elements + lineno;
             offset = 0;
         }
         offset += data.elements[ix + 1];
-        trace(CAT_LSP, "Semantic token[%zu]: line: %zu col: %zu", ix, lineno, offset);
+        // trace(CAT_LSP, "Semantic token[%zu]: line: %zu col: %zu", ix, lineno, offset);
         size_t length = data.elements[ix + 2];
         for (size_t token_ix = 0; token_ix < line->num_tokens; ++token_ix) {
             assert(line->first_token + token_ix < buffer->tokens.size);
