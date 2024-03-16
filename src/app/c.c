@@ -105,6 +105,7 @@ int handle_include_directive(Lexer *lexer)
             return NO_DIRECTIVE;
         }
         char end = (buffer[0] == '<') ? '>' : '"';
+        ++ix;
         while (buffer[ix] && buffer[ix] != end && buffer[ix] != '\n') {
             ++ix;
         }
