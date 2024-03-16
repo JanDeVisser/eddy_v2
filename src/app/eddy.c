@@ -331,7 +331,7 @@ void eddy_init(Eddy *eddy)
 void eddy_on_start(Eddy *eddy)
 {
     eddy->monitor = GetCurrentMonitor();
-    eddy->font = LoadFontEx(EDDY_DATADIR "/fonts/VictorMono-Medium.ttf", 30, 0, 250);
+    eddy->font = LoadFontEx(EDDY_DATADIR "/fonts/VictorMono-Medium.ttf", 20, 0, 250);
 }
 
 void eddy_on_terminate(Eddy *eddy)
