@@ -60,13 +60,35 @@ void emit_log_message(LogLevel level, TraceCategory category, char const *msg, .
     va_end(args);
 }
 
+static size_t linelen = 0;
+
 void vemit_log_message(LogLevel level, TraceCategory category, char const *msg, va_list args)
 {
-    if (level >= log_level) {
-        fprintf(stderr, "[%05d:%08llx]:%7.7s: ", getpid(), (uint64_t) pthread_self(), trace_category_to_string(category));
-        vfprintf(stderr, msg, args);
-        fprintf(stderr, "\n");
+    if (level < log_level || !s_categories[(int) category]) {
+        return;
     }
+    if (linelen == 0) {
+        fprintf(stderr, "[%05d:%08llx]:%7.7s: ", getpid(), (uint64_t) pthread_self(), trace_category_to_string(category));
+    }
+    linelen += vfprintf(stderr, msg, args);
+}
+
+void log_nl(LogLevel level, TraceCategory category)
+{
+    if (level < log_level || !s_categories[(int) category]) {
+        return;
+    }
+    fprintf(stderr, "\n");
+    linelen = 0;
+}
+
+void trace_nl(TraceCategory category)
+{
+    if (!s_categories[(int) category]) {
+        return;
+    }
+    log_nl(LL_TRACE, category);
+    linelen = 0;
 }
 
 void trace(TraceCategory category, char const *msg, ...)
@@ -81,6 +103,26 @@ void trace(TraceCategory category, char const *msg, ...)
 }
 
 void vtrace(TraceCategory category, char const *msg, va_list args)
+{
+    if (!s_categories[(int) category]) {
+        return;
+    }
+    vemit_log_message(LL_TRACE, category, msg, args);
+    trace_nl(category);
+}
+
+void trace_nonl(TraceCategory category, char const *msg, ...)
+{
+    if (!s_categories[(int) category]) {
+        return;
+    }
+    va_list args;
+    va_start(args, msg);
+    vtrace(category, msg, args);
+    va_end(args);
+}
+
+void vtrace_nonl(TraceCategory category, char const *msg, va_list args)
 {
     if (!s_categories[(int) category]) {
         return;
@@ -129,7 +171,9 @@ void _fatal(char const *msg, ...)
 void vfatal(char const *msg, va_list args)
 {
     vemit_log_message(LL_PANIC, CAT_COUNT, msg, args);
+    log_nl(LL_PANIC, CAT_COUNT);
     emit_log_message(LL_PANIC, CAT_COUNT, "Aborting...");
+    log_nl(LL_PANIC, CAT_COUNT);
     exit(1);
 }
 

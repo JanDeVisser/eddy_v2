@@ -31,7 +31,8 @@
     S(IPC)                 \
     S(LSP)                 \
     S(XML)                 \
-    S(TEMPLATE)
+    S(TEMPLATE)            \
+    S(EDIT)
 
 typedef enum trace_category {
 #undef TRACECATEGORY
@@ -44,7 +45,10 @@ typedef enum trace_category {
 struct string_view;
 
 // clang-format off
-extern void log_init();
+extern                            void log_init();
+extern                            void trace_nl(TraceCategory category);
+extern format_args(2, 3)          void trace_nonl(TraceCategory category, char const *msg, ...);
+extern                            void vtrace_nonl(TraceCategory category, char const *msg, va_list args);
 extern format_args(2, 3)          void trace(TraceCategory category, char const *msg, ...);
 extern                            void vtrace(TraceCategory category, char const *msg, va_list args);
 extern                            bool log_category_on(TraceCategory category);
