@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "log.h"
 #include <stdarg.h>
 #include <sys/syslimits.h>
 #include <unistd.h>
@@ -32,6 +33,9 @@ static PaletteIndex       colors[30];
 
 void trace_json(OptionalJSONValue json, char const *msg, ...)
 {
+    if (!log_category_on(CAT_LSP)) {
+        return;
+    }
     va_list args;
     va_start(args, msg);
     vtrace(CAT_LSP, msg, args);
