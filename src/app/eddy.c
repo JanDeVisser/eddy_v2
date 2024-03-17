@@ -83,7 +83,12 @@ void sb_cursor_draw(Label *label)
     if (view->selection != -1) {
         label->text = sv_from(TextFormat("%4d:%d %zu-%zu", view->cursor_pos.line + 1, view->cursor_pos.column + 1, view->selection, view->cursor));
     } else {
-        label->text = sv_from(TextFormat("%4d:%d %zu", view->cursor_pos.line + 1, view->cursor_pos.column + 1, view->cursor));
+        Buffer *buffer = eddy.buffers.elements + view->buffer_num;
+        size_t  len = buffer->lines.elements[view->cursor_pos.line].line.length;
+        label->text = sv_from(TextFormat("row:col %4d:%d len %zu pos %zu col %d, vp %d:%d",
+            view->cursor_pos.line + 1, view->cursor_pos.column + 1,
+            len, view->cursor, view->cursor_col,
+            view->left_column, view->top_line));
     }
     label_draw(label);
 }
@@ -127,7 +132,7 @@ void sb_init(StatusBar *status_bar)
     layout_add_widget((Layout *) status_bar, (Widget *) file_name);
     layout_add_widget((Layout *) status_bar, (Widget *) widget_new(Spacer));
     Label *cursor = widget_new(Label);
-    cursor->policy_size = 16;
+    cursor->policy_size = 24;
     cursor->color = DARKGRAY;
     cursor->handlers.draw = (WidgetDraw) sb_cursor_draw;
     layout_add_widget((Layout *) status_bar, (Widget *) cursor);
