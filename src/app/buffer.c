@@ -86,15 +86,19 @@ void buffer_build_indices(Buffer *buffer)
     size_t lineno = 0;
     // printf("Buffer size: %zu\n", buffer->text.view.length);
     // printf("%5zu: ", lineno);
-    for (Token t = lexer_next(&lexer); t.kind != TK_END_OF_FILE; t = lexer_next(&lexer)) {
+    while (true) {
+        Token t = lexer_next(&lexer);
         lexer_lex(&lexer);
-        if (token_matches(t, TK_WHITESPACE, TC_NEWLINE)) {
+        if (token_matches(t, TK_WHITESPACE, TC_NEWLINE) || token_matches_kind(t, TK_END_OF_FILE)) {
             // if (current->num_tokens == 0) {
             //     printf("[EOL]\n");
             // } else {
             //     printf("[EOL] %zu..%zu\n", current->first_token, current->first_token + current->num_tokens-1);
             // }
-            buffer->lines.elements[lineno].line.length = t.location - buffer->lines.elements[lineno].index_of + 1;
+            current->line.length = t.location - current->index_of;
+            if (t.kind == TK_END_OF_FILE) {
+                break;
+            }
             current = da_append_Index(&buffer->lines, (Index) { t.location + 1, { buffer->text.view.ptr + t.location + 1, 0 }, 0, 0 });
             // ++lineno;
             // printf("%5zu: ", lineno);

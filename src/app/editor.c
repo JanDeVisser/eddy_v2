@@ -235,16 +235,14 @@ void editor_update_cursor(Editor *editor)
     }
     current_line = buffer->lines.elements + view->cursor_pos.line;
     if (view->new_cursor == -1) {
-        assert(view->new_cursor == -1);
         assert(view->cursor_col >= 0);
-        if ((int) current_line->line.length < view->cursor_col) {
-            view->cursor_pos.column = current_line->line.length - 1;
+        if (((int) current_line->line.length) <= (view->cursor_col - 1)) {
+            view->cursor_pos.column = current_line->line.length;
         } else {
             view->cursor_pos.column = view->cursor_col;
         }
         view->new_cursor = current_line->index_of + view->cursor_pos.column;
     } else {
-        assert(view->new_cursor != -1);
         view->cursor_pos.column = view->new_cursor - current_line->index_of;
     }
     view->cursor = view->new_cursor;
@@ -532,6 +530,16 @@ void editor_cmd_begin_of_line(CommandContext *ctx)
     Index *line = buffer->lines.elements + view->cursor_pos.y;
     view->new_cursor = line->index_of;
     view->cursor_col = -1;
+}
+
+void editor_cmd_top_of_buffer(CommandContext *ctx)
+{
+    Editor     *editor = (Editor *) ctx->target;
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    view->new_cursor = 0;
+    view->cursor_col = -1;
+    view->top_line = 0;
+    view->left_column = 0;
 }
 
 void editor_cmd_end_of_line(CommandContext *ctx)
@@ -863,6 +871,8 @@ void editor_init(Editor *editor)
         (KeyCombo) { KEY_PAGE_DOWN, KMOD_NONE }, (KeyCombo) { KEY_PAGE_DOWN, KMOD_SHIFT });
     widget_add_command(editor, sv_from("cursor-home"), editor_cmd_begin_of_line,
         (KeyCombo) { KEY_HOME, KMOD_NONE }, (KeyCombo) { KEY_HOME, KMOD_SHIFT });
+    widget_add_command(editor, sv_from("cursor-top"), editor_cmd_top_of_buffer,
+        (KeyCombo) { KEY_HOME, KMOD_CONTROL }, (KeyCombo) { KEY_HOME, KMOD_SUPER | KMOD_SHIFT });
     widget_add_command(editor, sv_from("cursor-end"), editor_cmd_end_of_line,
         (KeyCombo) { KEY_END, KMOD_NONE }, (KeyCombo) { KEY_END, KMOD_SHIFT });
     widget_add_command(editor, sv_from("cursor-top"), editor_cmd_top,
@@ -943,12 +953,12 @@ void editor_draw(Editor *editor)
         }
         if (line.num_tokens == 0) {
             if (frame == 0) {
-                printf("%5d:%5zu:[          ]\n", row, lineno);
+                trace(CAT_EDIT, "%5d:%5zu:[          ]", row, lineno);
             }
             continue;
         }
         if (frame == 0) {
-            printf("%5d:%5zu:[%4zu..%4zu]", row, lineno, line.first_token, line.first_token + line.num_tokens - 1);
+            trace_nonl(CAT_EDIT, "%5d:%5zu:[%4zu..%4zu]", row, lineno, line.first_token, line.first_token + line.num_tokens - 1);
         }
         for (size_t ix = line.first_token; ix < line.first_token + line.num_tokens; ++ix) {
             DisplayToken *token = buffer->tokens.elements + ix;
@@ -963,13 +973,13 @@ void editor_draw(Editor *editor)
             int        length = iclamp((int) token->length, 0, editor->columns - start_col);
             StringView text = (StringView) { line.line.ptr + start_col, length };
             if (frame == 0) {
-                printf("[%zu %.*s]", ix, SV_ARG(text));
+                trace_nonl(CAT_EDIT, "[%zu %.*s]", ix, SV_ARG(text));
             }
             widget_render_text(editor, eddy.cell.x * start_col, eddy.cell.y * row,
                 text, eddy.font, palettes[PALETTE_DARK][token->color]);
         }
         if (frame == 0) {
-            printf("\n");
+            trace_nl(CAT_EDIT);
         }
     }
 
