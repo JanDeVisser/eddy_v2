@@ -361,7 +361,7 @@ void eddy_on_draw(Eddy *eddy)
 {
     for (size_t ix = 0; ix < eddy->buffers.size; ++ix) {
         Buffer *buffer = eddy->buffers.elements + ix;
-        if (buffer->indexed_version != buffer->undo_stack.size) {
+        if (buffer->indexed_version != buffer->version) {
             buffer_build_indices(buffer);
             for (size_t view_ix = 0; view_ix < eddy->editor->buffers.size; ++view_ix) {
                 BufferView *view = eddy->editor->buffers.elements + view_ix;
