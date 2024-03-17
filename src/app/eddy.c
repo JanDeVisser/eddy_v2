@@ -80,14 +80,18 @@ void sb_cursor_draw(Label *label)
     Editor *editor = (Editor *) label->parent->memo;
     assert(editor);
     BufferView *view = editor->buffers.elements + eddy.editor->current_buffer;
+    Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
+    size_t      len = buffer->lines.elements[view->cursor_pos.line].line.length;
     if (view->selection != -1) {
-        label->text = sv_from(TextFormat("%4d:%d %zu-%zu", view->cursor_pos.line + 1, view->cursor_pos.column + 1, view->selection, view->cursor));
-    } else {
-        Buffer *buffer = eddy.buffers.elements + view->buffer_num;
-        size_t  len = buffer->lines.elements[view->cursor_pos.line].line.length;
-        label->text = sv_from(TextFormat("row:col %4d:%d len %zu pos %zu col %d, vp %d:%d",
+        label->text = sv_from(TextFormat("row:col %d:%d sel: %zu-%zu len %zu pos %zu col %d clk %d vp %d:%d",
             view->cursor_pos.line + 1, view->cursor_pos.column + 1,
-            len, view->cursor, view->cursor_col,
+            view->selection, view->cursor,
+            len, view->cursor, view->cursor_col, editor->num_clicks,
+            view->left_column, view->top_line));
+    } else {
+        label->text = sv_from(TextFormat("row:col %d:%d len %zu pos %zu col %d clk %d vp %d:%d",
+            view->cursor_pos.line + 1, view->cursor_pos.column + 1,
+            len, view->cursor, view->cursor_col, editor->num_clicks,
             view->left_column, view->top_line));
     }
     label_draw(label);
@@ -132,7 +136,7 @@ void sb_init(StatusBar *status_bar)
     layout_add_widget((Layout *) status_bar, (Widget *) file_name);
     layout_add_widget((Layout *) status_bar, (Widget *) widget_new(Spacer));
     Label *cursor = widget_new(Label);
-    cursor->policy_size = 24;
+    cursor->policy_size = 30;
     cursor->color = DARKGRAY;
     cursor->handlers.draw = (WidgetDraw) sb_cursor_draw;
     layout_add_widget((Layout *) status_bar, (Widget *) cursor);

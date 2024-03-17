@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "log.h"
+#include "raylib.h"
+#include "widget.h"
 #include <ctype.h>
 #include <math.h>
 
@@ -296,19 +299,20 @@ void editor_select_line(Editor *editor)
     size_t      lineno = buffer_line_for_index(buffer, view->cursor);
     Index      *line = buffer->lines.elements + lineno;
     view->selection = line->index_of;
-    view->new_cursor = view->cursor = line->index_of + line->line.length;
+    view->new_cursor = view->cursor = line->index_of + line->line.length + 1;
 }
 
 void editor_word_left(Editor *editor)
 {
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
-    while (0 < view->cursor && !isalnum(buffer->text.view.ptr[view->cursor])) {
+    while (0 < ((int) view->cursor) && !isalnum(buffer->text.view.ptr[view->cursor])) {
         ++view->cursor;
     }
-    while (0 < view->cursor && isalnum(buffer->text.view.ptr[view->cursor])) {
+    while (0 < ((int) view->cursor) && isalnum(buffer->text.view.ptr[view->cursor])) {
         ++view->cursor;
     }
+    ++view->cursor;
 }
 
 void editor_word_right(Editor *editor)
@@ -481,12 +485,13 @@ void editor_cmd_word_left(CommandContext *ctx)
     editor_manage_selection(editor, view, ctx->trigger.modifier & KMOD_SHIFT);
     if (view->new_cursor > 0) {
         Buffer *buffer = eddy.buffers.elements + view->buffer_num;
-        while (0 < view->new_cursor && !isalnum(buffer->text.view.ptr[view->new_cursor])) {
+        while (0 < ((int) view->new_cursor) && !isalnum(buffer->text.view.ptr[view->new_cursor])) {
             --view->new_cursor;
         }
-        while (0 < view->new_cursor && isalnum(buffer->text.view.ptr[view->new_cursor])) {
+        while (0 < ((int) view->new_cursor) && isalnum(buffer->text.view.ptr[view->new_cursor])) {
             --view->new_cursor;
         }
+        view->new_cursor = ((int) view->new_cursor >= 0) ? view->new_cursor + 1 : 0;
     }
     view->cursor_col = -1;
 }
@@ -840,6 +845,12 @@ void editor_cmd_close_view(CommandContext *ctx)
     editor_close_view(editor);
 }
 
+void editor_cmd_completion(CommandContext *ctx)
+{
+    Editor *editor = (Editor *) ctx->target;
+    eddy_set_message(&eddy, "Completion");
+}
+
 /*
  * ---------------------------------------------------------------------------
  * Life cycle
@@ -851,6 +862,7 @@ void editor_init(Editor *editor)
     editor->policy = SP_STRETCH;
     editor->background = palettes[PALETTE_DARK][PI_BACKGROUND];
     editor->padding = DEFAULT_PADDING;
+    editor->num_clicks = 0;
     widget_add_command(editor, sv_from("cursor-up"), editor_cmd_up,
         (KeyCombo) { KEY_UP, KMOD_NONE }, (KeyCombo) { KEY_UP, KMOD_SHIFT });
     widget_add_command(editor, sv_from("select-word"), editor_cmd_select_word,
@@ -909,6 +921,8 @@ void editor_init(Editor *editor)
         (KeyCombo) { KEY_W, KMOD_CONTROL });
     widget_add_command(editor, sv_from("editor-close-view"), editor_cmd_close_view,
         (KeyCombo) { KEY_W, KMOD_CONTROL | KMOD_SHIFT });
+    widget_add_command(editor, sv_from("editor-show-completion"), editor_cmd_completion,
+        (KeyCombo) { KEY_SPACE, KMOD_CONTROL });
 }
 
 void editor_resize(Editor *editor)
@@ -1000,36 +1014,41 @@ void editor_draw(Editor *editor)
 
 void editor_process_input(Editor *editor)
 {
-    if ((IsMouseButtonPressed(MOUSE_BUTTON_LEFT) || IsMouseButtonDown(MOUSE_BUTTON_LEFT) || IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) && widget_contains(editor, GetMousePosition())) {
+    assert(editor->num_clicks >= 0 && editor->num_clicks < 3);
+    if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT) && widget_contains(editor, GetMousePosition())) {
         BufferView *view = editor->buffers.elements + editor->current_buffer;
         Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
         int         line = imin((GetMouseY() - editor->viewport.y) / eddy.cell.y + view->top_line,
                     buffer->lines.size - 1);
         int         col = imin((GetMouseX() - editor->viewport.x) / eddy.cell.x + view->left_column,
                     buffer->lines.elements[line].line.length - 1);
-        view->new_cursor = view->cursor = buffer->lines.elements[line].index_of + col;
+        view->new_cursor = buffer->lines.elements[line].index_of + col;
         view->cursor_col = -1;
-        if (IsMouseButtonUp(MOUSE_BUTTON_LEFT)) {
-            if (eddy.time - editor->clicks[editor->num_clicks] > 0.5) {
-                editor->num_clicks = 0;
-            }
-            editor->clicks[editor->num_clicks] = eddy.time;
-            ++editor->num_clicks;
-            switch (++editor->num_clicks) {
-            case 1:
-                view->selection = view->cursor;
-                break;
-            case 2:
-                editor_select_word(editor);
-                break;
-            case 3:
-                editor_select_line(editor);
-                // Fall through
-            default:
-                editor->num_clicks = 0;
-            }
+        if (editor->num_clicks > 0 && (eddy.time - editor->clicks[editor->num_clicks - 1]) > 0.5) {
+            editor->num_clicks = 0;
+        }
+        editor->clicks[editor->num_clicks] = eddy.time;
+        ++editor->num_clicks;
+        switch (editor->num_clicks) {
+        case 1:
+            view->selection = -1;
+            break;
+        case 2:
+            view->selection = buffer_word_boundary_left(buffer, view->new_cursor);
+            view->new_cursor = buffer_word_boundary_right(buffer, view->new_cursor);
+            break;
+        case 3: {
+            size_t lineno = buffer_line_for_index(buffer, view->new_cursor);
+            Index *line = buffer->lines.elements + lineno;
+            view->selection = line->index_of;
+            view->new_cursor = line->index_of + line->line.length + 1;
+        }
+            // Fall through
+        default:
+            editor->num_clicks = 0;
         }
     }
+    assert(editor->num_clicks >= 0 && editor->num_clicks < 3);
     for (int ch = GetCharPressed(); ch != 0; ch = GetCharPressed()) {
         editor_character(editor, ch);
     }

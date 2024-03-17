@@ -402,13 +402,15 @@ void buffer_save_as(Buffer *buffer, StringView name)
 size_t buffer_word_boundary_left(Buffer *buffer, size_t index)
 {
     if (isalnum(buffer->text.view.ptr[index]) || buffer->text.view.ptr[index] == '_') {
-        while (index > 0 && (isalnum(buffer->text.view.ptr[index - 1]) || buffer->text.view.ptr[index - 1] == '_')) {
+        while (((int) index) > 0 && (isalnum(buffer->text.view.ptr[index]) || buffer->text.view.ptr[index] == '_')) {
             --index;
         }
+        ++index;
     } else {
-        while (index > 0 && (!isalnum(buffer->text.view.ptr[index - 1]) && buffer->text.view.ptr[index - 1] != '_')) {
+        while (((int) index) > 0 && (!isalnum(buffer->text.view.ptr[index]) && buffer->text.view.ptr[index] != '_')) {
             --index;
         }
+        ++index;
     }
     return index;
 }
@@ -417,11 +419,11 @@ size_t buffer_word_boundary_right(Buffer *buffer, size_t index)
 {
     size_t max_index = buffer->text.view.length;
     if (isalnum(buffer->text.view.ptr[index]) || buffer->text.view.ptr[index] == '_') {
-        while (index < max_index && (isalnum(buffer->text.view.ptr[index + 1]) || buffer->text.view.ptr[index + 1] == '_')) {
+        while (index < max_index && (isalnum(buffer->text.view.ptr[index]) || buffer->text.view.ptr[index] == '_')) {
             ++index;
         }
     } else {
-        while (index < max_index && (!isalnum(buffer->text.view.ptr[index + 1]) && buffer->text.view.ptr[index + 1] != '_')) {
+        while (index < max_index && (!isalnum(buffer->text.view.ptr[index]) && buffer->text.view.ptr[index] != '_')) {
             ++index;
         }
     }

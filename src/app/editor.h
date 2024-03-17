@@ -31,7 +31,7 @@ typedef struct {
     int         current_buffer;
     int         columns;
     int         lines;
-    double      clicks[2];
+    double      clicks[3];
     int         num_clicks;
 } Editor;
 
