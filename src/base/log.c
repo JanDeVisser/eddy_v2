@@ -64,7 +64,7 @@ static size_t linelen = 0;
 
 void vemit_log_message(LogLevel level, TraceCategory category, char const *msg, va_list args)
 {
-    if (level < log_level || !s_categories[(int) category]) {
+    if (level < log_level || (category != CAT_COUNT && !s_categories[(int) category])) {
         return;
     }
     if (linelen == 0) {
@@ -207,4 +207,6 @@ void log_init()
         TRACECATEGORIES(TRACECATEGORY)
 #undef TRACECATEGORY
     }
+    linelen = 0;
+    emit_log_message(LL_PANIC, CAT_COUNT, "Logging initialized");
 }
