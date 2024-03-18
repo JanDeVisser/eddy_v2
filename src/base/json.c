@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <stdlib.h>
+
 #include <ctype.h>
 #include <json.h>
 
@@ -639,7 +641,12 @@ ErrorOrJSONValue json_decode_value(JSONDecoder *decoder)
                 while (isdigit(ss_peek(&decoder->ss))) {
                     ss_skip_one(&decoder->ss);
                 }
-                ERROR(JSONValue, JSONError, 0, "Can't parse doubles in JSON yet");
+                StringView sv = ss_read_from_mark(&decoder->ss);
+                char       ch = sv.ptr[sv.length];
+                ((char *) sv.ptr)[sv.length] = '\0';
+                double dbl = strtod(sv.ptr, NULL);
+                ((char *) sv.ptr)[sv.length] = ch;
+                RETURN(JSONValue, json_number(dbl));
             }
             StringView         sv = ss_read_from_mark(&decoder->ss);
             IntegerParseResult parse_result = sv_parse_integer(sv, I64);
