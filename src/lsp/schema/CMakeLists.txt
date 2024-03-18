@@ -17,6 +17,7 @@ WorkDoneProgressParams.c
 RegularExpressionsClientCapabilities.c
 Position.c
 PositionEncodingKind.c
+MarkupKind.c
 Range.c
 TextDocumentItem.c
 TextDocumentIdentifier.c
@@ -30,6 +31,8 @@ ChangeAnnotationIdentifier.c
 AnnotatedTextEdit.c
 Location.c
 LocationLink.c
+LSPCommand.c
+MarkupContent.c
 TraceValue.c
 TokenFormat.c
 SemanticTokenTypes.c
@@ -58,6 +61,17 @@ TextDocumentContentChangeEvent.c
 DidChangeTextDocumentParams.c
 FormattingOptions.c
 DocumentFormattingParams.c
+CompletionTriggerKind.c
+CompletionContext.c
+CompletionParams.c
+InsertTextFormat.c
+CompletionItemTag.c
+InsertReplaceEdit.c
+InsertTextMode.c
+CompletionItemLabelDetails.c
+CompletionItemKind.c
+CompletionItem.c
+CompletionList.c
 )
 
 target_link_libraries(lspschema base)

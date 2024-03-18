@@ -24,6 +24,12 @@ export namespace PositionEncodingKind {
     export const UTF32: PositionEncodingKind = 'utf-32';
 }
 
+export type MarkupKind = string;
+export namespace MarkupKind {
+	export const PlainText: MarkupKind = "plaintext";
+	export const Markdown: MarkupKind = 'markdown';
+}
+
 interface Range {
     start: Position;
     end: Position;
@@ -91,6 +97,17 @@ interface LocationLink {
     targetUri: DocumentUri;
     targetRange: Range;
     targetSelectionRange: Range;
+}
+
+interface LSPCommand {
+	title: string;
+	command: string;
+	arguments?: LSPAny[];
+}
+
+export interface MarkupContent {
+	kind: MarkupKind;
+	value: string;
 }
 
 export enum TraceValue {
@@ -301,4 +318,115 @@ interface FormattingOptions {
 interface DocumentFormattingParams extends WorkDoneProgressParams {
 	textDocument: TextDocumentIdentifier;
 	options: FormattingOptions;
+}
+
+export type CompletionTriggerKind = integer;
+export namespace CompletionTriggerKind {
+	export const Invoked: CompletionTriggerKind = 1;
+	export const TriggerCharacter: CompletionTriggerKind = 2;
+	export const TriggerForIncompleteCompletions: CompletionTriggerKind = 3;
+}
+
+export interface CompletionContext {
+	triggerKind: CompletionTriggerKind;
+	triggerCharacter?: string;
+}
+
+export interface CompletionParams extends TextDocumentPositionParams, WorkDoneProgressParams {
+	context?: CompletionContext;
+}
+
+export type InsertTextFormat = integer;
+export namespace InsertTextFormat {
+	export const PlainText: InsertTextFormat = 1;
+	export const Snippet: InsertTextFormat = 2;
+}
+
+export type CompletionItemTag = integer;
+export namespace CompletionItemTag {
+	export const Deprecated: CompletionItemTag = 1;
+}
+
+export interface InsertReplaceEdit {
+	newText: string;
+	insert: Range;
+	replace: Range;
+}
+
+export type InsertTextMode = integer;
+export namespace InsertTextMode {
+	export const asIs: InsertTextMode = 1;
+	export const adjustIndentation: InsertTextMode = 2;
+}
+
+
+export interface CompletionItemLabelDetails {
+	detail?: string;
+	description?: string;
+}
+
+export type CompletionItemKind = integer;
+export namespace CompletionItemKind {
+	export const Text: CompletionItemKind = 1;
+	export const Method: CompletionItemKind = 2;
+	export const Function: CompletionItemKind = 3;
+	export const Constructor: CompletionItemKind = 4;
+	export const Field: CompletionItemKind = 5;
+	export const Variable: CompletionItemKind = 6;
+	export const Class: CompletionItemKind = 7;
+	export const Interface: CompletionItemKind = 8;
+	export const Module: CompletionItemKind = 9;
+	export const Property: CompletionItemKind = 10;
+	export const Unit: CompletionItemKind = 11;
+	export const Value: CompletionItemKind = 12;
+	export const Enum: CompletionItemKind = 13;
+	export const Keyword: CompletionItemKind = 14;
+	export const Snippet: CompletionItemKind = 15;
+	export const Color: CompletionItemKind = 16;
+	export const File: CompletionItemKind = 17;
+	export const Reference: CompletionItemKind = 18;
+	export const Folder: CompletionItemKind = 19;
+	export const EnumMember: CompletionItemKind = 20;
+	export const Constant: CompletionItemKind = 21;
+	export const Struct: CompletionItemKind = 22;
+	export const Event: CompletionItemKind = 23;
+	export const Operator: CompletionItemKind = 24;
+	export const TypeParameter: CompletionItemKind = 25;
+}
+
+export interface CompletionItem {
+	label: string;
+	labelDetails?: CompletionItemLabelDetails;
+	kind?: CompletionItemKind;
+	tags?: CompletionItemTag[];
+	detail?: string;
+	documentation?: string | MarkupContent;
+	deprecated?: boolean;
+	preselect?: boolean;
+	sortText?: string;
+	filterText?: string;
+	insertText?: string;
+	insertTextFormat?: InsertTextFormat;
+	insertTextMode?: InsertTextMode;
+	textEdit?: TextEdit | InsertReplaceEdit;
+	textEditText?: string;
+	additionalTextEdits?: TextEdit[];
+	commitCharacters?: string[];
+	command?: LSPCommand;
+	data?: LSPAny;
+}
+
+export interface CompletionList {
+	isIncomplete: boolean;
+	itemDefaults?: {
+		commitCharacters?: string[];
+		editRange?: Range | {
+			insert: Range;
+			replace: Range;
+		};
+		insertTextFormat?: InsertTextFormat;
+		insertTextMode?: InsertTextMode;
+		data?: LSPAny;
+	};
+	items: CompletionItem[];
 }

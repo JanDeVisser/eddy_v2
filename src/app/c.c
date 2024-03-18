@@ -4,18 +4,89 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "lsp/schema/TextEdit.h"
+#include <app/buffer.h>
 #include <app/c.h>
+#include <app/eddy.h>
+#include <app/editor.h>
+#include <app/listbox.h>
+#include <app/widget.h>
 #include <base/process.h>
-#include <buffer.h>
-#include <eddy.h>
-#include <editor.h>
 #include <lsp/lsp.h>
-#include <widget.h>
-#include <xml.h>
+#include <lsp/schema/CompletionItem.h>
 
 // -- C Mode ----------------------------------------------------------------
 
-SIMPLE_WIDGET_CLASS_DEF(CMode, c_mode);
+MODE_CLASS_DEF(CMode, c_mode);
+
+void completions_submit(ListBox *listbox, ListBoxEntry selection)
+{
+    CompletionItem *item = (CompletionItem *) selection.payload;
+    Editor         *editor = eddy.editor;
+    BufferView     *view = editor->buffers.elements + editor->current_buffer;
+    Buffer         *buffer = eddy.buffers.elements + view->buffer_num;
+    switch (item->textEdit.tag) {
+    case 0: {
+        TextEdit   edit = item->textEdit._0;
+        IntVector2 start = { edit.range.start.character, edit.range.start.line };
+        IntVector2 end = { edit.range.end.character, edit.range.end.line };
+        size_t     offset = buffer_position_to_index(buffer, start);
+        size_t     length = buffer_position_to_index(buffer, end) - offset;
+        size_t     prefix_length = view->cursor - offset;
+
+        if (length == 0 || prefix_length == 0) {
+            buffer_insert(buffer, edit.newText, offset);
+            view->new_cursor = offset + edit.newText.length;
+        } else {
+            buffer_replace(buffer, offset, length, edit.newText);
+            view->new_cursor = offset + length;
+        }
+        view->cursor_col = -1;
+    } break;
+    case 1:
+    default:
+        UNREACHABLE();
+    }
+}
+
+void completions_draw(ListBox *completions)
+{
+    widget_draw_rectangle(completions, 0.0, 0.0, 0.0, 0.0, DARKGRAY);
+    widget_draw_outline(completions, 2, 2, -2.0, -2.0, RAYWHITE);
+    listbox_draw_entries(completions, 4);
+}
+
+void c_mode_cmd_completion(CommandContext *ctx)
+{
+    Editor                 *editor = (Editor *) ctx->target->parent->parent;
+    BufferView             *view = editor->buffers.elements + editor->current_buffer;
+    OptionalCompletionItems items_maybe = lsp_request_completions(view);
+    if (!items_maybe.has_value) {
+        return;
+    }
+    CompletionItems items = items_maybe.value;
+
+    ListBox *listbox = widget_new(ListBox);
+    listbox->textsize = 0.75;
+
+    int col = view->cursor_pos.x - view->left_column;
+    int line = view->cursor_pos.y - view->top_line;
+    listbox->viewport.x = editor->viewport.x + col * eddy.cell.x;
+    listbox->viewport.y = editor->viewport.y + (line + 1) * eddy.cell.y;
+    listbox->viewport.width = 300;
+    listbox->viewport.height = 150;
+    listbox->lines = (listbox->viewport.height - 8) / (eddy.cell.y * listbox->textsize + 2);
+    listbox->viewport.height = 8 + listbox->lines * (eddy.cell.y * listbox->textsize + 2);
+    listbox->handlers.draw = (WidgetDraw) completions_draw;
+    listbox->handlers.resize = NULL;
+
+    listbox->submit = completions_submit;
+    for (size_t ix = 0; ix < items.size; ++ix) {
+        CompletionItem *item = da_element_CompletionItem(&items, ix);
+        da_append_ListBoxEntry(&listbox->entries, (ListBoxEntry) { item->label, item });
+    }
+    listbox_show(listbox);
+}
 
 void c_mode_cmd_format_source(CommandContext *ctx)
 {
@@ -68,6 +139,8 @@ void c_mode_init(CMode *mode)
 {
     widget_add_command(mode, sv_from("c-format-source"), c_mode_cmd_format_source,
         (KeyCombo) { KEY_L, KMOD_SHIFT | KMOD_CONTROL });
+    widget_add_command(mode, sv_from("c-show-completions"), c_mode_cmd_completion,
+        (KeyCombo) { KEY_SPACE, KMOD_CONTROL });
     mode->handlers.on_draw = (WidgetOnDraw) c_mode_on_draw;
     BufferView *view = (BufferView *) mode->parent;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;

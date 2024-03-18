@@ -23,6 +23,32 @@ OptionalJSONValue JSONValue_decode(OptionalJSONValue value)
     return value;
 }
 
+OptionalJSONValue JSONValues_encode(JSONValues value)
+{
+    JSONValue ret = json_array();
+    for (size_t ix = 0; ix < value.size; ++ix) {
+        json_append(&ret, *da_element_JSONValue(&value, ix));
+    }
+    RETURN_VALUE(JSONValue, ret);
+}
+
+OptionalJSONValues JSONValues_decode(OptionalJSONValue json)
+{
+    if (!json.has_value) {
+        RETURN_EMPTY(JSONValues);
+    }
+    assert(json.value.type == JSON_TYPE_ARRAY);
+    JSONValues ret = { 0 };
+    for (size_t ix = 0; ix < json_len(&json.value); ++ix) {
+        OptionalJSONValue elem = json_at(&json.value, ix);
+        if (!elem.has_value) {
+            RETURN_EMPTY(JSONValues);
+        }
+        da_append_JSONValue(&ret, elem.value);
+    }
+    RETURN_VALUE(JSONValues, ret);
+}
+
 // -- Int -------------------------------------------------------------------
 
 OptionalJSONValue Int_encode(int value)

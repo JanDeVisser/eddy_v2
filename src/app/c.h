@@ -4,17 +4,44 @@
  * SPDX-License-Identifier: MIT
  */
 
-#ifndef __LANG_C_H__
-#define __LANG_C_H__
+#ifndef __APP_C_H__
+#define __APP_C_H__
 
-#include <lexer.h>
-#include <widget.h>
+#include <app/widget.h>
+#include <base/lexer.h>
+#include <lsp/schema/CompletionItem.h>
+
+#define _MODE_FIELDS \
+    _WIDGET_FIELDS;
+
+typedef struct _mode {
+    _MODE_FIELDS;
+} Mode;
+
+#define _M               \
+    union {              \
+        Mode _mode;      \
+        struct {         \
+            _MODE_FIELDS \
+        };               \
+    }
+
+WIDGET_CLASS(Mode, mode);
+#define MODE_CLASS(c, prefix)          \
+    extern void    prefix##_init(c *); \
+    WidgetHandlers $##c##_handlers
+
+#define MODE_CLASS_DEF(c, prefix)           \
+    WidgetHandlers $##c##_handlers = {      \
+        .init = (WidgetInit) prefix##_init, \
+    }
 
 typedef struct {
-    _W;
+    _M;
+    OptionalCompletionItems completions;
 } CMode;
 
-SIMPLE_WIDGET_CLASS(CMode, c_mode);
+MODE_CLASS(CMode, c_mode);
 
 int handle_c_directive(Lexer *lexer, int directive);
 
@@ -125,4 +152,4 @@ static Language c_language = {
     .directive_handler = handle_c_directive,
 };
 
-#endif /* __LANG_C_H__ */
+#endif /* __APP_C_H__ */

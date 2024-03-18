@@ -554,8 +554,7 @@ void editor_cmd_end_of_line(CommandContext *ctx)
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
     assert(view->cursor_pos.y < buffer->lines.size);
     Index *line = buffer->lines.elements + view->cursor_pos.y;
-    view->new_cursor = line->index_of + line->line.length - 1;
-    view->cursor_col = -1;
+    view->new_cursor = line->index_of + line->line.length;
     view->cursor_col = -1;
 }
 
@@ -845,12 +844,6 @@ void editor_cmd_close_view(CommandContext *ctx)
     editor_close_view(editor);
 }
 
-void editor_cmd_completion(CommandContext *ctx)
-{
-    Editor *editor = (Editor *) ctx->target;
-    eddy_set_message(&eddy, "Completion");
-}
-
 /*
  * ---------------------------------------------------------------------------
  * Life cycle
@@ -921,8 +914,6 @@ void editor_init(Editor *editor)
         (KeyCombo) { KEY_W, KMOD_CONTROL });
     widget_add_command(editor, sv_from("editor-close-view"), editor_cmd_close_view,
         (KeyCombo) { KEY_W, KMOD_CONTROL | KMOD_SHIFT });
-    widget_add_command(editor, sv_from("editor-show-completion"), editor_cmd_completion,
-        (KeyCombo) { KEY_SPACE, KMOD_CONTROL });
 }
 
 void editor_resize(Editor *editor)
@@ -995,6 +986,10 @@ void editor_draw(Editor *editor)
         if (frame == 0) {
             trace_nl(CAT_EDIT);
         }
+    }
+
+    if (view->mode != NULL && view->mode->handlers.draw != NULL) {
+        view->mode->handlers.draw(view->mode);
     }
 
     double time = app->time - view->cursor_flash;

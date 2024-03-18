@@ -4,13 +4,20 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "editor.h"
 #include "log.h"
+#include "optional.h"
+#include "schema/CompletionItem.h"
+#include "schema/CompletionList.h"
+#include "schema/Position.h"
+#include "sv.h"
 #include <stdarg.h>
 #include <sys/syslimits.h>
 #include <unistd.h>
 
 #include <eddy.h>
 #include <json.h>
+#include <lsp/schema/CompletionParams.h>
 #include <lsp/schema/DidChangeTextDocumentParams.h>
 #include <lsp/schema/DidCloseTextDocumentParams.h>
 #include <lsp/schema/DidOpenTextDocumentParams.h>
@@ -423,9 +430,6 @@ int lsp_format(int buffer_num)
     if (response_error(&response)) {
         return -1;
     }
-    StringView s = json_encode(response.result.value);
-    // trace(CAT_LSP, "Formatting edits: %.*s", SV_ARG(s));
-    sv_free(s);
 
     if (response.result.value.type != JSON_TYPE_ARRAY) {
         return -1;
@@ -448,4 +452,54 @@ int lsp_format(int buffer_num)
     }
     da_free_TextEdit(&edits);
     return edits.size;
+}
+
+OptionalCompletionItems completion_results(CompletionItems items)
+{
+    for (size_t ix = 0; ix < items.size; ++ix) {
+        trace(CAT_LSP, "%zu: %.*s", ix, SV_ARG(items.elements[ix].label));
+    }
+    RETURN_VALUE(CompletionItems, items);
+}
+
+OptionalCompletionItems lsp_request_completions(BufferView *view)
+{
+    lsp_initialize();
+    Buffer *buffer = eddy.buffers.elements + view->buffer_num;
+
+    if (sv_empty(buffer->name)) {
+        RETURN_EMPTY(CompletionItems);
+    }
+
+    CompletionParams completion_params = { 0 };
+    completion_params.textDocument = (TextDocumentIdentifier) {
+        .uri = buffer_uri(buffer),
+    };
+    completion_params.position = (Position) {
+        .line = view->cursor_pos.line,
+        .character = view->cursor_pos.column
+    };
+
+    OptionalJSONValue params_json = CompletionParams_encode(completion_params);
+    Response          response = MUST(Response, lsp_message("textDocument/completion", params_json));
+    if (response_error(&response)) {
+        RETURN_EMPTY(CompletionItems);
+    }
+
+    JSONValue resp = response.result.value;
+    switch (resp.type) {
+    case JSON_TYPE_NULL:
+        RETURN_EMPTY(CompletionItems);
+    case JSON_TYPE_ARRAY: {
+        OptionalCompletionItems items_maybe = CompletionItems_decode(response.result);
+        return completion_results(items_maybe.value);
+    } break;
+    case JSON_TYPE_OBJECT: {
+        OptionalCompletionList completionlist_maybe = CompletionList_decode(response.result);
+        assert(completionlist_maybe.has_value);
+        return completion_results(completionlist_maybe.value.items);
+    } break;
+    default:
+        UNREACHABLE();
+    }
 }

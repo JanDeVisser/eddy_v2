@@ -7,7 +7,7 @@
 #ifndef __LSP_LSP_BASE_H__
 #define __LSP_LSP_BASE_H__
 
-#include "sv.h"
+#include "da.h"
 #include <stdint.h>
 
 #include <json.h>
@@ -41,6 +41,8 @@ ERROR_OR(Response);
 
 extern OptionalJSONValue   JSONValue_encode(JSONValue value);
 extern OptionalJSONValue   JSONValue_decode(OptionalJSONValue value);
+extern OptionalJSONValue   JSONValues_encode(JSONValues value);
+extern OptionalJSONValues  JSONValues_decode(OptionalJSONValue json);
 extern OptionalJSONValue   Int_encode(int value);
 extern OptionalInt         Int_decode(OptionalJSONValue value);
 extern OptionalJSONValue   Ints_encode(Ints value);
