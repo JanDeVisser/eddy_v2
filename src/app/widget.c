@@ -159,6 +159,11 @@ Rectangle widget_normalize(void *w, float left, float top, float width, float he
 
 void widget_render_text(void *w, float x, float y, StringView text, Font font, Color color)
 {
+    widget_render_sized_text(w, x, y, text, font, 1.0, color);
+}
+
+void widget_render_sized_text(void *w, float x, float y, StringView text, Font font, float size, Color color)
+{
     Widget *widget = (Widget *) w;
     if (sv_empty(text)) {
         return;
@@ -168,7 +173,7 @@ void widget_render_text(void *w, float x, float y, StringView text, Font font, C
         ((char *) text.ptr)[text.length] = 0;
     }
     if (x < 0 || y < 0) {
-        Vector2 m = MeasureTextEx(font, text.ptr, font.baseSize, 2);
+        Vector2 m = MeasureTextEx(font, text.ptr, font.baseSize * size, 2);
         if (x < 0) {
             x = widget->viewport.width - m.x + x;
         }
@@ -177,7 +182,7 @@ void widget_render_text(void *w, float x, float y, StringView text, Font font, C
         }
     }
     Vector2 pos = { widget->viewport.x + x, widget->viewport.y + y };
-    DrawTextEx(font, text.ptr, pos, font.baseSize, 2, color);
+    DrawTextEx(font, text.ptr, pos, font.baseSize * size, 2, color);
     if (ch) {
         ((char *) text.ptr)[text.length] = ch;
     }

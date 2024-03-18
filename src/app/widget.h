@@ -396,6 +396,7 @@ extern char const *modifier_string(KeyboardModifier modifier);
 extern bool        _is_key_pressed(int key, char const *keystr, ...);
 extern Rectangle   widget_normalize(void *w, float left, float top, float width, float height);
 extern void        widget_render_text(void *w, float x, float y, StringView text, Font font, Color color);
+extern void        widget_render_sized_text(void *w, float x, float y, StringView text, Font font, float size, Color color);
 extern void        widget_render_text_bitmap(void *w, float x, float y, StringView text, Color color);
 extern void        widget_draw_rectangle(void *w, float x, float y, float width, float height, Color color);
 extern void        widget_draw_outline(void *w, float x, float y, float width, float height, Color color);
