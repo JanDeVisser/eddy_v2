@@ -54,6 +54,7 @@ typedef void (*ListBoxDismiss)(ListBox *listbox);
 
 typedef struct listbox {
     _W;
+    float               textsize;
     StringView          prompt;
     ListBoxEntries      entries;
     ListBoxEntries      matches;
@@ -79,5 +80,6 @@ extern void     listbox_refresh(ListBox *listbox);
 extern void     listbox_show(ListBox *listbox);
 extern ListBox *listbox_create_query(StringView query, QueryResult handler, QueryOption options);
 extern ListBox *file_selector_create(StringView prompt, FileSelectorResult handler, FileSelectorOption options);
+extern void     listbox_draw_entries(ListBox *listbox, size_t y_offset);
 
 #endif /* __APP_LISTBOX_H__ */

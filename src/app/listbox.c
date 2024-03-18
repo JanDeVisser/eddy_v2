@@ -15,6 +15,7 @@ WIDGET_CLASS_DEF(ListBox, listbox);
 
 void listbox_init(ListBox *listbox)
 {
+    listbox->textsize = 1.0;
     listbox_sort(listbox);
     listbox_filter(listbox);
     listbox->background = DARKGRAY;
@@ -34,6 +35,25 @@ void listbox_resize(ListBox *listbox)
     listbox->viewport.height = 19 + eddy.cell.y + listbox->lines * (eddy.cell.y + 2);
 }
 
+void listbox_draw_entries(ListBox *listbox, size_t y_offset)
+{
+    ToStringView    to_string_view = listbox->to_string_view;
+    size_t          maxlen = (listbox->viewport.width - 28) / (eddy.cell.x * listbox->textsize);
+    ListBoxEntries *entries = (listbox->no_search || sv_empty(listbox->search.view)) ? &listbox->entries : &listbox->matches;
+    for (size_t ix = listbox->top_line; ix < entries->size && ix < listbox->top_line + listbox->lines; ++ix) {
+        if (ix == listbox->selection) {
+            widget_draw_rectangle(listbox, 8, y_offset - 1, -8, eddy.cell.y * listbox->textsize + 1, palettes[PALETTE_DARK][PI_SELECTION]);
+        }
+        StringView sv = entries->elements[ix].text;
+        if (to_string_view) {
+            sv = to_string_view(entries->elements[ix]);
+        }
+        sv.length = iclamp(sv.length, 0, maxlen);
+        widget_render_sized_text(listbox, 10, y_offset, sv, eddy.font, listbox->textsize, palettes[PALETTE_DARK][PI_DEFAULT]);
+        y_offset += (eddy.cell.y * listbox->textsize) + 2;
+    }
+}
+
 void listbox_draw(ListBox *listbox)
 {
     widget_draw_rectangle(listbox, 0.0, 0.0, 0.0, 0.0, DARKGRAY);
@@ -41,23 +61,7 @@ void listbox_draw(ListBox *listbox)
     widget_render_text(listbox, 8, 8, listbox->prompt, eddy.font, RAYWHITE);
     widget_render_text(listbox, -8, 8, listbox->search.view, eddy.font, RAYWHITE);
     widget_draw_line(listbox, 2, eddy.cell.y + 10, -2, eddy.cell.y + 10, RAYWHITE);
-    size_t y = eddy.cell.y + 14;
-
-    ToStringView    to_string_view = listbox->to_string_view;
-    size_t          maxlen = listbox->viewport.width / eddy.cell.x;
-    ListBoxEntries *entries = (listbox->no_search || sv_empty(listbox->search.view)) ? &listbox->entries : &listbox->matches;
-    for (size_t ix = listbox->top_line; ix < entries->size && ix < listbox->top_line + listbox->lines; ++ix) {
-        if (ix == listbox->selection) {
-            widget_draw_rectangle(listbox, 8, y - 1, -8, eddy.cell.y + 1, palettes[PALETTE_DARK][PI_SELECTION]);
-        }
-        StringView sv = entries->elements[ix].text;
-        if (to_string_view) {
-            sv = to_string_view(entries->elements[ix]);
-        }
-        sv.length = iclamp(sv.length, 0, maxlen);
-        widget_render_text(listbox, 10, y, sv, eddy.font, palettes[PALETTE_DARK][PI_DEFAULT]);
-        y += eddy.cell.y + 2;
-    }
+    listbox_draw_entries(listbox, eddy.cell.y + 14);
 }
 
 void listbox_process_input(ListBox *listbox)
