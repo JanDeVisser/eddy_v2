@@ -50,6 +50,7 @@ DA_FUNCTIONS(JSONValue)
 DA_FUNCTIONS(JSONNVPair)
 OPTIONAL(JSONValue)
 ERROR_OR(JSONValue)
+OPTIONAL(JSONValues)
 
 extern char const       *JSONType_name(JSONType type);
 extern JSONValue         json_object(void);
