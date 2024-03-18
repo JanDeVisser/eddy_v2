@@ -75,7 +75,7 @@ void vemit_log_message(LogLevel level, TraceCategory category, char const *msg, 
 
 void log_nl(LogLevel level, TraceCategory category)
 {
-    if (level < log_level || !s_categories[(int) category]) {
+    if (level < log_level || (category != CAT_COUNT && !s_categories[(int) category])) {
         return;
     }
     fprintf(stderr, "\n");
