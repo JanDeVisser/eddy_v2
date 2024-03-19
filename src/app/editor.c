@@ -402,22 +402,23 @@ void editor_delete_current_char(Editor *editor)
     }
 }
 
-void editor_character(Editor *editor, int ch)
+bool editor_character(Editor *editor, int ch)
 {
     BufferView *view = editor->buffers.elements + editor->current_buffer;
-    int         at = view->cursor;
+    int         at = view->new_cursor;
     if (view->selection != -1) {
         at = view->new_cursor = editor_delete_selection(editor);
     }
     editor_insert(editor, (StringView) { (char const *) &ch, 1 }, at);
     view->new_cursor = at + 1;
     view->cursor_col = -1;
+    return true;
 }
 
 void editor_insert_string(Editor *editor, StringView sv)
 {
     BufferView *view = editor->buffers.elements + editor->current_buffer;
-    int         at = view->cursor;
+    int         at = view->new_cursor;
     if (view->selection != -1) {
         at = view->new_cursor = editor_delete_selection(editor);
     }
@@ -431,8 +432,8 @@ void editor_selection_to_clipboard(Editor *editor)
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     if (view->selection != -1) {
         Buffer *buffer = eddy.buffers.elements + view->buffer_num;
-        int     selection_start = imin(view->selection, view->cursor);
-        int     selection_end = imax(view->selection, view->cursor);
+        int     selection_start = imin(view->selection, view->new_cursor);
+        int     selection_end = imax(view->selection, view->new_cursor);
         char    ch = buffer->text.view.ptr[selection_end];
         ((char *) buffer->text.view.ptr)[selection_end] = 0;
         SetClipboardText(buffer->text.view.ptr + selection_start);
@@ -856,6 +857,7 @@ void editor_init(Editor *editor)
     editor->background = palettes[PALETTE_DARK][PI_BACKGROUND];
     editor->padding = DEFAULT_PADDING;
     editor->num_clicks = 0;
+    editor->handlers.character = (WidgetHandleCharacter) editor_character;
     widget_add_command(editor, sv_from("cursor-up"), editor_cmd_up,
         (KeyCombo) { KEY_UP, KMOD_NONE }, (KeyCombo) { KEY_UP, KMOD_SHIFT });
     widget_add_command(editor, sv_from("select-word"), editor_cmd_select_word,
@@ -1016,7 +1018,7 @@ void editor_process_input(Editor *editor)
         int         line = imin((GetMouseY() - editor->viewport.y) / eddy.cell.y + view->top_line,
                     buffer->lines.size - 1);
         int         col = imin((GetMouseX() - editor->viewport.x) / eddy.cell.x + view->left_column,
-                    buffer->lines.elements[line].line.length - 1);
+                    buffer->lines.elements[line].line.length);
         view->new_cursor = buffer->lines.elements[line].index_of + col;
         view->cursor_col = -1;
         if (editor->num_clicks > 0 && (eddy.time - editor->clicks[editor->num_clicks - 1]) > 0.5) {
@@ -1044,7 +1046,4 @@ void editor_process_input(Editor *editor)
         }
     }
     assert(editor->num_clicks >= 0 && editor->num_clicks < 3);
-    for (int ch = GetCharPressed(); ch != 0; ch = GetCharPressed()) {
-        editor_character(editor, ch);
-    }
 }

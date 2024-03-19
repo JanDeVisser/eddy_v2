@@ -5,6 +5,8 @@
  */
 
 #include "lsp/schema/TextEdit.h"
+#include "raylib.h"
+#include "sv.h"
 #include <app/buffer.h>
 #include <app/c.h>
 #include <app/eddy.h>
@@ -135,13 +137,154 @@ void c_mode_buffer_event_listener(Buffer *buffer, BufferEvent event)
     }
 }
 
+int indent_for_line(Buffer *buffer, size_t lineno)
+{
+    while (lineno > 0) {
+        --lineno;
+        Index *l = buffer->lines.elements + lineno;
+        int    non_space;
+        int    indent = 0;
+        for (non_space = 0; non_space < l->line.length && isspace(l->line.ptr[non_space]); ++non_space) {
+            switch (l->line.ptr[non_space]) {
+            case '\t':
+                indent = ((indent / 4) + 1) * 4;
+                break;
+            default:
+                ++indent;
+            }
+        }
+        if (non_space < l->line.length) {
+            int last_non_space;
+            for (last_non_space = l->line.length; last_non_space >= 0 && isspace(l->line.ptr[last_non_space]); --last_non_space)
+                ;
+            if (l->line.ptr[last_non_space] == '{') {
+                indent += 4;
+            }
+            return indent;
+        }
+        lineno--;
+    }
+    return 0;
+}
+
+void c_mode_cmd_split_line(CommandContext *ctx)
+{
+    Editor     *editor = (Editor *) ctx->target->parent->parent;
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
+    size_t      lineno = buffer_line_for_index(buffer, view->new_cursor);
+    int         indent_this_line = indent_for_line(buffer, lineno);
+    int         indent_new_line = indent_this_line;
+    Index      *l = buffer->lines.elements + lineno;
+    int         first_non_space, last_non_space;
+
+    // | | | | |x| |=| |1|0|;| | |\n|
+    // |}| | |\n|
+    //  0 1 2 3 4 5 6 7 8 9 0 1 2 3
+    //                          ^
+    for (first_non_space = l->index_of; buffer->text.ptr[first_non_space] != 0 && isspace(buffer->text.ptr[first_non_space]); ++first_non_space)
+        ;
+    for (last_non_space = view->new_cursor - 1; last_non_space >= l->index_of && isspace(buffer->text.ptr[last_non_space]); --last_non_space)
+        ;
+    size_t text_length = last_non_space - first_non_space + 1;
+    bool   last_is_close_curly = buffer->text.ptr[last_non_space] == '}';
+    bool   last_is_open_curly = buffer->text.ptr[last_non_space] == '{';
+
+    // Remove trailing whitespace:
+    if (view->new_cursor > last_non_space) {
+        // Actually strip the trailing whitespace:
+        buffer_delete(buffer, last_non_space + 1, view->new_cursor - last_non_space - 1);
+    }
+
+    // Reindent:
+    if (first_non_space > l->index_of) {
+        buffer_delete(buffer, l->index_of, first_non_space - l->index_of);
+    }
+    if (last_is_close_curly) {
+        indent_this_line -= 4;
+        indent_new_line = indent_this_line;
+    }
+    if (indent_this_line > 0) {
+        StringView s = sv_printf("%*s", indent_this_line, "");
+        buffer_insert(buffer, s, l->index_of);
+        sv_free(s);
+    }
+    if (last_is_open_curly) {
+        indent_new_line += 4;
+    }
+
+    StringView s = sv_printf("\n%*s", indent_new_line, "");
+    buffer_insert(buffer, s, l->index_of + indent_this_line + text_length);
+    sv_free(s);
+    view->new_cursor = l->index_of + indent_this_line + text_length + 1 + indent_new_line;
+    view->cursor_col = -1;
+}
+
+void c_mode_cmd_indent(CommandContext *ctx)
+{
+    Editor     *editor = (Editor *) ctx->target->parent->parent;
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
+    size_t      lineno = buffer_line_for_index(buffer, view->new_cursor);
+    int         indent = indent_for_line(buffer, lineno);
+    Index      *l = buffer->lines.elements + lineno;
+    int         first_non_space, last_non_space;
+
+    // | | | | |x| |=| |1|0|;| | |\n|
+    // |}| | |\n|
+    //  0 1 2 3 4 5 6 7 8 9 0 1 2 3
+    //                          ^
+    for (first_non_space = l->index_of; buffer->text.ptr[first_non_space] != 0 && isspace(buffer->text.ptr[first_non_space]); ++first_non_space)
+        ;
+    for (last_non_space = l->index_of + l->line.length - 1; last_non_space >= l->index_of && isspace(buffer->text.ptr[last_non_space]); --last_non_space)
+        ;
+    size_t text_length = last_non_space - first_non_space + 1;
+    bool   last_is_closing_curly = buffer->text.ptr[last_non_space] == '}';
+
+    // Remove trailing whitespace:
+    if (l->index_of + l->line.length - 1 > last_non_space) {
+        // Actually strip the trailing whitespace:
+        buffer_delete(buffer, last_non_space + 1, view->new_cursor - last_non_space - 1);
+    }
+
+    // Reindent:
+    if (first_non_space > l->index_of) {
+        buffer_delete(buffer, l->index_of, first_non_space - l->index_of);
+    }
+    if (last_is_closing_curly) {
+        indent -= 4;
+    }
+    if (indent > 0) {
+        StringView s = sv_printf("%*s", indent, "");
+        buffer_insert(buffer, s, l->index_of);
+        sv_free(s);
+    }
+    view->new_cursor = l->index_of + indent;
+}
+
+void c_mode_cmd_unindent(CommandContext *ctx)
+{
+    // Not sure how this is supposed to work
+}
+
+bool c_mode_character(CMode *mode, int ch)
+{
+    return false;
+}
+
 void c_mode_init(CMode *mode)
 {
     widget_add_command(mode, sv_from("c-format-source"), c_mode_cmd_format_source,
         (KeyCombo) { KEY_L, KMOD_SHIFT | KMOD_CONTROL });
     widget_add_command(mode, sv_from("c-show-completions"), c_mode_cmd_completion,
         (KeyCombo) { KEY_SPACE, KMOD_CONTROL });
-    mode->handlers.on_draw = (WidgetOnDraw) c_mode_on_draw;
+    widget_add_command(mode, sv_from("c-split-line"), c_mode_cmd_split_line,
+        (KeyCombo) { KEY_ENTER, KMOD_NONE }, (KeyCombo) { KEY_KP_ENTER, KMOD_NONE });
+    widget_add_command(mode, sv_from("c-indent"), c_mode_cmd_indent,
+        (KeyCombo) { KEY_TAB, KMOD_NONE });
+    widget_add_command(mode, sv_from("c-unindent"), c_mode_cmd_unindent,
+        (KeyCombo) { KEY_TAB, KMOD_SHIFT });
+    // mode->handlers.on_draw = (WidgetOnDraw) c_mode_on_draw;
     BufferView *view = (BufferView *) mode->parent;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
     buffer_add_listener(buffer, c_mode_buffer_event_listener);

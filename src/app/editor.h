@@ -53,6 +53,8 @@ extern void       editor_select_prev(Editor *editor);
 extern void       editor_select_next(Editor *editor);
 extern void       editor_update_cursor(Editor *editor);
 extern void       editor_insert(Editor *editor, StringView text, size_t at);
+extern void       editor_insert_string(Editor *editor, StringView sv);
+extern bool       editor_character(Editor *editor, int ch);
 extern void       editor_delete(Editor *editor, size_t at, size_t count);
 extern void       editor_lines_up(Editor *editor, int count);
 extern void       editor_lines_down(Editor *editor, int count);
