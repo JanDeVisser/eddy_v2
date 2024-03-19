@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "sv.h"
 #include <math.h>
 
 #include <allocate.h>
@@ -394,21 +395,41 @@ void layout_process_input(Layout *layout)
     }
 }
 
-Widget *layout_find_by_draw_function(Layout *layout, WidgetDraw draw_fnc)
+Widget *layout_find_by_predicate(Layout *layout, LayoutFindByPredicate predicate, void *ctx)
 {
     for (size_t ix = 0; ix < layout->widgets.size; ++ix) {
         Widget *w = (Widget *) layout->widgets.elements[ix];
-        if (w->handlers.draw == draw_fnc) {
+        if (predicate(layout, w, ctx)) {
             return w;
         }
         if (w->handlers.resize == (WidgetResize) layout_resize) {
-            Widget *ret = layout_find_by_draw_function((Layout *) w, draw_fnc);
+            Widget *ret = layout_find_by_predicate((Layout *) w, predicate, ctx);
             if (ret) {
                 return ret;
             }
         }
     }
     return NULL;
+}
+
+bool find_by_draw_fnc(Layout *layout, Widget *widget, void *ctx)
+{
+    return (widget->handlers.draw == (WidgetDraw) ctx);
+}
+
+Widget *layout_find_by_draw_function(Layout *layout, WidgetDraw draw_fnc)
+{
+    return layout_find_by_predicate(layout, find_by_draw_fnc, draw_fnc);
+}
+
+bool find_by_classname(Layout *layout, Widget *widget, void *ctx)
+{
+    return sv_eq_cstr(*(StringView *) ctx, widget->classname);
+}
+
+Widget *layout_find_by_classname(Layout *layout, StringView classname)
+{
+    return layout_find_by_predicate(layout, find_by_classname, &classname);
 }
 
 void layout_traverse(Layout *layout, void (*fnc)(Widget *))
@@ -595,15 +616,8 @@ bool find_and_run_shortcut(Widget *w, KeyboardModifier modifier)
     return false;
 }
 
-void handle_characters_recursive(App *app, Widget *w)
-{
-}
-
 void handle_characters(App *app, Widget *w)
 {
-    for (int ch = GetCharPressed(); ch != 0; ch = GetCharPressed()) {
-        da_append_int(&app->queue, ch);
-    }
     while (app->queue.size > 0) {
         int ch = app->queue.elements[0];
         for (; w != NULL; w = w->parent) {
@@ -631,8 +645,12 @@ void app_process_input(App *app)
         command.handler(&ctx);
         return;
     }
+    for (int ch = GetCharPressed(); ch != 0; ch = GetCharPressed()) {
+        da_append_int(&app->queue, ch);
+    }
     if (app->modals.size) {
         Widget *modal = app->modals.elements[app->modals.size - 1];
+        handle_characters(app, modal);
         modal->handlers.process_input(modal);
         return;
     }

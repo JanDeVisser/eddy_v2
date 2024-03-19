@@ -7,6 +7,7 @@
 #ifndef __APP_EDITOR_H__
 #define __APP_EDITOR_H__
 
+#include "sv.h"
 #include <widget.h>
 
 typedef struct {
@@ -19,6 +20,7 @@ typedef struct {
     int        left_column;
     size_t     selection;
     int        cursor_flash;
+    StringView find_text;
     Widget    *mode;
 } BufferView;
 

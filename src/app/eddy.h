@@ -27,14 +27,6 @@ typedef struct {
 LAYOUT_CLASS(StatusBar, sb);
 
 typedef struct {
-    _W;
-    StringView message;
-    double     time;
-} MessageLine;
-
-WIDGET_CLASS(MessageLine, message_line);
-
-typedef struct {
     _A;
     Buffers    buffers;
     Editor    *editor;

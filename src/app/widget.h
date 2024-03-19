@@ -385,6 +385,7 @@ typedef struct {
     }
 
 typedef App *(*AppCreate)(void);
+typedef bool (*LayoutFindByPredicate)(Layout *layout, Widget *w, void *ctx);
 
 extern char const *SizePolicy_name(SizePolicy policy);
 extern int         iclamp(int v, int min, int max);
@@ -406,7 +407,9 @@ extern void        widget_draw_outline(void *w, float x, float y, float width, f
 extern void        widget_draw_line(void *w, float x0, float y0, float x1, float y1, Color color);
 extern void        _widget_add_command(void *w, StringView cmd, CommandHandler handler, ...);
 extern bool        widget_contains(void *widget, Vector2 world_coordinates);
+extern Widget     *layout_find_by_predicate(Layout *layout, LayoutFindByPredicate predicate, void *ctx);
 extern Widget     *layout_find_by_draw_function(Layout *layout, WidgetDraw draw_fnc);
+extern Widget     *layout_find_by_classname(Layout *layout, StringView classname);
 extern void        layout_add_widget(Layout *layout, void *widget);
 extern void        layout_traverse(Layout *layout, void (*fnc)(Widget *));
 extern void        layout_dump(Layout *layout);

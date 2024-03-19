@@ -4,9 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "lsp/schema/TextEdit.h"
-#include "raylib.h"
-#include "sv.h"
 #include <app/buffer.h>
 #include <app/c.h>
 #include <app/eddy.h>
@@ -16,6 +13,7 @@
 #include <base/process.h>
 #include <lsp/lsp.h>
 #include <lsp/schema/CompletionItem.h>
+#include <lsp/schema/TextEdit.h>
 
 // -- C Mode ----------------------------------------------------------------
 

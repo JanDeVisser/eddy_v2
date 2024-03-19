@@ -96,7 +96,8 @@ extern void da_free(DA_void *array, size_t elem_size, char const *type);
     S da_pop_##T(DA_##T *array)                                                       \
     {                                                                                 \
         assert(array->size > 0);                                                      \
-        return *da_element_##T(array, array->size--);                                 \
+        return *da_element_##T(array, array->size - 1);                               \
+        --array->size;                                                                \
     }                                                                                 \
     S da_pop_front_##T(DA_##T *array)                                                 \
     {                                                                                 \

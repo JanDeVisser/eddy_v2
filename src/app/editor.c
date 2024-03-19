@@ -4,22 +4,19 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "log.h"
-#include "raylib.h"
-#include "widget.h"
+#include "sv.h"
 #include <ctype.h>
 #include <math.h>
 
 #include <allocate.h>
 
-#include <buffer.h>
-#include <c.h>
-#include <eddy.h>
-#include <editor.h>
-#include <fs.h>
-#include <listbox.h>
-#include <palette.h>
-#include <process.h>
+#include <app/buffer.h>
+#include <app/c.h>
+#include <app/eddy.h>
+#include <app/editor.h>
+#include <app/listbox.h>
+#include <app/minibuffer.h>
+#include <app/palette.h>
 
 DECLARE_SHARED_ALLOCATOR(eddy);
 
@@ -845,6 +842,51 @@ void editor_cmd_close_view(CommandContext *ctx)
     editor_close_view(editor);
 }
 
+bool find_next(BufferView *view)
+{
+    assert(sv_not_empty(view->find_text));
+    Buffer *buffer = eddy.buffers.elements + view->buffer_num;
+    int     pos = sv_find_from(buffer->text.view, view->find_text, view->cursor);
+    if (pos < 0) {
+        pos = sv_find(buffer->text.view, view->find_text);
+    }
+    if (pos >= 0) {
+        view->selection = pos;
+        view->new_cursor = pos + view->find_text.length;
+        view->cursor_col = -1;
+        return true;
+    }
+    return false;
+}
+
+void do_find(Editor *editor, StringView query)
+{
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    sv_free(view->find_text);
+    view->find_text = sv_copy(query);
+    find_next(view);
+}
+
+void editor_cmd_find(CommandContext *ctx)
+{
+    minibuffer_query(ctx->target, SV("Find", 4), (MiniBufferQueryFunction) do_find);
+}
+
+void editor_cmd_find_next(CommandContext *ctx)
+{
+    Editor     *editor = (Editor *) ctx->target;
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    if (sv_empty(view->find_text)) {
+        return;
+    }
+    find_next(view);
+}
+
+void editor_cmd_find_replace(CommandContext *ctx)
+{
+    //
+}
+
 /*
  * ---------------------------------------------------------------------------
  * Life cycle
@@ -904,6 +946,12 @@ void editor_init(Editor *editor)
         (KeyCombo) { KEY_X, KMOD_CONTROL });
     widget_add_command(editor, sv_from("paste-from-clipboard"), editor_cmd_paste,
         (KeyCombo) { KEY_V, KMOD_CONTROL });
+    widget_add_command(editor, sv_from("editor-find"), editor_cmd_find,
+        (KeyCombo) { KEY_F, KMOD_SUPER });
+    widget_add_command(editor, sv_from("editor-find-next"), editor_cmd_find_next,
+        (KeyCombo) { KEY_G, KMOD_SUPER });
+    widget_add_command(editor, sv_from("editor-find-replace"), editor_cmd_find_replace,
+        (KeyCombo) { KEY_R, KMOD_SUPER });
     widget_add_command(editor, sv_from("editor-save"), editor_cmd_save,
         (KeyCombo) { KEY_S, KMOD_CONTROL });
     widget_add_command(editor, sv_from("editor-undo"), editor_cmd_undo,
@@ -998,7 +1046,7 @@ void editor_draw(Editor *editor)
     if (time - floor(time) < 0.5) {
         int x = view->cursor_pos.x - view->left_column;
         int y = view->cursor_pos.y - view->top_line;
-        widget_draw_rectangle(editor, x * eddy.cell.x, y * eddy.cell.y, 2, eddy.cell.y, palettes[PALETTE_DARK][PI_CURSOR]);
+        widget_draw_rectangle(editor, x * eddy.cell.x, y * eddy.cell.y, 2, eddy.cell.y + 5, palettes[PALETTE_DARK][PI_CURSOR]);
     }
     DrawLine(editor->viewport.x + 80 * eddy.cell.x, editor->viewport.y,
         editor->viewport.x + 80 * eddy.cell.x, editor->viewport.y + editor->viewport.height,

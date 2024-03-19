@@ -11,13 +11,14 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include <eddy.h>
-#include <fs.h>
-#include <io.h>
-#include <json.h>
-#include <listbox.h>
-#include <options.h>
-#include <palette.h>
+#include <app/eddy.h>
+#include <app/listbox.h>
+#include <app/minibuffer.h>
+#include <app/palette.h>
+#include <base/fs.h>
+#include <base/io.h>
+#include <base/json.h>
+#include <base/options.h>
 
 #define WINDOW_WIDTH 1600
 #define WINDOW_HEIGHT 768
@@ -151,36 +152,6 @@ void sb_init(StatusBar *status_bar)
     layout_add_widget((Layout *) status_bar, (Widget *) fps);
 }
 
-WIDGET_CLASS_DEF(MessageLine, message_line);
-
-void message_line_init(MessageLine *message_line)
-{
-    message_line->policy = SP_CHARACTERS;
-    message_line->policy_size = 1.0f;
-    message_line->padding = DEFAULT_PADDING;
-    message_line->message = sv_null();
-}
-
-void message_line_resize(MessageLine *)
-{
-}
-
-void message_line_draw(MessageLine *message_line)
-{
-    widget_draw_rectangle(message_line, 0, 0, message_line->viewport.width, message_line->viewport.height, palettes[PALETTE_DARK][PI_BACKGROUND]);
-    if (!sv_empty(message_line->message)) {
-        widget_render_text(message_line, 0, 0, message_line->message, eddy.font, palettes[PALETTE_DARK][PI_DEFAULT]);
-    }
-}
-
-void message_line_process_input(MessageLine *message_line)
-{
-    if (sv_not_empty(message_line->message) && eddy.time - message_line->time > 2.0) {
-        sv_free(message_line->message);
-        message_line->message = sv_null();
-    }
-}
-
 APP_CLASS_DEF(Eddy, eddy);
 
 void eddy_quit(Eddy *eddy)
@@ -287,7 +258,7 @@ void eddy_init(Eddy *eddy)
     main_area->policy = SP_STRETCH;
     layout_add_widget(main_area, editor_pane);
     layout_add_widget(main_area, widget_new(StatusBar));
-    layout_add_widget(main_area, widget_new(MessageLine));
+    layout_add_widget(main_area, widget_new(MiniBuffer));
 
     layout_add_widget((Layout *) eddy, (Widget *) main_area);
     eddy->editor = (Editor *) layout_find_by_draw_function((Layout *) eddy, (WidgetDraw) editor_draw);
@@ -438,24 +409,13 @@ void eddy_close_buffer(Eddy *eddy, int buffer_num)
 
 void eddy_set_message(Eddy *eddy, char const *fmt, ...)
 {
-    MessageLine *message_line = (MessageLine *) layout_find_by_draw_function((Layout *) eddy, (WidgetDraw) message_line_draw);
-    assert(message_line);
-    if (!sv_empty(message_line->message)) {
-        sv_free(message_line->message);
-    }
     va_list args;
     va_start(args, fmt);
-    message_line->message = sv_vprintf(fmt, args);
+    minibuffer_set_vmessage(fmt, args);
     va_end(args);
-    message_line->time = eddy->time;
 }
 
 void eddy_clear_message(Eddy *eddy)
 {
-    MessageLine *message_line = (MessageLine *) layout_find_by_draw_function((Layout *) eddy, (WidgetDraw) message_line_draw);
-    assert(message_line);
-    if (sv_not_empty(message_line->message)) {
-        sv_free(message_line->message);
-        message_line->message = sv_null();
-    }
+    minibuffer_clear_message();
 }
