@@ -49,10 +49,9 @@ typedef struct {
     void da_resize_##T(DA_##T *array, size_t cap); \
     S   *da_append_##T(DA_##T *array, S elem);     \
     S   *da_element_##T(DA_##T *array, size_t ix); \
-    void da_free_##T(DA_##T *array);
-
-// S    da_pop_##T(DA_##T *array);                \
-// S    da_pop_front_##T(DA_##T *array);          \
+    void da_free_##T(DA_##T *array);               \
+    S    da_pop_front_##T(DA_##T *array);          \
+    S    da_pop_##T(DA_##T *array);
 
 #define DA_FUNCTIONS(T) DA_FUNCTIONS_TYPE(T, T)
 
