@@ -631,8 +631,9 @@ ErrorOrJSONValue json_decode_value(JSONDecoder *decoder)
         RETURN(JSONValue, json_string(str));
     }
     default: {
-        if (isdigit(ss_peek(&decoder->ss))) {
+        if (isdigit(ss_peek(&decoder->ss)) || ss_peek(&decoder->ss) == '-') {
             ss_reset(&decoder->ss);
+            ss_skip_one(&decoder->ss);
             while (isdigit(ss_peek(&decoder->ss))) {
                 ss_skip_one(&decoder->ss);
             }
@@ -653,7 +654,7 @@ ErrorOrJSONValue json_decode_value(JSONDecoder *decoder)
             if (parse_result.success) {
                 RETURN(JSONValue, json_integer(parse_result.integer));
             }
-            parse_result = sv_parse_integer(sv, U64);
+            parse_result = sv_parse_integer(sv, I64);
             if (!parse_result.success) {
                 ERROR(JSONValue, JSONError, 0, "Unparseable integer %.*s", SV_ARG(sv));
             }
