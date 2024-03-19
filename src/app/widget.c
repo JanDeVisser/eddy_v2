@@ -595,6 +595,28 @@ bool find_and_run_shortcut(Widget *w, KeyboardModifier modifier)
     return false;
 }
 
+void handle_characters_recursive(App *app, Widget *w)
+{
+}
+
+void handle_characters(App *app, Widget *w)
+{
+    for (int ch = GetCharPressed(); ch != 0; ch = GetCharPressed()) {
+        da_append_int(&app->queue, ch);
+    }
+    while (app->queue.size > 0) {
+        int ch = app->queue.elements[0];
+        for (; w != NULL; w = w->parent) {
+            if (w->handlers.character != NULL) {
+                if (w->handlers.character(w, ch)) {
+                    break;
+                }
+            }
+        }
+        da_pop_front_int(&app->queue);
+    }
+}
+
 void app_process_input(App *app)
 {
     if (app->pending_commands.size > 0) {
@@ -620,6 +642,7 @@ void app_process_input(App *app)
     }
     KeyboardModifier modifier = modifier_current();
     if (!find_and_run_shortcut(f, modifier)) {
+        handle_characters(app, f);
         layout_process_input((Layout *) app);
     }
 }

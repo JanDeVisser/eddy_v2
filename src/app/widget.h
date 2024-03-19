@@ -128,6 +128,7 @@ typedef void (*WidgetAfterDraw)(Widget *);
 typedef void (*WidgetOnResize)(Widget *);
 typedef void (*WidgetResize)(Widget *);
 typedef void (*WidgetAfterResize)(Widget *);
+typedef bool (*WidgetHandleCharacter)(Widget *, int);
 typedef void (*WidgetOnProcessInput)(Widget *);
 typedef void (*WidgetProcessInput)(Widget *);
 typedef void (*WidgetAfterProcessInput)(Widget *);
@@ -139,6 +140,7 @@ typedef struct {
     WidgetOnResize          on_resize;
     WidgetResize            resize;
     WidgetAfterResize       after_resize;
+    WidgetHandleCharacter   character;
     WidgetOnProcessInput    on_process_input;
     WidgetProcessInput      process_input;
     WidgetAfterProcessInput after_process_input;
@@ -350,6 +352,7 @@ WIDGET_CLASS(Label, label);
     Font     font;             \
     Widget  *focus;            \
     Vector2  cell;             \
+    Ints     queue;            \
     char     last_key[64];     \
     bool     quit;             \
     double   time;             \
