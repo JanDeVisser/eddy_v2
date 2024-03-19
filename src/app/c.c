@@ -226,7 +226,7 @@ void c_mode_cmd_indent(CommandContext *ctx)
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
     size_t      lineno = buffer_line_for_index(buffer, view->new_cursor);
-    int         indent = indent_for_line(buffer, lineno);
+    int         indent_this_line = indent_for_line(buffer, lineno);
     Index      *l = buffer->lines.elements + lineno;
     int         first_non_space, last_non_space;
 
@@ -236,13 +236,13 @@ void c_mode_cmd_indent(CommandContext *ctx)
     //                          ^
     for (first_non_space = l->index_of; buffer->text.ptr[first_non_space] != 0 && isspace(buffer->text.ptr[first_non_space]); ++first_non_space)
         ;
-    for (last_non_space = l->index_of + l->line.length - 1; last_non_space >= l->index_of && isspace(buffer->text.ptr[last_non_space]); --last_non_space)
+    for (last_non_space = view->new_cursor - 1; last_non_space >= l->index_of && isspace(buffer->text.ptr[last_non_space]); --last_non_space)
         ;
     size_t text_length = last_non_space - first_non_space + 1;
-    bool   last_is_closing_curly = buffer->text.ptr[last_non_space] == '}';
+    bool   last_is_close_curly = buffer->text.ptr[last_non_space] == '}';
 
     // Remove trailing whitespace:
-    if (l->index_of + l->line.length - 1 > last_non_space) {
+    if (view->new_cursor > last_non_space) {
         // Actually strip the trailing whitespace:
         buffer_delete(buffer, last_non_space + 1, view->new_cursor - last_non_space - 1);
     }
@@ -251,15 +251,16 @@ void c_mode_cmd_indent(CommandContext *ctx)
     if (first_non_space > l->index_of) {
         buffer_delete(buffer, l->index_of, first_non_space - l->index_of);
     }
-    if (last_is_closing_curly) {
-        indent -= 4;
+    if (last_is_close_curly) {
+        indent_this_line -= 4;
     }
-    if (indent > 0) {
-        StringView s = sv_printf("%*s", indent, "");
+    if (indent_this_line > 0) {
+        StringView s = sv_printf("%*s", indent_this_line, "");
         buffer_insert(buffer, s, l->index_of);
         sv_free(s);
     }
-    view->new_cursor = l->index_of + indent;
+    view->new_cursor = l->index_of + indent_this_line + text_length;
+    view->cursor_col = -1;
 }
 
 void c_mode_cmd_unindent(CommandContext *ctx)
