@@ -94,6 +94,7 @@ void editor_select_view(Editor *editor, int view_ix)
     assert(view);
     editor->current_buffer = view_ix;
     view->cursor_flash = app->time;
+    app->focus = (Widget *) editor;
     if (view->mode) {
         app->focus = view->mode;
     }
@@ -158,7 +159,7 @@ void editor_select_prev(Editor *editor)
         --prev;
     }
     if (prev >= 0) {
-        editor_select_buffer(editor, prev);
+        editor_select_view(editor, prev);
     }
 }
 
@@ -169,7 +170,7 @@ void editor_select_next(Editor *editor)
         ++next;
     }
     if (next < editor->buffers.size) {
-        editor_select_buffer(editor, next);
+        editor_select_view(editor, next);
     }
 }
 
@@ -786,8 +787,11 @@ void editor_cmd_switch_buffer(CommandContext *ctx)
     listbox->prompt = sv_from("Select buffer");
     for (size_t ix = 0; ix < editor->buffers.size; ++ix) {
         BufferView *view = editor->buffers.elements + ix;
-        Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
-        StringView  text;
+        if (view->buffer_num == -1) {
+            continue;
+        }
+        Buffer    *buffer = eddy.buffers.elements + view->buffer_num;
+        StringView text;
         if (buffer->saved_version < buffer->version) {
             text = sv_printf("%.*s *", SV_ARG(buffer->name));
         } else {
