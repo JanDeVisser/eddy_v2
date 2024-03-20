@@ -4,64 +4,27 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "widget.h"
 #include <ctype.h>
-
-#include <eddy.h>
-#include <listbox.h>
+#include <math.h>
 #include <sys/stat.h>
+
+#include <app/eddy.h>
+#include <app/listbox.h>
 
 DA_IMPL(ListBoxEntry)
 WIDGET_CLASS_DEF(ListBox, listbox);
+WIDGET_CLASS_DEF(InputBox, inputbox);
 
-void listbox_init(ListBox *listbox)
+bool listbox_character(ListBox *listbox, int ch)
 {
-    listbox->textsize = 1.0;
-    listbox_sort(listbox);
-    listbox_filter(listbox);
-    listbox->background = DARKGRAY;
-    listbox_resize(listbox);
-}
-
-void listbox_resize(ListBox *listbox)
-{
-    listbox->viewport.x = eddy.viewport.width / 4;
-    listbox->viewport.y = eddy.viewport.height / 4;
-    listbox->viewport.width = eddy.viewport.width / 2;
-    listbox->viewport.height = eddy.viewport.height / 2;
-    listbox->lines = (listbox->viewport.height - 19 + eddy.cell.y) / (eddy.cell.y + 2);
-    if (listbox->shrink && listbox->no_search && listbox->entries.size < listbox->lines) {
-        listbox->lines = listbox->entries.size;
+    if (!listbox->no_search) {
+        int len = listbox->search.view.length;
+        sb_append_char(&listbox->search, ch);
+        listbox_filter(listbox);
+        return true;
     }
-    listbox->viewport.height = 19 + eddy.cell.y + listbox->lines * (eddy.cell.y + 2);
-}
-
-void listbox_draw_entries(ListBox *listbox, size_t y_offset)
-{
-    ToStringView    to_string_view = listbox->to_string_view;
-    size_t          maxlen = (listbox->viewport.width - 28) / (eddy.cell.x * listbox->textsize);
-    ListBoxEntries *entries = (listbox->no_search || sv_empty(listbox->search.view)) ? &listbox->entries : &listbox->matches;
-    for (size_t ix = listbox->top_line; ix < entries->size && ix < listbox->top_line + listbox->lines; ++ix) {
-        if (ix == listbox->selection) {
-            widget_draw_rectangle(listbox, 8, y_offset - 1, -8, eddy.cell.y * listbox->textsize + 1, palettes[PALETTE_DARK][PI_SELECTION]);
-        }
-        StringView sv = entries->elements[ix].text;
-        if (to_string_view) {
-            sv = to_string_view(entries->elements[ix]);
-        }
-        sv.length = iclamp(sv.length, 0, maxlen);
-        widget_render_sized_text(listbox, 10, y_offset, sv, eddy.font, listbox->textsize, palettes[PALETTE_DARK][PI_DEFAULT]);
-        y_offset += (eddy.cell.y * listbox->textsize) + 2;
-    }
-}
-
-void listbox_draw(ListBox *listbox)
-{
-    widget_draw_rectangle(listbox, 0.0, 0.0, 0.0, 0.0, DARKGRAY);
-    widget_draw_outline(listbox, 2, 2, -2.0, -2.0, RAYWHITE);
-    widget_render_text(listbox, 8, 8, listbox->prompt, eddy.font, RAYWHITE);
-    widget_render_text(listbox, -8, 8, listbox->search.view, eddy.font, RAYWHITE);
-    widget_draw_line(listbox, 2, eddy.cell.y + 10, -2, eddy.cell.y + 10, RAYWHITE);
-    listbox_draw_entries(listbox, eddy.cell.y + 14);
+    return false;
 }
 
 void listbox_process_input(ListBox *listbox)
@@ -111,19 +74,9 @@ void listbox_process_input(ListBox *listbox)
             listbox->top_line += listbox->lines;
         }
     }
-    if (!listbox->no_search) {
-        int len = listbox->search.view.length;
-        if (IsKeyPressed(KEY_BACKSPACE) || IsKeyPressedRepeat(KEY_BACKSPACE)) {
-            if (!sv_empty(listbox->search.view)) {
-                sb_remove(&listbox->search, len - 1, 1);
-            }
-        }
-        for (int ch = GetCharPressed(); ch != 0; ch = GetCharPressed()) {
-            sb_append_char(&listbox->search, ch);
-        }
-        if (listbox->search.view.length != len) {
-            listbox_filter(listbox);
-        }
+    if (!listbox->no_search && (IsKeyPressed(KEY_BACKSPACE) || IsKeyPressedRepeat(KEY_BACKSPACE)) && !sv_empty(listbox->search.view)) {
+        sb_remove(&listbox->search, listbox->search.length - 1, 1);
+        listbox_filter(listbox);
     }
     if (listbox->status != ModalStatusActive) {
         --eddy.modals.size;
@@ -201,6 +154,60 @@ void listbox_show(ListBox *listbox)
     da_append_Widget(&eddy.modals, (Widget *) listbox);
 }
 
+void listbox_init(ListBox *listbox)
+{
+    listbox->handlers.character = (WidgetHandleCharacter) listbox_character;
+    listbox->textsize = 1.0;
+    listbox_sort(listbox);
+    listbox_filter(listbox);
+    listbox->background = DARKGRAY;
+    listbox_resize(listbox);
+}
+
+void listbox_resize(ListBox *listbox)
+{
+    listbox->viewport.x = eddy.viewport.width / 4;
+    listbox->viewport.y = eddy.viewport.height / 4;
+    listbox->viewport.width = eddy.viewport.width / 2;
+    listbox->viewport.height = eddy.viewport.height / 2;
+    listbox->lines = (listbox->viewport.height - 19 + eddy.cell.y) / (eddy.cell.y + 2);
+    if (listbox->shrink && listbox->no_search && listbox->entries.size < listbox->lines) {
+        listbox->lines = listbox->entries.size;
+    }
+    listbox->viewport.height = 19 + eddy.cell.y + listbox->lines * (eddy.cell.y + 2);
+}
+
+void listbox_draw_entries(ListBox *listbox, size_t y_offset)
+{
+    ToStringView    to_string_view = listbox->to_string_view;
+    size_t          maxlen = (listbox->viewport.width - 28) / (eddy.cell.x * listbox->textsize);
+    ListBoxEntries *entries = (listbox->no_search || sv_empty(listbox->search.view)) ? &listbox->entries : &listbox->matches;
+    for (size_t ix = listbox->top_line; ix < entries->size && ix < listbox->top_line + listbox->lines; ++ix) {
+        if (ix == listbox->selection) {
+            widget_draw_rectangle(listbox, 8, y_offset - 1, -8, eddy.cell.y * listbox->textsize + 1, palettes[PALETTE_DARK][PI_SELECTION]);
+        }
+        StringView sv = entries->elements[ix].text;
+        if (to_string_view) {
+            sv = to_string_view(entries->elements[ix]);
+        }
+        sv.length = iclamp(sv.length, 0, maxlen);
+        widget_render_sized_text(listbox, 10, y_offset, sv, eddy.font, listbox->textsize, palettes[PALETTE_DARK][PI_DEFAULT]);
+        y_offset += (eddy.cell.y * listbox->textsize) + 2;
+    }
+}
+
+void listbox_draw(ListBox *listbox)
+{
+    widget_draw_rectangle(listbox, 0.0, 0.0, 0.0, 0.0, DARKGRAY);
+    widget_draw_outline(listbox, 2, 2, -2.0, -2.0, RAYWHITE);
+    widget_render_text(listbox, 8, 8, listbox->prompt, eddy.font, RAYWHITE);
+    widget_render_text(listbox, -8, 8, listbox->search.view, eddy.font, RAYWHITE);
+    widget_draw_line(listbox, 2, eddy.cell.y + 10, -2, eddy.cell.y + 10, RAYWHITE);
+    listbox_draw_entries(listbox, eddy.cell.y + 14);
+}
+
+// -- Q U E R Y -------------------------------------------------------------
+
 void query_submit(ListBox *query, ListBoxEntry selection)
 {
     QueryDef *def = query->memo;
@@ -243,6 +250,8 @@ ListBox *listbox_create_query(StringView query, QueryResult handler, QueryOption
     }
     return ret;
 }
+
+// -- F I L E S E L E C T O R -----------------------------------------------
 
 void file_selector_populate(ListBox *listbox, StringView directory)
 {
@@ -340,6 +349,9 @@ void file_selector_process_input(ListBox *listbox)
             filename = sv_from(TextFormat("%.*s/%.*s", SV_ARG(dir->directory), SV_ARG(entry.name)));
         }
     }
+    if ((status->options & FSCreateDirectory) && IsKeyPressed(KEY_N) && is_modifier_down(KMOD_CONTROL)) {
+        //
+    }
     if (sv_not_empty(filename)) {
         file_selector_populate(listbox, filename);
         return;
@@ -359,9 +371,104 @@ ListBox *file_selector_create(StringView prompt, FileSelectorResult handler, Fil
     ret->dismiss = file_selector_dismiss;
     ret->to_string_view = file_selector_to_string_view;
     ret->compare = (ListBoxEntryCompare) file_selector_compare;
-    ret->prompt = sv_from("Select file");
+    ret->prompt = ((options & FSFile) == 0) ? SV("Select directory", 16) : SV("Select File", 11);
     StringView canonical = fs_canonical(sv_from("."));
     file_selector_populate(ret, canonical);
     sv_free(canonical);
+    return ret;
+}
+
+void file_selector_new_file(ListBox *listbox, DirEntry entry)
+{
+    assert(entry.type == FileTypeDirectory);
+    //
+}
+
+ListBox *file_selector_new_file_create(StringView prompt, InputBoxSubmit handler)
+{
+    ListBox            *selector = file_selector_create(prompt, file_selector_new_file, FSDirectory | FSCreateDirectory);
+    FileSelectorStatus *status = (FileSelectorStatus *) selector->memo;
+    status->memo = handler;
+    return selector;
+}
+
+// -- I N P U T B O X -------------------------------------------------------
+
+bool inputbox_character(InputBox *inputbox, int ch)
+{
+    sb_append_char(&inputbox->text, ch);
+    return true;
+}
+
+void inputbox_process_input(InputBox *inputbox)
+{
+    if (inputbox->status == ModalStatusDormant) {
+        return;
+    }
+    if (IsKeyPressed(KEY_ESCAPE)) {
+        inputbox->status = ModalStatusDismissed;
+        if (inputbox->dismiss) {
+            inputbox->dismiss(inputbox);
+        }
+    } else if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER)) {
+        inputbox->status = ModalStatusSubmitted;
+        if (inputbox->submit) {
+            inputbox->submit(inputbox, inputbox->text.view);
+        }
+    } else if (IsKeyPressed(KEY_LEFT) && inputbox->cursor > 0) {
+        --inputbox->cursor;
+    } else if (IsKeyPressed(KEY_RIGHT) && inputbox->cursor < inputbox->text.length) {
+        ++inputbox->cursor;
+    } else if (IsKeyPressed(KEY_BACKSPACE) && inputbox->cursor > 0) {
+        sb_remove(&inputbox->text, inputbox->cursor - 1, 1);
+        --inputbox->cursor;
+    }
+    if (inputbox->status != ModalStatusActive) {
+        --eddy.modals.size;
+        sv_free(inputbox->text.view);
+        sv_free(inputbox->prompt);
+        free(inputbox);
+    }
+}
+
+void inputbox_show(InputBox *inputbox)
+{
+    da_append_Widget(&eddy.modals, (Widget *) inputbox);
+    inputbox->status = ModalStatusActive;
+}
+
+void inputbox_init(InputBox *inputbox)
+{
+    inputbox->handlers.character = (WidgetHandleCharacter) inputbox_character;
+    inputbox->background = DARKGRAY;
+    inputbox_resize(inputbox);
+}
+
+void inputbox_resize(InputBox *inputbox)
+{
+    inputbox->viewport.x = eddy.viewport.width / 4;
+    inputbox->viewport.y = eddy.viewport.height / 4;
+    inputbox->viewport.width = eddy.viewport.width / 2;
+    inputbox->viewport.height = 21 + 2 * eddy.cell.y;
+}
+
+void inputbox_draw(InputBox *inputbox)
+{
+    widget_draw_rectangle(inputbox, 0.0, 0.0, 0.0, 0.0, DARKGRAY);
+    widget_draw_outline(inputbox, 2, 2, -2.0, -2.0, RAYWHITE);
+    widget_render_text(inputbox, 8, 8, inputbox->prompt, eddy.font, RAYWHITE);
+    widget_draw_line(inputbox, 2, eddy.cell.y + 10, -2, eddy.cell.y + 10, RAYWHITE);
+    widget_render_text(inputbox, 10, eddy.cell.y + 14, inputbox->text.view, eddy.font, RAYWHITE);
+    double t = GetTime();
+    if ((t - floor(t)) < 0.5) {
+        widget_draw_rectangle(inputbox, 10 + inputbox->cursor * eddy.cell.x, eddy.cell.y + 12, 2, eddy.cell.y + 2, palettes[PALETTE_DARK][PI_CURSOR]);
+    }
+}
+
+InputBox *inputbox_create(StringView prompt, InputBoxSubmit submit)
+{
+    InputBox *ret = widget_new(InputBox);
+    ret->prompt = sv_copy(prompt);
+    ret->submit = submit;
     return ret;
 }

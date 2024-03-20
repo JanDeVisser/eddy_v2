@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "sv.h"
 #include <math.h>
 
 #include <allocate.h>

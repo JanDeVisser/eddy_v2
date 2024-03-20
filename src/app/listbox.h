@@ -14,6 +14,7 @@ typedef enum : uint8_t {
     FSFile = 0x01,
     FSDirectory = 0x02,
     FSShowHidden = 0x04,
+    FSCreateDirectory = 0x08,
 } FileSelectorOption;
 
 typedef enum : uint8_t {
@@ -43,6 +44,7 @@ typedef struct {
     DirListing         dir;
     FileSelectorOption options;
     FileSelectorResult handler;
+    void              *memo;
 } FileSelectorStatus;
 
 DA_WITH_NAME(ListBoxEntry, ListBoxEntries);
@@ -74,12 +76,31 @@ typedef struct listbox {
 
 WIDGET_CLASS(ListBox, listbox)
 
-extern void     listbox_sort(ListBox *listbox);
-extern void     listbox_filter(ListBox *listbox);
-extern void     listbox_refresh(ListBox *listbox);
-extern void     listbox_show(ListBox *listbox);
-extern ListBox *listbox_create_query(StringView query, QueryResult handler, QueryOption options);
-extern ListBox *file_selector_create(StringView prompt, FileSelectorResult handler, FileSelectorOption options);
-extern void     listbox_draw_entries(ListBox *listbox, size_t y_offset);
+typedef struct inputbox InputBox;
+typedef void (*InputBoxSubmit)(InputBox *inputbox, StringView s);
+typedef void (*InputBoxDismiss)(InputBox *inputbox);
+
+typedef struct inputbox {
+    _W;
+    float           textsize;
+    StringView      prompt;
+    StringBuilder   text;
+    size_t          cursor;
+    ModalStatus     status;
+    InputBoxSubmit  submit;
+    InputBoxDismiss dismiss;
+} InputBox;
+
+WIDGET_CLASS(InputBox, inputbox)
+
+extern void      listbox_sort(ListBox *listbox);
+extern void      listbox_filter(ListBox *listbox);
+extern void      listbox_refresh(ListBox *listbox);
+extern void      listbox_show(ListBox *listbox);
+extern ListBox  *listbox_create_query(StringView query, QueryResult handler, QueryOption options);
+extern ListBox  *file_selector_create(StringView prompt, FileSelectorResult handler, FileSelectorOption options);
+extern void      listbox_draw_entries(ListBox *listbox, size_t y_offset);
+extern void      inputbox_show(InputBox *inputbox);
+extern InputBox *inputbox_create(StringView prompt, InputBoxSubmit submit);
 
 #endif /* __APP_LISTBOX_H__ */

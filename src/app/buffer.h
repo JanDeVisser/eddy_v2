@@ -105,6 +105,7 @@ extern void          buffer_delete(Buffer *buffer, size_t at, size_t count);
 extern void          buffer_replace(Buffer *buffer, size_t at, size_t num, StringView replacement);
 extern void          buffer_merge_lines(Buffer *buffer, int top_line);
 extern void          buffer_save(Buffer *buffer);
+extern void          buffer_save_as(Buffer *buffer, StringView name);
 extern size_t        buffer_word_boundary_left(Buffer *buffer, size_t index);
 extern size_t        buffer_word_boundary_right(Buffer *buffer, size_t index);
 extern void          buffer_edit(Buffer *buffer, BufferEvent event);

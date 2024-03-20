@@ -746,13 +746,35 @@ void editor_cmd_paste(CommandContext *ctx)
     editor_insert_string(editor, sv_from(text));
 }
 
+void save_as_submit(InputBox *filename_box, StringView filename)
+{
+    Editor     *editor = filename_box->memo;
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
+    buffer_save_as(buffer, filename);
+    eddy_set_message(&eddy, "Buffer saved");
+}
+
+void editor_cmd_save_as(CommandContext *ctx)
+{
+    Editor     *editor = (Editor *) ctx->target;
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
+    InputBox   *filename_box = inputbox_create(SV("New file name", 13), save_as_submit);
+    filename_box->memo = editor;
+    if (sv_not_empty(buffer->name)) {
+        sb_append_sv(&filename_box->text, buffer->name);
+    }
+    inputbox_show(filename_box);
+}
+
 void editor_cmd_save(CommandContext *ctx)
 {
     Editor     *editor = (Editor *) ctx->target;
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
     if (sv_empty(buffer->name)) {
-        eddy_set_message(&eddy, "Can't save-as yet!");
+        editor_cmd_save_as(ctx);
         return;
     }
     buffer_save(buffer);
@@ -1026,6 +1048,8 @@ void editor_init(Editor *editor)
         (KeyCombo) { KEY_R, KMOD_SUPER });
     widget_add_command(editor, sv_from("editor-save"), editor_cmd_save,
         (KeyCombo) { KEY_S, KMOD_CONTROL });
+    widget_add_command(editor, sv_from("editor-save-as"), editor_cmd_save_as,
+        (KeyCombo) { KEY_S, KMOD_CONTROL | KMOD_ALT });
     widget_add_command(editor, sv_from("editor-undo"), editor_cmd_undo,
         (KeyCombo) { KEY_Z, KMOD_CONTROL });
     widget_add_command(editor, sv_from("editor-redo"), editor_cmd_redo,
