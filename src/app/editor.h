@@ -21,6 +21,7 @@ typedef struct {
     size_t     selection;
     int        cursor_flash;
     StringView find_text;
+    StringView replacement;
     Widget    *mode;
 } BufferView;
 

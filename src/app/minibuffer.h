@@ -7,10 +7,16 @@
 #ifndef __APP_MINIBUFFER_H__
 #define __APP_MINIBUFFER_H__
 
+#include "sv.h"
 #include <app/widget.h>
 #include <stdarg.h>
 
-typedef void (*MiniBufferQueryFunction)(void *w, StringView query);
+typedef struct minibuffer_chain (*MiniBufferQueryFunction)(void *w, StringView query);
+
+typedef struct minibuffer_chain {
+    StringView              prompt;
+    MiniBufferQueryFunction fnc;
+} MiniBufferChain;
 
 typedef struct {
     _W void                *target;

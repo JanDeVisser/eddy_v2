@@ -23,12 +23,17 @@ void mb_query_process_input(MiniBufferQuery *mbq)
         mbq->text.length = 0;
         mbq->prompt = sv_null();
     } else if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER)) {
-        mbq->fnc(mbq->target, mbq->text.view);
-        --eddy.modals.size;
-        mbq->fnc = NULL;
+        MiniBufferChain chain = mbq->fnc(mbq->target, mbq->text.view);
         mbq->cursor = 0;
         mbq->text.length = 0;
-        mbq->prompt = sv_null();
+        if (chain.fnc == NULL) {
+            --eddy.modals.size;
+            mbq->fnc = NULL;
+            mbq->prompt = sv_null();
+        } else {
+            mbq->fnc = (MiniBufferQueryFunction) chain.fnc;
+            mbq->prompt = chain.prompt;
+        }
     } else if (IsKeyPressed(KEY_BACKSPACE) || IsKeyPressedRepeat(KEY_BACKSPACE)) {
         if (mbq->cursor > 0) {
             sb_remove(&mbq->text, mbq->cursor - 1, 1);

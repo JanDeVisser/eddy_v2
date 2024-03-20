@@ -5,6 +5,7 @@
  */
 
 #include "sv.h"
+#include "widget.h"
 #include <ctype.h>
 #include <math.h>
 
@@ -361,9 +362,10 @@ int editor_delete_selection(Editor *editor)
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     int         selection_start = -1;
     if (view->selection != -1) {
-        selection_start = imin(view->selection, view->cursor);
-        int selection_end = imax(view->selection, view->cursor);
+        selection_start = imin(view->selection, view->new_cursor);
+        int selection_end = imax(view->selection, view->new_cursor);
         editor_delete(editor, selection_start, selection_end - selection_start);
+        view->new_cursor = selection_start;
         view->selection = -1;
     }
     return selection_start;
@@ -785,19 +787,15 @@ void editor_cmd_switch_buffer(CommandContext *ctx)
     ListBox *listbox = widget_new(ListBox);
     listbox->submit = (ListBoxSubmit) switch_buffer_submit;
     listbox->prompt = sv_from("Select buffer");
-    for (size_t ix = 0; ix < editor->buffers.size; ++ix) {
-        BufferView *view = editor->buffers.elements + ix;
-        if (view->buffer_num == -1) {
-            continue;
-        }
-        Buffer    *buffer = eddy.buffers.elements + view->buffer_num;
+    for (size_t ix = 0; ix < eddy.buffers.size; ++ix) {
+        Buffer    *buffer = eddy.buffers.elements + ix;
         StringView text;
         if (buffer->saved_version < buffer->version) {
             text = sv_printf("%.*s *", SV_ARG(buffer->name));
         } else {
             text = buffer->name;
         }
-        da_append_ListBoxEntry(&listbox->entries, (ListBoxEntry) { text, (void *) (size_t) view->buffer_num });
+        da_append_ListBoxEntry(&listbox->entries, (ListBoxEntry) { text, (void *) ix });
     }
     listbox_show(listbox);
 }
@@ -850,7 +848,7 @@ bool find_next(BufferView *view)
 {
     assert(sv_not_empty(view->find_text));
     Buffer *buffer = eddy.buffers.elements + view->buffer_num;
-    int     pos = sv_find_from(buffer->text.view, view->find_text, view->cursor);
+    int     pos = sv_find_from(buffer->text.view, view->find_text, view->new_cursor);
     if (pos < 0) {
         pos = sv_find(buffer->text.view, view->find_text);
     }
@@ -863,16 +861,23 @@ bool find_next(BufferView *view)
     return false;
 }
 
-void do_find(Editor *editor, StringView query)
+MiniBufferChain do_find(Editor *editor, StringView query)
 {
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     sv_free(view->find_text);
     view->find_text = sv_copy(query);
     find_next(view);
+    return (MiniBufferChain) { 0 };
 }
 
 void editor_cmd_find(CommandContext *ctx)
 {
+    Editor     *editor = (Editor *) ctx->target;
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    sv_free(view->find_text);
+    view->find_text = sv_null();
+    sv_free(view->replacement);
+    view->replacement = sv_null();
     minibuffer_query(ctx->target, SV("Find", 4), (MiniBufferQueryFunction) do_find);
 }
 
@@ -886,9 +891,68 @@ void editor_cmd_find_next(CommandContext *ctx)
     find_next(view);
 }
 
+MiniBufferChain do_ask_replace(Editor *editor, StringView reply)
+{
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    char        cmd = 0;
+    if (sv_not_empty(reply)) {
+        cmd = toupper(reply.ptr[0]);
+    }
+    switch (cmd) {
+    case 'Y': {
+        editor_delete_selection(editor);
+        editor_insert_string(editor, view->replacement);
+    } break;
+    case 'N':
+        break;
+    case 'A': {
+        do {
+            editor_delete_selection(editor);
+            editor_insert_string(editor, view->replacement);
+        } while (find_next(view));
+        return (MiniBufferChain) { 0 };
+    }
+    case 'Q':
+        return (MiniBufferChain) { 0 };
+    default:
+        return (MiniBufferChain) { .fnc = (MiniBufferQueryFunction) do_ask_replace, .prompt = SV("Replace ((Y)es/(N)o/(A)ll/(Q)uit)", 33) };
+    }
+    if (find_next(view)) {
+        return (MiniBufferChain) { .fnc = (MiniBufferQueryFunction) do_ask_replace, .prompt = SV("Replace ((Y)es/(N)o/(A)ll/(Q)uit)", 33) };
+    }
+    eddy_set_message(&eddy, "Not found");
+    return (MiniBufferChain) { 0 };
+}
+
+MiniBufferChain do_replacement_query(Editor *editor, StringView replacement)
+{
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    sv_free(view->replacement);
+    view->replacement = sv_copy(replacement);
+    if (find_next(view)) {
+        return (MiniBufferChain) { .fnc = (MiniBufferQueryFunction) do_ask_replace, .prompt = SV("Replace ((Y)es/(N)o/(A)ll/(Q)uit)", 33) };
+    }
+    eddy_set_message(&eddy, "Not found");
+    return (MiniBufferChain) { 0 };
+}
+
+MiniBufferChain do_find_query(Editor *editor, StringView query)
+{
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    sv_free(view->find_text);
+    view->find_text = sv_copy(query);
+    return (MiniBufferChain) { .fnc = (MiniBufferQueryFunction) do_replacement_query, .prompt = SV("Replace with", 12) };
+}
+
 void editor_cmd_find_replace(CommandContext *ctx)
 {
-    //
+    Editor     *editor = (Editor *) ctx->target;
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    sv_free(view->find_text);
+    view->find_text = sv_null();
+    sv_free(view->replacement);
+    view->replacement = sv_null();
+    minibuffer_query(ctx->target, SV("Find", 4), (MiniBufferQueryFunction) do_find_query);
 }
 
 /*
@@ -919,15 +983,19 @@ void editor_init(Editor *editor)
     widget_add_command(editor, sv_from("cursor-word-right"), editor_cmd_word_right,
         (KeyCombo) { KEY_RIGHT, KMOD_ALT }, (KeyCombo) { KEY_LEFT, KMOD_ALT | KMOD_SHIFT });
     widget_add_command(editor, sv_from("cursor-page-up"), editor_cmd_page_up,
-        (KeyCombo) { KEY_PAGE_UP, KMOD_NONE }, (KeyCombo) { KEY_PAGE_UP, KMOD_SHIFT });
+        (KeyCombo) { KEY_PAGE_UP, KMOD_NONE }, (KeyCombo) { KEY_PAGE_UP, KMOD_SHIFT },
+        (KeyCombo) { KEY_UP, KMOD_SUPER }, (KeyCombo) { KEY_UP, KMOD_SUPER | KMOD_SHIFT });
     widget_add_command(editor, sv_from("cursor-page-down"), editor_cmd_page_down,
-        (KeyCombo) { KEY_PAGE_DOWN, KMOD_NONE }, (KeyCombo) { KEY_PAGE_DOWN, KMOD_SHIFT });
+        (KeyCombo) { KEY_PAGE_DOWN, KMOD_NONE }, (KeyCombo) { KEY_PAGE_DOWN, KMOD_SHIFT },
+        (KeyCombo) { KEY_DOWN, KMOD_SUPER }, (KeyCombo) { KEY_DOWN, KMOD_SUPER | KMOD_SHIFT });
     widget_add_command(editor, sv_from("cursor-home"), editor_cmd_begin_of_line,
-        (KeyCombo) { KEY_HOME, KMOD_NONE }, (KeyCombo) { KEY_HOME, KMOD_SHIFT });
+        (KeyCombo) { KEY_HOME, KMOD_NONE }, (KeyCombo) { KEY_HOME, KMOD_SHIFT },
+        (KeyCombo) { KEY_LEFT, KMOD_SUPER }, (KeyCombo) { KEY_LEFT, KMOD_SUPER | KMOD_SHIFT });
     widget_add_command(editor, sv_from("cursor-top"), editor_cmd_top_of_buffer,
         (KeyCombo) { KEY_HOME, KMOD_CONTROL }, (KeyCombo) { KEY_HOME, KMOD_SUPER | KMOD_SHIFT });
     widget_add_command(editor, sv_from("cursor-end"), editor_cmd_end_of_line,
-        (KeyCombo) { KEY_END, KMOD_NONE }, (KeyCombo) { KEY_END, KMOD_SHIFT });
+        (KeyCombo) { KEY_END, KMOD_NONE }, (KeyCombo) { KEY_END, KMOD_SHIFT },
+        (KeyCombo) { KEY_RIGHT, KMOD_SUPER }, (KeyCombo) { KEY_RIGHT, KMOD_SUPER | KMOD_SHIFT });
     widget_add_command(editor, sv_from("cursor-top"), editor_cmd_top,
         (KeyCombo) { KEY_HOME, KMOD_CONTROL }, (KeyCombo) { KEY_HOME, KMOD_CONTROL | KMOD_SHIFT });
     widget_add_command(editor, sv_from("cursor-bottom"), editor_cmd_bottom,
