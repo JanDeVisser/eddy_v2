@@ -88,9 +88,10 @@ static void sb_reallocate(StringBuilder *sb, size_t new_len)
     if (new_cap <= cap) {
         return;
     }
-    ret = allocate_for_length(new_len + 1, &cap);
+    size_t allocated_cap = 0;
+    ret = allocate_for_length(new_len + 1, &allocated_cap);
     if (sb->view.ptr) {
-        memcpy(ret, sb->view.ptr, cap);
+        memcpy(ret, sb->view.ptr, sb->view.length);
         free_buffer((char *) sb->view.ptr);
     }
     sb->view.ptr = ret;

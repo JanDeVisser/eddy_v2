@@ -68,6 +68,7 @@ extern JSONValue         json_copy(JSONValue from);
 extern int               json_compare(JSONValue a, JSONValue b);
 extern void              json_append(JSONValue *array, JSONValue elem);
 extern void              json_add(JSONValue *array, JSONValue elem);
+extern void              json_concat(JSONValue *array, JSONValue other);
 extern OptionalInt       json_find(JSONValue *array, JSONValue elem);
 extern OptionalJSONValue json_at(JSONValue *array, size_t index);
 extern JSONValue        *json_at_ref(JSONValue *array, size_t index);
@@ -80,7 +81,8 @@ extern void              json_set_int(JSONValue *value, char const *attr, int i)
 extern void              json_set_int_sv(JSONValue *value, StringView attr, int i);
 extern void              json_set_sv(JSONValue *value, StringView attr, JSONValue elem);
 extern OptionalJSONValue json_entry_at(JSONValue *value, int ix);
-extern OptionalJSONValue json_get(JSONValue *value, char const *attr);
+extern OptionalJSONValue _json_get(JSONValue *value, ...);
+// extern OptionalJSONValue json_get(JSONValue *value, char const *attr);
 extern OptionalJSONValue json_get_sv(JSONValue *value, StringView attr);
 extern JSONValue        *json_get_ref(JSONValue *value, StringView attr);
 extern JSONValue         json_get_default(JSONValue *value, char const *attr, JSONValue default_);
@@ -95,5 +97,7 @@ extern void              json_merge(JSONValue *value, JSONValue sub);
 extern StringView        json_to_string(JSONValue value);
 extern StringView        json_encode(JSONValue value);
 extern ErrorOrJSONValue  json_decode(StringView json_text);
+
+#define json_get(JSON, ...) _json_get((JSON) __VA_OPT__(, ) __VA_ARGS__, NULL)
 
 #endif /* __JSON_H__ */

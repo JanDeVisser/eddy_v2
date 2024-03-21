@@ -51,6 +51,8 @@ extern format_args(2, 3)          void trace_nonl(TraceCategory category, char c
 extern                            void vtrace_nonl(TraceCategory category, char const *msg, va_list args);
 extern format_args(2, 3)          void trace(TraceCategory category, char const *msg, ...);
 extern                            void vtrace(TraceCategory category, char const *msg, va_list args);
+extern format_args(1, 2)          void panic(char const *msg, ...);
+extern                            void vpanic(char const *msg, va_list args);
 extern                            bool log_category_on(TraceCategory category);
 extern                            void log_turn_on(TraceCategory category);
 extern                            void log_turn_off(TraceCategory category);

@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "optional.h"
+#include "sv.h"
+#include <stdarg.h>
 #include <stdlib.h>
 
 #include <ctype.h>
@@ -307,6 +310,15 @@ void json_add(JSONValue *array, JSONValue elem)
     }
 }
 
+void json_concat(JSONValue *array, JSONValue other)
+{
+    assert(array->type == JSON_TYPE_ARRAY);
+    assert(other.type == JSON_TYPE_ARRAY);
+    for (size_t ix = 0; ix < other.array.size; ++ix) {
+        json_append(array, json_copy(*da_element_JSONValue(&array->array, ix)));
+    }
+}
+
 OptionalInt json_find(JSONValue *array, JSONValue elem)
 {
     assert(array->type == JSON_TYPE_ARRAY);
@@ -448,19 +460,30 @@ OptionalJSONValue json_entry_at(JSONValue *value, int ix)
     RETURN_EMPTY(JSONValue);
 }
 
-OptionalJSONValue json_get(JSONValue *value, char const *attr)
+OptionalJSONValue _json_get(JSONValue *value, ...)
 {
-    return json_get_sv(value, sv_from(attr));
+    va_list args;
+    va_start(args, value);
+    JSONValue *json = value;
+    for (char const *attr = va_arg(args, char const *); json != NULL && attr != NULL; attr = va_arg(args, char const *)) {
+        if (json->type != JSON_TYPE_OBJECT) {
+            va_end(args);
+            RETURN_EMPTY(JSONValue);
+        }
+        json = json_get_ref(json, sv_from(attr));
+    }
+    va_end(args);
+    if (json != NULL) {
+        RETURN_VALUE(JSONValue, *json);
+    }
+    RETURN_EMPTY(JSONValue);
 }
 
 OptionalJSONValue json_get_sv(JSONValue *value, StringView attr)
 {
-    assert(value->type == JSON_TYPE_OBJECT);
-    for (size_t ix = 0; ix < value->object.size; ++ix) {
-        JSONNVPair const *pair = da_element_JSONNVPair(&value->object, ix);
-        if (sv_eq(pair->name, attr)) {
-            RETURN_VALUE(JSONValue, pair->value);
-        }
+    JSONValue *ref = json_get_ref(value, attr);
+    if (ref != NULL) {
+        RETURN_VALUE(JSONValue, *ref);
     }
     RETURN_EMPTY(JSONValue);
 }
@@ -513,8 +536,15 @@ void json_merge(JSONValue *value, JSONValue sub)
     assert(value->type == JSON_TYPE_OBJECT);
     assert(sub.type == JSON_TYPE_OBJECT);
     for (size_t ix = 0; ix < sub.object.size; ++ix) {
-        JSONNVPair const *pair = da_element_JSONNVPair(&value->object, ix);
-        json_set_sv(value, pair->name, json_copy(pair->value));
+        JSONNVPair const *pair = da_element_JSONNVPair(&sub.object, ix);
+        JSONValue        *existing = json_get_ref(value, pair->name);
+        if (existing != NULL && existing->type == JSON_TYPE_OBJECT && pair->value.type == JSON_TYPE_OBJECT) {
+            json_merge(existing, pair->value);
+        } else if (existing != NULL && existing->type == JSON_TYPE_ARRAY && pair->value.type == JSON_TYPE_ARRAY) {
+            json_concat(existing, pair->value);
+        } else {
+            json_set_sv(value, pair->name, json_copy(pair->value));
+        }
     }
 }
 

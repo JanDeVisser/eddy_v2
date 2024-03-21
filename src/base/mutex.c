@@ -108,8 +108,8 @@ void mutex_unlock(Mutex mutex)
 #elif defined(HAVE_INITIALIZECRITICALSECTION)
     EnterCriticalSection(&mutex->cs);
 #endif /* HAVE_PTHREAD_H */
-    if (retval) {
-        fatal("Error unlocking mutex: %s", errorcode_to_string(errno));
+    if (retval && errno != EPERM) {
+        panic("Error unlocking mutex: %s", errorcode_to_string(errno));
     }
     trace(CAT_THREAD, "Mutex unlocked");
 }

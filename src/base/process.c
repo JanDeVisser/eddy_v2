@@ -78,44 +78,33 @@ void read_pipe_read(ReadPipe *pipe)
     poll_fd.events = POLLIN;
 
     while (true) {
-        if (pipe->debug)
-            trace(CAT_PROCESS, "read_pipe_read(): Polling fd %d", pipe->fd);
         if (poll(&poll_fd, 1, -1) == -1) {
-            if (pipe->debug)
-                trace(CAT_PROCESS, "read_pipe_read(): poll() failed on fd %d: %s", pipe->fd, errorcode_to_string(errno));
             if (errno == EINTR) {
                 continue;
             }
             break;
         }
         if (poll_fd.revents & POLLIN) {
-            if (pipe->debug)
-                trace(CAT_PROCESS, "read_pipe_read(): Input ready on fd %d", pipe->fd);
             read_pipe_drain(pipe);
-        } else {
-            if (pipe->debug)
-                trace(CAT_PROCESS, "read_pipe_read(): Spurious poll() return on fd %d: %s", pipe->fd, errorcode_to_string(errno));
+        }
+        if (poll_fd.revents & POLLHUP) {
+            break;
         }
     }
     read_pipe_close(pipe);
+    condition_wakeup(pipe->condition);
 }
 
 #define DRAIN_SIZE 64 * 1024
 
 void read_pipe_drain(ReadPipe *pipe)
 {
-    if (pipe->debug)
-        trace(CAT_PROCESS, "read_pipe_drain(): Waiting for mutex");
     char buffer[DRAIN_SIZE];
     condition_acquire(pipe->condition);
-    if (pipe->debug)
-        trace(CAT_PROCESS, "read_pipe_drain(): Mutex acquired");
     while (true) {
         ssize_t count = read(pipe->fd, buffer, sizeof(buffer) - 1);
         buffer[count] = 0;
         if (count > 0) {
-            if (pipe->debug)
-                trace(CAT_PROCESS, "read_pipe_drain(): Read %zd bytes: %s", count, buffer);
             size_t ix = pipe->buffer.view.length;
             sb_append_chars(&pipe->buffer, buffer, count);
             if (pipe->current.ptr == NULL) {
@@ -128,20 +117,14 @@ void read_pipe_drain(ReadPipe *pipe)
             break;
         }
         if (count == 0) {
-            if (pipe->debug)
-                trace(CAT_PROCESS, "read_pipe_drain(): Read ZERO bytes! %s", errorcode_to_string(errno));
             break;
         }
         if (errno == EINTR) {
-            if (pipe->debug)
-                trace(CAT_PROCESS, "read_pipe_drain(): Interrupted read. Retrying. (%s)", errorcode_to_string(errno));
             continue;
         }
         fatal("read_pipe_drain(): Error reading child process output: %s", errorcode_to_string(errno));
     }
 
-    if (pipe->debug)
-        trace(CAT_PROCESS, "read_pipe_drain(): pipe drained");
     if (pipe->on_read) {
         pipe->on_read(pipe);
     }
@@ -150,34 +133,24 @@ void read_pipe_drain(ReadPipe *pipe)
 
 StringView read_pipe_current(ReadPipe *pipe)
 {
-    if (pipe->debug)
-        trace(CAT_PROCESS, "read_pipe_current(): Acquiring condition");
     condition_acquire(pipe->condition);
-    if (pipe->debug)
-        trace(CAT_PROCESS, "read_pipe_current(): Condition acquired");
     StringView ret = pipe->current;
     pipe->current = (StringView) { 0 };
-    if (pipe->debug)
-        trace(CAT_PROCESS, "read_pipe_current(): Releasing condition");
     condition_release(pipe->condition);
     return ret;
 }
 
-void read_pipe_expect(ReadPipe *pipe)
+bool read_pipe_expect(ReadPipe *pipe)
 {
-    if (pipe->debug)
-        trace(CAT_PROCESS, "read_pipe_expect(): Acquiring condition");
     condition_acquire(pipe->condition);
-    if (pipe->debug)
-        trace(CAT_PROCESS, "read_pipe_expect(): Condition acquired");
     while (sv_empty(pipe->current)) {
-        if (pipe->debug)
-            trace(CAT_PROCESS, "read_pipe_expect(): Sleeping on condition");
         condition_sleep(pipe->condition);
-        if (pipe->debug)
-            trace(CAT_PROCESS, "read_pipe_expect(): Condition woken up");
+        if (pipe->fd < 0) {
+            return false;
+        }
     }
     condition_release(pipe->condition);
+    return true;
 }
 
 ErrorOrWritePipe write_pipe_init(WritePipe *p)

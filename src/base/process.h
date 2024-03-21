@@ -50,7 +50,7 @@ extern void              read_pipe_connect_parent(ReadPipe *pipe);
 extern void              read_pipe_connect_child(ReadPipe *pipe, int fd);
 extern void              read_pipe_close(ReadPipe *pipe);
 extern void              read_pipe_read(ReadPipe *p);
-extern void              read_pipe_expect(ReadPipe *pipe);
+extern bool              read_pipe_expect(ReadPipe *pipe);
 extern StringView        read_pipe_current(ReadPipe *pipe);
 extern ErrorOrWritePipe  write_pipe_init(WritePipe *p);
 extern void              write_pipe_destroy(WritePipe *pipe);

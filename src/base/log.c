@@ -52,6 +52,7 @@ TraceCategory trace_category_from_string(StringView category)
 #undef S
     return CAT_NONE;
 }
+
 void emit_log_message(LogLevel level, TraceCategory category, char const *msg, ...)
 {
     va_list args;
@@ -109,6 +110,20 @@ void vtrace(TraceCategory category, char const *msg, va_list args)
     }
     vemit_log_message(LL_TRACE, category, msg, args);
     trace_nl(category);
+}
+
+void panic(char const *msg, ...)
+{
+    va_list args;
+    va_start(args, msg);
+    vpanic(msg, args);
+    va_end(args);
+}
+
+void vpanic(char const *msg, va_list args)
+{
+    vemit_log_message(LL_PANIC, CAT_COUNT, msg, args);
+    log_nl(LL_PANIC, CAT_COUNT);
 }
 
 void trace_nonl(TraceCategory category, char const *msg, ...)
@@ -170,10 +185,8 @@ void _fatal(char const *msg, ...)
 
 void vfatal(char const *msg, va_list args)
 {
-    vemit_log_message(LL_PANIC, CAT_COUNT, msg, args);
-    log_nl(LL_PANIC, CAT_COUNT);
-    emit_log_message(LL_PANIC, CAT_COUNT, "Aborting...");
-    log_nl(LL_PANIC, CAT_COUNT);
+    vpanic(msg, args);
+    panic("Aborting...");
     exit(1);
 }
 
@@ -208,5 +221,5 @@ void log_init()
 #undef TRACECATEGORY
     }
     linelen = 0;
-    emit_log_message(LL_PANIC, CAT_COUNT, "Logging initialized");
+    panic("Logging initialized");
 }

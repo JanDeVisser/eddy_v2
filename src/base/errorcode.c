@@ -14,6 +14,7 @@
 
 #define ERRORCODES(S)                                                                  \
     S(ENOERROR, "ENOERROR", "No error")                                                \
+    S(EPERM, "EPERM", "Permission")                                                    \
     S(ENOENT, "ENOENT", "No such file or directory")                                   \
     S(ESRCH, "ESRCH", "No such process")                                               \
     S(EINTR, "EINTR", "Interrupted system call")                                       \
@@ -139,6 +140,6 @@ char const *errorcode_to_string(int err)
     static char buffer[1024];
     buffer[1023] = 0;
     ErrorCode error = get_errorcode(err);
-    snprintf(buffer, 1023, "%s (%d): %s", error.errorcode, error.errorno, error.description);
+    snprintf(buffer, 1023, "%s (%d): %s", error.errorcode, err, error.description);
     return buffer;
 }
