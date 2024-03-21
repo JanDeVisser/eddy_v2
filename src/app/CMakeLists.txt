@@ -2,6 +2,7 @@ add_executable(
         eddy
         buffer.c
         c.c
+        cmake.c
         eddy.c
         editor.c
         listbox.c

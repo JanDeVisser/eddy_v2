@@ -173,7 +173,7 @@ void widget_render_sized_text(void *w, float x, float y, StringView text, Font f
         ((char *) text.ptr)[text.length] = 0;
     }
     if (x < 0 || y < 0) {
-        Vector2 m = MeasureTextEx(font, text.ptr, font.baseSize * size, 2);
+        Vector2 m = MeasureTextEx(font, text.ptr, /* font.baseSize */ 20.0 * size, 2);
         if (x < 0) {
             x = widget->viewport.width - m.x + x;
         }
@@ -182,7 +182,7 @@ void widget_render_sized_text(void *w, float x, float y, StringView text, Font f
         }
     }
     Vector2 pos = { widget->viewport.x + x, widget->viewport.y + y };
-    DrawTextEx(font, text.ptr, pos, font.baseSize * size, 2, color);
+    DrawTextEx(font, text.ptr, pos, /* font.baseSize */ 20.0 * size, 2, color);
     if (ch) {
         ((char *) text.ptr)[text.length] = ch;
     }
@@ -513,9 +513,6 @@ void app_init(App *app)
     if (!app->handlers.on_process_input) {
         app->handlers.on_process_input = (WidgetOnProcessInput) app_on_process_input;
     }
-    app->viewport = (Rect) { 0 };
-    app->viewport.width = GetScreenWidth();
-    app->viewport.height = GetScreenHeight();
 }
 
 void app_draw(App *app)
@@ -529,7 +526,8 @@ void app_draw(App *app)
 
 void app_on_resize(App *app)
 {
-    Vector2 measurements = MeasureTextEx(app->font, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", (float) app->font.baseSize, 2);
+    Vector2 measurements = MeasureTextEx(app->font, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+        /* (float) app->font.baseSize */ 20.0, 2);
     app->cell.x = measurements.x / 52.0f;
     int rows = (app->viewport.height - 10) / measurements.y;
     app->cell.y = (float) (app->viewport.height - 10) / (float) rows;
@@ -538,7 +536,7 @@ void app_on_resize(App *app)
     app->viewport.height = GetScreenHeight();
 }
 
-void app_initialize(App *the_app, AppCreate create, int argc, char **argv)
+void app_initialize(AppCreate create, int argc, char **argv)
 {
     app = create();
     app->argc = argc;
@@ -553,6 +551,8 @@ void app_initialize(App *the_app, AppCreate create, int argc, char **argv)
     app->handlers.init((Widget *) app);
 
     InitWindow(app->viewport.width, app->viewport.height, app->classname);
+    app->viewport.width = GetScreenWidth();
+    app->viewport.height = GetScreenHeight();
     SetWindowMonitor(app->monitor);
     SetWindowState(FLAG_WINDOW_RESIZABLE | FLAG_WINDOW_MAXIMIZED | FLAG_VSYNC_HINT);
     Image icon = LoadImage("eddy.png");

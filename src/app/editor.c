@@ -1142,7 +1142,7 @@ void editor_draw(Editor *editor)
     if (time - floor(time) < 0.5) {
         int x = view->cursor_pos.x - view->left_column;
         int y = view->cursor_pos.y - view->top_line;
-        widget_draw_rectangle(editor, x * eddy.cell.x, y * eddy.cell.y, 2, eddy.cell.y + 5, palettes[PALETTE_DARK][PI_CURSOR]);
+        widget_draw_rectangle(editor, x * eddy.cell.x, y * eddy.cell.y, 2, eddy.cell.y + 1, palettes[PALETTE_DARK][PI_CURSOR]);
     }
     DrawLine(editor->viewport.x + 80 * eddy.cell.x, editor->viewport.y,
         editor->viewport.x + 80 * eddy.cell.x, editor->viewport.y + editor->viewport.height,

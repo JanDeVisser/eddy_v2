@@ -413,7 +413,7 @@ extern Widget     *layout_find_by_classname(Layout *layout, StringView classname
 extern void        layout_add_widget(Layout *layout, void *widget);
 extern void        layout_traverse(Layout *layout, void (*fnc)(Widget *));
 extern void        layout_dump(Layout *layout);
-extern void        app_initialize(App *app, AppCreate create, int argc, char **argv);
+extern void        app_initialize(AppCreate create, int argc, char **argv);
 extern void        app_start();
 extern void        app_init(App *app);
 extern void        app_draw(App *app);

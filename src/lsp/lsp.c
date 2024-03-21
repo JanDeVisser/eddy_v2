@@ -4,19 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "editor.h"
-#include "log.h"
-#include "optional.h"
-#include "schema/CompletionItem.h"
-#include "schema/CompletionList.h"
-#include "schema/Position.h"
-#include "sv.h"
+#include "error_or.h"
 #include <stdarg.h>
 #include <sys/syslimits.h>
 #include <unistd.h>
 
 #include <eddy.h>
 #include <json.h>
+#include <lsp/schema/CompletionItem.h>
+#include <lsp/schema/CompletionList.h>
 #include <lsp/schema/CompletionParams.h>
 #include <lsp/schema/DidChangeTextDocumentParams.h>
 #include <lsp/schema/DidCloseTextDocumentParams.h>
@@ -73,7 +69,9 @@ ErrorOrResponse lsp_message(char const *method, OptionalJSONValue params)
 
     StringView buf = { 0 };
     while (true) {
-        read_pipe_expect(&lsp->out);
+        if (!read_pipe_expect(&lsp->out)) {
+            ERROR(Response, IOError, 0, "LSP process terminated");
+        }
         StringView out = read_pipe_current(&lsp->out);
         if (buf.ptr == NULL) {
             buf = out;
@@ -82,7 +80,7 @@ ErrorOrResponse lsp_message(char const *method, OptionalJSONValue params)
             buf.length += out.length;
         }
         StringScanner ss = ss_create(buf);
-        if (!ss_expect_sv(&ss, sv_from("Content-Length:"))) {
+        if (!ss_expect_sv(&ss, SV("Content-Length:", 15))) {
             continue;
         }
         ss_skip_whitespace(&ss);
@@ -90,7 +88,7 @@ ErrorOrResponse lsp_message(char const *method, OptionalJSONValue params)
         if (!resp_content_length) {
             continue;
         }
-        if (!ss_expect_sv(&ss, sv_from("\r\n\r\n"))) {
+        if (!ss_expect_sv(&ss, SV("\r\n\r\n", 4))) {
             continue;
         }
         StringView response_json = ss_read(&ss, resp_content_length);

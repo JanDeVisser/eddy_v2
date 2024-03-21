@@ -80,10 +80,7 @@ void listbox_process_input(ListBox *listbox)
     }
     if (listbox->status != ModalStatusActive) {
         --eddy.modals.size;
-        da_free_ListBoxEntry(&listbox->entries);
-        sv_free(listbox->search.view);
-        sv_free(listbox->prompt);
-        free(listbox);
+        listbox_free(listbox);
     }
 }
 
@@ -204,6 +201,21 @@ void listbox_draw(ListBox *listbox)
     widget_render_text(listbox, -8, 8, listbox->search.view, eddy.font, RAYWHITE);
     widget_draw_line(listbox, 2, eddy.cell.y + 10, -2, eddy.cell.y + 10, RAYWHITE);
     listbox_draw_entries(listbox, eddy.cell.y + 14);
+}
+
+void listbox_free(ListBox *listbox)
+{
+    if (listbox->free_entry) {
+        for (size_t ix = 0; ix < listbox->entries.size; ++ix) {
+            ListBoxEntry *entry = da_element_ListBoxEntry(&listbox->entries, ix);
+            listbox->free_entry(listbox, *entry);
+        }
+    }
+    da_free_ListBoxEntry(&listbox->entries);
+    da_free_ListBoxEntry(&listbox->matches);
+    sv_free(listbox->search.view);
+    sv_free(listbox->prompt);
+    free(listbox);
 }
 
 // -- Q U E R Y -------------------------------------------------------------

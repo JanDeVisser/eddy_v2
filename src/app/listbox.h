@@ -53,6 +53,7 @@ typedef int (*ListBoxEntryCompare)(ListBox *, ListBoxEntry const *, ListBoxEntry
 typedef StringView (*ToStringView)(ListBoxEntry);
 typedef void (*ListBoxSubmit)(ListBox *listbox, ListBoxEntry selection);
 typedef void (*ListBoxDismiss)(ListBox *listbox);
+typedef void (*ListBoxFreeEntry)(ListBox *listbox, ListBoxEntry entry);
 
 typedef struct listbox {
     _W;
@@ -72,6 +73,7 @@ typedef struct listbox {
     ToStringView        to_string_view;
     ListBoxSubmit       submit;
     ListBoxDismiss      dismiss;
+    ListBoxFreeEntry    free_entry;
 } ListBox;
 
 WIDGET_CLASS(ListBox, listbox)
@@ -97,6 +99,7 @@ extern void      listbox_sort(ListBox *listbox);
 extern void      listbox_filter(ListBox *listbox);
 extern void      listbox_refresh(ListBox *listbox);
 extern void      listbox_show(ListBox *listbox);
+extern void      listbox_free(ListBox *listbox);
 extern ListBox  *listbox_create_query(StringView query, QueryResult handler, QueryOption options);
 extern ListBox  *file_selector_create(StringView prompt, FileSelectorResult handler, FileSelectorOption options);
 extern void      listbox_draw_entries(ListBox *listbox, size_t y_offset);

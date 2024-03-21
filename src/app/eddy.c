@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "config.h"
+#include "optional.h"
+#include "sv.h"
 #include <errno.h>
 #include <pwd.h>
 #include <stdlib.h>
@@ -11,6 +14,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <app/cmake.h>
 #include <app/eddy.h>
 #include <app/listbox.h>
 #include <app/minibuffer.h>
@@ -239,6 +243,71 @@ void eddy_cmd_open_file(CommandContext *ctx)
     listbox_show(listbox);
 }
 
+void free_search_entry(ListBox *listbox, ListBoxEntry entry)
+{
+    sv_free(sv_from((char const *) entry.payload));
+    sv_free(entry.text);
+}
+
+void file_search_submit(ListBox *listbox, ListBoxEntry selection)
+{
+    StringView    filename = sv_from((char const *) selection.payload);
+    StringView    canonical = fs_canonical(filename);
+    ErrorOrBuffer buffer_maybe = eddy_open_buffer(&eddy, canonical);
+    if (ErrorOrBuffer_is_error(buffer_maybe)) {
+        eddy_set_message(&eddy, "Could not open '%.*': %s", SV_ARG(canonical), Error_to_string(buffer_maybe.error));
+    } else {
+        editor_select_buffer(eddy.editor, buffer_maybe.value->buffer_ix);
+    }
+    sv_free(canonical);
+}
+
+ErrorOrInt fill_search_listbox(ListBox *listbox, StringView dir)
+{
+    DirListing listing = TRY_TO(DirListing, Int, fs_directory(dir, DirOptionFiles | DirOptionDirectories));
+    for (size_t ix = 0; ix < listing.entries.size; ++ix) {
+        DirEntry *entry = da_element_DirEntry(&listing.entries, ix);
+        switch (entry->type) {
+        case FileTypeRegularFile: {
+            StringView label = sv_printf("%.*s (%.*s)", SV_ARG(entry->name), SV_ARG(dir));
+            StringView fullpath = sv_printf("%.*s/%.*s", SV_ARG(dir), SV_ARG(entry->name));
+            da_append_ListBoxEntry(&listbox->entries, (ListBoxEntry) { label, (void *) fullpath.ptr });
+        } break;
+        case FileTypeDirectory: {
+            if (entry->name.length && (entry->name.ptr[0] == '.')) {
+                continue;
+            }
+            StringView subdir = sv_printf("%.*s/%.*s", SV_ARG(dir), SV_ARG(entry->name));
+            ErrorOrInt error_maybe = fill_search_listbox(listbox, subdir);
+            sv_free(subdir);
+            if (ErrorOrInt_is_error(error_maybe)) {
+                return error_maybe;
+            }
+        } break;
+        default:
+            UNREACHABLE();
+        }
+    }
+    dl_free(listing);
+    RETURN(Int, 0);
+}
+
+void eddy_cmd_search_file(CommandContext *ctx)
+{
+    ListBox *listbox = widget_new(ListBox);
+    listbox->submit = file_search_submit;
+    listbox->free_entry = free_search_entry;
+    for (size_t ix = 0; ix < eddy.source_dirs.size; ++ix) {
+        ErrorOrInt error_maybe = fill_search_listbox(listbox, eddy.source_dirs.strings[ix]);
+        if (ErrorOrInt_is_error(error_maybe)) {
+            eddy_set_message(&eddy, "Could not list source directory '%.*': %s", SV_ARG(eddy.source_dirs.strings[ix]), Error_to_string(error_maybe.error));
+            listbox_free(listbox);
+            return;
+        }
+    }
+    listbox_show(listbox);
+}
+
 Eddy *eddy_create()
 {
     app_state_read(&state);
@@ -297,6 +366,10 @@ void eddy_init(Eddy *eddy)
         (KeyCombo) { KEY_X, KMOD_SUPER });
     widget_add_command(eddy, sv_from("eddy-open-file"), eddy_cmd_open_file,
         (KeyCombo) { KEY_O, KMOD_CONTROL });
+    widget_add_command(eddy, sv_from("eddy-search-file"), eddy_cmd_search_file,
+        (KeyCombo) { KEY_O, KMOD_SUPER });
+    widget_add_command(eddy, sv_from("cmake-build"), cmake_cmd_build,
+        (KeyCombo) { KEY_F9, KMOD_NONE });
 
     eddy->viewport.width = WINDOW_WIDTH;
     eddy->viewport.height = WINDOW_HEIGHT;
@@ -311,7 +384,7 @@ void eddy_init(Eddy *eddy)
 void eddy_on_start(Eddy *eddy)
 {
     eddy->monitor = GetCurrentMonitor();
-    eddy->font = LoadFontEx(EDDY_DATADIR "/fonts/VictorMono-Medium.ttf", 20, 0, 250);
+    eddy_load_font(eddy);
 }
 
 void eddy_on_terminate(Eddy *eddy)
@@ -345,6 +418,85 @@ void eddy_on_draw(Eddy *eddy)
     ClearBackground(palettes[PALETTE_DARK][PI_BACKGROUND]);
 }
 
+void eddy_read_settings(Eddy *eddy)
+{
+    json_free(eddy->settings);
+    JSONValue settings = json_object();
+    if (fs_file_exists(sv_from(EDDY_DATADIR "/settings.json"))) {
+        StringView s = MUST(StringView, read_file_by_name(sv_from(EDDY_DATADIR "/settings.json")));
+        JSONValue  system_wide = MUST(JSONValue, json_decode(s));
+        sv_free(s);
+        json_merge(&settings, system_wide);
+        json_free(system_wide);
+    }
+
+    struct passwd *pw = getpwuid(getuid());
+    StringView     eddy_fname = sv_printf("%s/.eddy", pw->pw_dir);
+    MUST(Int, fs_assert_dir(eddy_fname));
+    StringView user_settings_fname = sv_printf("%.*s/settings.json", SV_ARG(eddy_fname));
+    sv_free(eddy_fname);
+    if (fs_file_exists(user_settings_fname)) {
+        StringView s = MUST(StringView, read_file_by_name(user_settings_fname));
+        JSONValue  user = MUST(JSONValue, json_decode(s));
+        sv_free(s);
+        json_merge(&settings, user);
+        json_free(user);
+    }
+    sv_free(user_settings_fname);
+
+    if (fs_file_exists(SV(".eddy/settings.json", 19))) {
+        StringView s = MUST(StringView, read_file_by_name(SV(".eddy/settings.json", 19)));
+        JSONValue  prj = MUST(JSONValue, json_decode(s));
+        sv_free(s);
+        json_merge(&settings, prj);
+        json_free(prj);
+    }
+    eddy->settings = settings;
+}
+
+void eddy_load_font(Eddy *eddy)
+{
+    JSONValue appearance = json_get_default(&eddy->settings, "appearance", json_object());
+    JSONValue directories = json_get_default(&appearance, "font_directories", json_array());
+    if (directories.type == JSON_TYPE_STRING) {
+        JSONValue dirs = json_array();
+        json_append(&dirs, json_copy(directories));
+        directories = dirs;
+    }
+    assert(directories.type == JSON_TYPE_ARRAY);
+    json_append(&directories, json_string(sv_from(EDDY_DATADIR "/fonts")));
+    JSONValue default_font = json_string(SV("VictorMono-Medium.ttf", 21));
+    JSONValue font = json_get_default(&appearance, "font", default_font);
+    assert(font.type == JSON_TYPE_STRING);
+    JSONValue font_size = json_get_default(&appearance, "font_size", json_int(20));
+    assert(font_size.type == JSON_TYPE_INT);
+
+    struct passwd *pw = getpwuid(getuid());
+    StringBuilder  d = { 0 };
+    for (int tries = 0; tries < 2; ++tries) {
+        for (size_t ix = 0; ix < json_len(&directories); ++ix) {
+            JSONValue dir = MUST_OPTIONAL(JSONValue, json_at(&directories, ix));
+            assert(dir.type == JSON_TYPE_STRING);
+            d.length = 0;
+            sb_append_sv(&d, dir.string);
+            sb_replace_all(&d, SV("${HOME}", 7), sv_from(pw->pw_dir));
+            sb_replace_all(&d, SV("${EDDY_DATADIR}", 15), sv_from(EDDY_DATADIR));
+            StringView path = sv_printf("%.*s/%.*s", SV_ARG(d.view), SV_ARG(font.string));
+            if (fs_file_exists(path) && !fs_is_directory(path)) {
+                printf("Found font file %.*s\n", SV_ARG(path));
+                eddy->font = LoadFontEx(sv_cstr(path), /* json_int_value(font_size) */ 20.0, NULL, 0);
+                sv_free(d.view);
+                sv_free(path);
+                return;
+            }
+            printf("Font file %.*s does not exist\n", SV_ARG(path));
+            sv_free(path);
+        }
+        font = default_font;
+    }
+    fatal("Could not load font!");
+}
+
 void eddy_open_dir(Eddy *eddy, StringView dir)
 {
     dir = fs_canonical(dir);
@@ -365,6 +517,27 @@ void eddy_open_dir(Eddy *eddy, StringView dir)
             MUST(Buffer, eddy_open_buffer(eddy, f.string));
         }
     }
+    JSONValue prj = json_object();
+    if (fs_file_exists(sv_from(".eddy/project.json"))) {
+        StringView s = MUST(StringView, read_file_by_name(sv_from(".eddy/project.json")));
+        prj = MUST(JSONValue, json_decode(s));
+    }
+    JSONValue source_dirs = json_get_default(&prj, "sources", json_array());
+    assert(source_dirs.type == JSON_TYPE_ARRAY);
+    if (json_len(&source_dirs) == 0) {
+        sl_push(&eddy->source_dirs, SV(".", 1));
+    } else {
+        for (int ix = 0; ix < json_len(&source_dirs); ++ix) {
+            JSONValue d = MUST_OPTIONAL(JSONValue, json_at(&source_dirs, ix));
+            assert(d.type == JSON_TYPE_STRING);
+            sl_push(&eddy->source_dirs, sv_copy(d.string));
+        }
+    }
+    JSONValue cmake = json_get_default(&prj, "cmake", json_object());
+    assert(cmake.type == JSON_TYPE_OBJECT);
+    eddy->cmake.cmakelists = sv_copy(json_get_string(&cmake, "cmakelists", SV("CMakeLists.txt", 14)));
+    eddy->cmake.build_dir = sv_copy(json_get_string(&cmake, "build", SV("build", 5)));
+    eddy_read_settings(eddy);
 }
 
 ErrorOrBuffer eddy_open_buffer(Eddy *eddy, StringView file)

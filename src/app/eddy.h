@@ -7,6 +7,8 @@
 #ifndef __APP_EDDY_H__
 #define __APP_EDDY_H__
 
+#include "json.h"
+#include "sv.h"
 #include <buffer.h>
 #include <editor.h>
 #include <widget.h>
@@ -27,10 +29,18 @@ typedef struct {
 LAYOUT_CLASS(StatusBar, sb);
 
 typedef struct {
+    StringView cmakelists;
+    StringView build_dir;
+} CMake;
+
+typedef struct {
     _A;
     Buffers    buffers;
     Editor    *editor;
     StringView project_dir;
+    StringList source_dirs;
+    CMake      cmake;
+    JSONValue  settings;
 } Eddy;
 
 APP_CLASS(Eddy, eddy);
@@ -48,6 +58,7 @@ extern Buffer       *eddy_new_buffer(Eddy *eddy);
 extern void          eddy_close_buffer(Eddy *eddy, int buffer_num);
 extern void          eddy_set_message(Eddy *eddy, char const *fmt, ...);
 extern void          eddy_clear_message(Eddy *eddy);
+extern void          eddy_load_font(Eddy *eddy);
 extern Eddy         *eddy_create();
 
 extern AppState state;
