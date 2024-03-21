@@ -10,3 +10,5 @@ test/scribble/.scribble
 .cache
 .vscode
 .eddy
+raylib/
+
