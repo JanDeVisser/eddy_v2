@@ -1,5 +1,6 @@
 add_executable(
         eddy
+        app.c
         buffer.c
         c.c
         cmake.c

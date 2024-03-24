@@ -13,97 +13,14 @@
 #include <base/process.h>
 #include <lsp/lsp.h>
 #include <lsp/schema/CompletionItem.h>
+#include <lsp/schema/CompletionList.h>
+#include <lsp/schema/CompletionParams.h>
+#include <lsp/schema/DocumentFormattingParams.h>
 #include <lsp/schema/TextEdit.h>
 
 // -- C Mode ----------------------------------------------------------------
 
 MODE_CLASS_DEF(CMode, c_mode);
-
-void completions_submit(ListBox *listbox, ListBoxEntry selection)
-{
-    CompletionItem *item = (CompletionItem *) selection.payload;
-    Editor         *editor = eddy.editor;
-    BufferView     *view = editor->buffers.elements + editor->current_buffer;
-    Buffer         *buffer = eddy.buffers.elements + view->buffer_num;
-    switch (item->textEdit.tag) {
-    case 0: {
-        TextEdit   edit = item->textEdit._0;
-        IntVector2 start = { edit.range.start.character, edit.range.start.line };
-        IntVector2 end = { edit.range.end.character, edit.range.end.line };
-        size_t     offset = buffer_position_to_index(buffer, start);
-        size_t     length = buffer_position_to_index(buffer, end) - offset;
-        size_t     prefix_length = view->cursor - offset;
-
-        if (length == 0 || prefix_length == 0) {
-            buffer_insert(buffer, edit.newText, offset);
-            view->new_cursor = offset + edit.newText.length;
-        } else {
-            buffer_replace(buffer, offset, length, edit.newText);
-            view->new_cursor = offset + length;
-        }
-        view->cursor_col = -1;
-    } break;
-    case 1:
-    default:
-        UNREACHABLE();
-    }
-}
-
-void completions_draw(ListBox *completions)
-{
-    widget_draw_rectangle(completions, 0.0, 0.0, 0.0, 0.0, DARKGRAY);
-    widget_draw_outline(completions, 2, 2, -2.0, -2.0, RAYWHITE);
-    listbox_draw_entries(completions, 4);
-}
-
-void c_mode_cmd_completion(CommandContext *ctx)
-{
-    Editor                 *editor = (Editor *) ctx->target->parent->parent;
-    BufferView             *view = editor->buffers.elements + editor->current_buffer;
-    OptionalCompletionItems items_maybe = lsp_request_completions(view);
-    if (!items_maybe.has_value) {
-        return;
-    }
-    CompletionItems items = items_maybe.value;
-
-    ListBox *listbox = widget_new(ListBox);
-    listbox->textsize = 0.75;
-
-    int col = view->cursor_pos.x - view->left_column;
-    int line = view->cursor_pos.y - view->top_line;
-    listbox->viewport.x = editor->viewport.x + col * eddy.cell.x;
-    listbox->viewport.y = editor->viewport.y + (line + 1) * eddy.cell.y;
-    listbox->viewport.width = 300;
-    listbox->viewport.height = 150;
-    listbox->lines = (listbox->viewport.height - 8) / (eddy.cell.y * listbox->textsize + 2);
-    listbox->viewport.height = 8 + listbox->lines * (eddy.cell.y * listbox->textsize + 2);
-    listbox->handlers.draw = (WidgetDraw) completions_draw;
-    listbox->handlers.resize = NULL;
-
-    listbox->submit = completions_submit;
-    for (size_t ix = 0; ix < items.size; ++ix) {
-        CompletionItem *item = da_element_CompletionItem(&items, ix);
-        da_append_ListBoxEntry(&listbox->entries, (ListBoxEntry) { item->label, item });
-    }
-    listbox_show(listbox);
-}
-
-void c_mode_cmd_format_source(CommandContext *ctx)
-{
-    Editor     *editor = (Editor *) ctx->target->parent->parent;
-    BufferView *view = editor->buffers.elements + editor->current_buffer;
-    Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
-    eddy_set_message(&eddy, "%.*", SV_ARG(ctx->called_as));
-
-    if (sv_empty(buffer->name)) {
-        eddy_set_message(&eddy, "Cannot format untitled buffer");
-        return;
-    }
-    int num = lsp_format(view->buffer_num);
-    if (num >= 0) {
-        eddy_set_message(&eddy, "Formatted. Made %d changes", num);
-    }
-}
 
 void c_mode_on_draw(CMode *mode)
 {
@@ -113,22 +30,22 @@ void c_mode_buffer_event_listener(Buffer *buffer, BufferEvent event)
 {
     switch (event.type) {
     case ETInsert:
-        lsp_did_change(buffer->buffer_ix, event.range.start, event.range.end, buffer_sv_from_ref(buffer, event.insert.text));
+        lsp_did_change(buffer, event.range.start, event.range.end, buffer_sv_from_ref(buffer, event.insert.text));
         break;
     case ETDelete:
-        lsp_did_change(buffer->buffer_ix, event.range.start, event.range.end, sv_null());
+        lsp_did_change(buffer, event.range.start, event.range.end, sv_null());
         break;
     case ETReplace:
-        lsp_did_change(buffer->buffer_ix, event.range.start, event.range.end, buffer_sv_from_ref(buffer, event.replace.replacement));
+        lsp_did_change(buffer, event.range.start, event.range.end, buffer_sv_from_ref(buffer, event.replace.replacement));
         break;
     case ETIndexed:
-        lsp_semantic_tokens(buffer->buffer_ix);
+        lsp_semantic_tokens(buffer);
         break;
     case ETSave:
-        lsp_did_save(buffer->buffer_ix);
+        lsp_did_save(buffer);
         break;
     case ETClose:
-        lsp_did_close(buffer->buffer_ix);
+        lsp_did_close(buffer);
         break;
     default:
         break;
@@ -165,9 +82,9 @@ int indent_for_line(Buffer *buffer, size_t lineno)
     return 0;
 }
 
-void c_mode_cmd_split_line(CommandContext *ctx)
+void c_mode_cmd_split_line(CMode *mode, JSONValue unused)
 {
-    Editor     *editor = (Editor *) ctx->target->parent->parent;
+    Editor     *editor = (Editor *) mode->parent->parent;
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
     size_t      lineno = buffer_line_for_index(buffer, view->new_cursor);
@@ -218,9 +135,9 @@ void c_mode_cmd_split_line(CommandContext *ctx)
     view->cursor_col = -1;
 }
 
-void c_mode_cmd_indent(CommandContext *ctx)
+void c_mode_cmd_indent(CMode *mode, JSONValue unused)
 {
-    Editor     *editor = (Editor *) ctx->target->parent->parent;
+    Editor     *editor = (Editor *) mode->parent->parent;
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
     size_t      lineno = buffer_line_for_index(buffer, view->new_cursor);
@@ -261,7 +178,7 @@ void c_mode_cmd_indent(CommandContext *ctx)
     view->cursor_col = -1;
 }
 
-void c_mode_cmd_unindent(CommandContext *ctx)
+void c_mode_cmd_unindent(CMode *mode, JSONValue unused)
 {
     // Not sure how this is supposed to work
 }
@@ -271,24 +188,197 @@ bool c_mode_character(CMode *mode, int ch)
     return false;
 }
 
+void completions_submit(ListBox *listbox, ListBoxEntry selection)
+{
+    CompletionItem *item = (CompletionItem *) selection.payload;
+    Editor         *editor = eddy.editor;
+    BufferView     *view = editor->buffers.elements + editor->current_buffer;
+    Buffer         *buffer = eddy.buffers.elements + view->buffer_num;
+    switch (item->textEdit.tag) {
+    case 0: {
+        TextEdit   edit = item->textEdit._0;
+        IntVector2 start = { edit.range.start.character, edit.range.start.line };
+        IntVector2 end = { edit.range.end.character, edit.range.end.line };
+        size_t     offset = buffer_position_to_index(buffer, start);
+        size_t     length = buffer_position_to_index(buffer, end) - offset;
+        size_t     prefix_length = view->cursor - offset;
+
+        if (length == 0 || prefix_length == 0) {
+            buffer_insert(buffer, edit.newText, offset);
+            view->new_cursor = offset + edit.newText.length;
+        } else {
+            buffer_replace(buffer, offset, length, edit.newText);
+            view->new_cursor = offset + length;
+        }
+        view->cursor_col = -1;
+    } break;
+    case 1:
+    default:
+        UNREACHABLE();
+    }
+}
+
+void completions_draw(ListBox *completions)
+{
+    widget_draw_rectangle(completions, 0.0, 0.0, 0.0, 0.0, DARKGRAY);
+    widget_draw_outline(completions, 2, 2, -2.0, -2.0, RAYWHITE);
+    listbox_draw_entries(completions, 4);
+}
+
+void fill_completions_list(ListBox *listbox, JSONValue resp)
+{
+    Response response = response_decode(&resp);
+    if (response_error(&response)) {
+        eddy_set_message(&eddy, "textDocument/completion LSP message returned error");
+        return;
+    }
+
+    OptionalJSONValue result = response.result;
+    CompletionItems   items = { 0 };
+    switch (result.value.type) {
+    case JSON_TYPE_NULL:
+        eddy_set_message(&eddy, "textDocument/completion LSP message returned null");
+        return;
+    case JSON_TYPE_ARRAY: {
+        OptionalCompletionItems items_maybe = CompletionItems_decode(result);
+        assert(items_maybe.has_value);
+        items = items_maybe.value;
+    } break;
+    case JSON_TYPE_OBJECT: {
+        OptionalCompletionList completionlist_maybe = CompletionList_decode(response.result);
+        assert(completionlist_maybe.has_value);
+        items = completionlist_maybe.value.items;
+    } break;
+    default:
+        UNREACHABLE();
+    }
+    if (items.size == 0) {
+        eddy_set_message(&eddy, "textDocument/completion LSP message returned no results");
+        return;
+    }
+    for (size_t ix = 0; ix < items.size; ++ix) {
+        CompletionItem *item = da_element_CompletionItem(&items, ix);
+        da_append_ListBoxEntry(&listbox->entries, (ListBoxEntry) { item->label, item });
+    }
+    listbox_show(listbox);
+}
+
+void c_mode_cmd_completion(CMode *mode, JSONValue unused)
+{
+    BufferView *view = (BufferView *) mode->parent;
+    Editor     *editor = (Editor *) view->parent;
+
+    lsp_initialize();
+    Buffer *buffer = eddy.buffers.elements + view->buffer_num;
+
+    if (sv_empty(buffer->name)) {
+        return;
+    }
+
+    ListBox *listbox = widget_new(ListBox);
+    listbox->textsize = 0.75;
+
+    int col = view->cursor_pos.x - view->left_column;
+    int line = view->cursor_pos.y - view->top_line;
+    listbox->viewport.x = editor->viewport.x + col * eddy.cell.x;
+    listbox->viewport.y = editor->viewport.y + (line + 1) * eddy.cell.y;
+    listbox->viewport.width = 300;
+    listbox->viewport.height = 150;
+    listbox->lines = (listbox->viewport.height - 8) / (eddy.cell.y * listbox->textsize + 2);
+    listbox->viewport.height = 8 + listbox->lines * (eddy.cell.y * listbox->textsize + 2);
+    listbox->handlers.draw = (WidgetDraw) completions_draw;
+    listbox->handlers.resize = NULL;
+    widget_register(listbox, "lsp-textDocument/completion", (WidgetCommandHandler) fill_completions_list);
+    listbox->submit = completions_submit;
+
+    CompletionParams completion_params = { 0 };
+    completion_params.textDocument = (TextDocumentIdentifier) {
+        .uri = buffer_uri(buffer),
+    };
+    completion_params.position = (Position) {
+        .line = view->cursor_pos.line,
+        .character = view->cursor_pos.column
+    };
+
+    OptionalJSONValue params_json = CompletionParams_encode(completion_params);
+    MUST(Int, lsp_message(listbox, "textDocument/completion", params_json));
+}
+
+void c_mode_formatting_response(CMode *mode, JSONValue resp)
+{
+    Response response = response_decode(&resp);
+    if (response_error(&response)) {
+        return;
+    }
+    if (response.result.value.type != JSON_TYPE_ARRAY) {
+        return;
+    }
+
+    BufferView *view = (BufferView *) mode->parent;
+    Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
+    TextEdits   edits = MUST_OPTIONAL(TextEdits, TextEdits_decode(response.result));
+    for (size_t ix = 0; ix < edits.size; ++ix) {
+        TextEdit   edit = edits.elements[ix];
+        IntVector2 start = { edit.range.start.character, edit.range.start.line };
+        IntVector2 end = { edit.range.end.character, edit.range.end.line };
+        size_t     offset = buffer_position_to_index(buffer, start);
+        size_t     length = buffer_position_to_index(buffer, end) - offset;
+
+        if (sv_empty(edit.newText)) {
+            buffer_delete(buffer, offset, length);
+        } else if (length == 0) {
+            buffer_insert(buffer, edit.newText, offset);
+        } else {
+            buffer_replace(buffer, offset, length, edit.newText);
+        }
+    }
+    if (edits.size >= 0) {
+        eddy_set_message(&eddy, "Formatted. Made %d changes", edits.size);
+    }
+    da_free_TextEdit(&edits);
+}
+
+void c_mode_cmd_format_source(CMode *mode, JSONValue unused)
+{
+    BufferView *view = (BufferView *) mode->parent;
+    Buffer     *buffer = (Buffer *) eddy.buffers.elements + view->buffer_num;
+    lsp_initialize();
+
+    if (sv_empty(buffer->name)) {
+        return;
+    }
+
+    DocumentFormattingParams params = { 0 };
+    params.textDocument.uri = buffer_uri(buffer);
+    params.options.insertSpaces = true;
+    params.options.tabSize = 4;
+    params.options.trimTrailingWhitespace = (OptionalBool) { .has_value = true, .value = true };
+    params.options.insertFinalNewline = (OptionalBool) { .has_value = true, .value = true };
+    params.options.trimFinalNewlines = (OptionalBool) { .has_value = true, .value = true };
+
+    OptionalJSONValue params_json = DocumentFormattingParams_encode(params);
+    MUST(Int, lsp_message(mode, "textDocument/formatting", params_json));
+}
+
 void c_mode_init(CMode *mode)
 {
-    widget_add_command(mode, sv_from("c-format-source"), c_mode_cmd_format_source,
+    widget_add_command(mode, "c-format-source", (WidgetCommandHandler) c_mode_cmd_format_source,
         (KeyCombo) { KEY_L, KMOD_SHIFT | KMOD_CONTROL });
-    widget_add_command(mode, sv_from("c-show-completions"), c_mode_cmd_completion,
+    widget_add_command(mode, "c-show-completions", (WidgetCommandHandler) c_mode_cmd_completion,
         (KeyCombo) { KEY_SPACE, KMOD_CONTROL });
-    widget_add_command(mode, sv_from("c-split-line"), c_mode_cmd_split_line,
+    widget_add_command(mode, "c-split-line", (WidgetCommandHandler) c_mode_cmd_split_line,
         (KeyCombo) { KEY_ENTER, KMOD_NONE }, (KeyCombo) { KEY_KP_ENTER, KMOD_NONE });
-    widget_add_command(mode, sv_from("c-indent"), c_mode_cmd_indent,
+    widget_add_command(mode, "c-indent", (WidgetCommandHandler) c_mode_cmd_indent,
         (KeyCombo) { KEY_TAB, KMOD_NONE });
-    widget_add_command(mode, sv_from("c-unindent"), c_mode_cmd_unindent,
+    widget_add_command(mode, "c-unindent", (WidgetCommandHandler) c_mode_cmd_unindent,
         (KeyCombo) { KEY_TAB, KMOD_SHIFT });
+    widget_register(mode, "lsp-textDocument/formatting", (WidgetCommandHandler) c_mode_formatting_response);
     // mode->handlers.on_draw = (WidgetOnDraw) c_mode_on_draw;
     BufferView *view = (BufferView *) mode->parent;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
     buffer_add_listener(buffer, c_mode_buffer_event_listener);
-    lsp_on_open(view->buffer_num);
-    lsp_semantic_tokens(view->buffer_num);
+    lsp_on_open(buffer);
+    lsp_semantic_tokens(buffer);
 }
 
 typedef enum {

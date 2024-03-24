@@ -4,15 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "log.h"
 #include <math.h>
 
-#include <allocate.h>
 #include <widget.h>
 
-DECLARE_SHARED_ALLOCATOR(eddy)
 DA_IMPL(Rect);
-DA_IMPL(Command);
+DA_IMPL(WidgetCommand);
 DA_IMPL(CommandBinding);
+DA_IMPL(PendingCommand);
 DA_IMPL_TYPE(Widget, Widget *);
 
 WIDGET_CLASS_DEF(Layout, layout);
@@ -244,17 +244,55 @@ void widget_draw_outline(void *w, float x, float y, float width, float height, C
     DrawRectangleLinesEx(widget_normalize(w, x, y, width, height), 1, color);
 }
 
-void _widget_add_command(void *w, StringView cmd, CommandHandler handler, ...)
+void widget_register(void *w, char const *command, WidgetCommandHandler handler)
 {
     Widget *widget = (Widget *) w;
-    da_append_Command(&widget->commands, (Command) { w, cmd, handler });
-    size_t  ix = widget->commands.size - 1;
+    for (size_t ix = 0; ix < widget->commands.size; ++ix) {
+        if (sv_eq_cstr(widget->commands.elements[ix].command, command)) {
+            widget->commands.elements[ix].handler = handler;
+            return;
+        }
+    }
+    da_append_WidgetCommand(&widget->commands, (WidgetCommand) { w, sv_from(command), handler });
+}
+
+void _widget_bind(void *w, char const *command, ...)
+{
+    va_list bindings;
+    va_start(bindings, command);
+    widget_vbind(w, command, bindings);
+    va_end(bindings);
+}
+
+void widget_vbind(void *w, char const *command, va_list bindings)
+{
+    Widget *widget = (Widget *) w;
+    for (KeyCombo key_combo = va_arg(bindings, KeyCombo); key_combo.key != KEY_NULL; key_combo = va_arg(bindings, KeyCombo)) {
+        da_append_CommandBinding(&widget->bindings, (CommandBinding) { key_combo, sv_from(command) });
+    }
+}
+
+void _widget_add_command(void *w, char const *command, WidgetCommandHandler handler, ...)
+{
+    Widget *widget = (Widget *) w;
+    widget_register(w, command, handler);
     va_list bindings;
     va_start(bindings, handler);
-    for (KeyCombo key_combo = va_arg(bindings, KeyCombo); key_combo.key != KEY_NULL; key_combo = va_arg(bindings, KeyCombo)) {
-        da_append_CommandBinding(&widget->bindings, (CommandBinding) { key_combo, ix });
-    }
+    widget_vbind(w, command, bindings);
     va_end(bindings);
+}
+
+void widget_command_execute(void *w, StringView command, JSONValue args)
+{
+    Widget *widget = (Widget *) w;
+    for (size_t ix = 0; ix < widget->commands.size; ++ix) {
+        if (sv_eq(command, widget->commands.elements[ix].command)) {
+            trace(CAT_EDIT, "Executing command '%.*s' on class '%s'", SV_ARG(command), widget->classname);
+            widget->commands.elements[ix].handler(widget, args);
+            return;
+        }
+    }
+    panic("Command '%.*s' not registered for class '%s'", SV_ARG(command), widget->classname);
 }
 
 bool widget_contains(void *widget, Vector2 world_coordinates)
@@ -494,172 +532,4 @@ void label_draw(Label *label)
 
 void label_process_input(Label *)
 {
-}
-
-void app_init(App *app)
-{
-    if (!app->handlers.resize) {
-        app->handlers.resize = (WidgetResize) layout_resize;
-    }
-    if (!app->handlers.process_input) {
-        app->handlers.process_input = (WidgetProcessInput) app_process_input;
-    }
-    if (!app->handlers.draw) {
-        app->handlers.draw = (WidgetDraw) app_draw;
-    }
-    if (!app->handlers.on_resize) {
-        app->handlers.on_resize = (WidgetOnResize) app_on_resize;
-    }
-    if (!app->handlers.on_process_input) {
-        app->handlers.on_process_input = (WidgetOnProcessInput) app_on_process_input;
-    }
-}
-
-void app_draw(App *app)
-{
-    layout_draw((Layout *) app);
-    for (size_t ix = 0; ix < app->modals.size; ++ix) {
-        Widget *m = app->modals.elements[ix];
-        m->handlers.draw(m);
-    }
-}
-
-void app_on_resize(App *app)
-{
-    Vector2 measurements = MeasureTextEx(app->font, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
-        /* (float) app->font.baseSize */ 20.0, 2);
-    app->cell.x = measurements.x / 52.0f;
-    int rows = (app->viewport.height - 10) / measurements.y;
-    app->cell.y = (float) (app->viewport.height - 10) / (float) rows;
-    app->viewport = (Rect) { 0 };
-    app->viewport.width = GetScreenWidth();
-    app->viewport.height = GetScreenHeight();
-}
-
-void app_initialize(AppCreate create, int argc, char **argv)
-{
-    app = create();
-    app->argc = argc;
-    app->argv = argv;
-    if (!app->classname) {
-        app->classname = "App";
-    }
-    if (!app->handlers.init) {
-        app->handlers.init = (WidgetInit) app_init;
-    }
-
-    app->handlers.init((Widget *) app);
-
-    InitWindow(app->viewport.width, app->viewport.height, app->classname);
-    app->viewport.width = GetScreenWidth();
-    app->viewport.height = GetScreenHeight();
-    SetWindowMonitor(app->monitor);
-    SetWindowState(FLAG_WINDOW_RESIZABLE | FLAG_WINDOW_MAXIMIZED | FLAG_VSYNC_HINT);
-    Image icon = LoadImage("eddy.png");
-    SetWindowIcon(icon);
-    SetExitKey(KEY_NULL);
-    SetTargetFPS(60);
-    MaximizeWindow();
-}
-
-void app_start()
-{
-    if (app->handlers.on_start) {
-        app->handlers.on_start((Widget *) app);
-    }
-    layout_resize((Layout *) app);
-    while (!WindowShouldClose() && !app->quit) {
-        app->handlers.process_input((Widget *) app);
-        BeginDrawing();
-        app->handlers.draw((Widget *) app);
-        EndDrawing();
-    }
-    if (app->handlers.on_terminate) {
-        app->handlers.on_terminate((Widget *) app);
-    }
-    CloseWindow();
-}
-
-void app_on_process_input(App *app)
-{
-    app->time = GetTime();
-    ++app->frame_count;
-    if (IsWindowResized()) {
-        Rect r = { 0 };
-        app->viewport.width = GetScreenWidth();
-        app->viewport.height = GetScreenHeight();
-        layout_resize((Layout *) app);
-    }
-    if (GetCurrentMonitor() != app->monitor) {
-        app->monitor = GetCurrentMonitor();
-    }
-}
-
-bool find_and_run_shortcut(Widget *w, KeyboardModifier modifier)
-{
-    for (; w; w = w->parent) {
-        for (size_t bix = 0; bix < w->bindings.size; ++bix) {
-            int key = w->bindings.elements[bix].key_combo.key;
-            if ((IsKeyPressed(key) || IsKeyPressedRepeat(key)) && w->bindings.elements[bix].key_combo.modifier == modifier) {
-                assert(w->bindings.elements[bix].command < w->commands.size);
-                Command       *command = w->commands.elements + w->bindings.elements[bix].command;
-                CommandContext ctx = { 0 };
-                ctx.trigger = w->bindings.elements[bix].key_combo;
-                ctx.called_as = command->name;
-                ctx.target = w;
-                command->handler(&ctx);
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-void handle_characters(App *app, Widget *w)
-{
-    while (app->queue.size > 0) {
-        int ch = app->queue.elements[0];
-        for (; w != NULL; w = w->parent) {
-            if (w->handlers.character != NULL) {
-                if (w->handlers.character(w, ch)) {
-                    break;
-                }
-            }
-        }
-        da_pop_front_int(&app->queue);
-    }
-}
-
-void app_process_input(App *app)
-{
-    if (app->pending_commands.size > 0) {
-        // Command command = *da_element_Command(&app->pending_commands, 0);
-        // memmove(app->pending_commands.elements, app->pending_commands.elements + 1, sizeof(Command) * app->pending_commands.size);
-        // --app->pending_commands.size;
-        Command        command = da_pop_front_Command(&app->pending_commands);
-        CommandContext ctx = { 0 };
-        ctx.trigger = (KeyCombo) { .key = KEY_NULL, KMOD_NONE };
-        ctx.called_as = command.name;
-        ctx.target = command.target;
-        command.handler(&ctx);
-        return;
-    }
-    for (int ch = GetCharPressed(); ch != 0; ch = GetCharPressed()) {
-        da_append_int(&app->queue, ch);
-    }
-    if (app->modals.size) {
-        Widget *modal = app->modals.elements[app->modals.size - 1];
-        handle_characters(app, modal);
-        modal->handlers.process_input(modal);
-        return;
-    }
-    Widget *f = app->focus;
-    if (!f) {
-        f = (Widget *) app;
-    }
-    KeyboardModifier modifier = modifier_current();
-    if (!find_and_run_shortcut(f, modifier)) {
-        handle_characters(app, f);
-        layout_process_input((Layout *) app);
-    }
 }

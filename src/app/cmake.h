@@ -9,6 +9,6 @@
 
 #include <app/eddy.h>
 
-extern void cmake_cmd_build(CommandContext *ctx);
+extern void cmake_cmd_build(Eddy *eddy, JSONValue unused);
 
 #endif /* __APP_CMAKE_H__ */

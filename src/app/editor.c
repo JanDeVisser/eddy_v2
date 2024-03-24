@@ -4,12 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "sv.h"
-#include "widget.h"
 #include <ctype.h>
 #include <math.h>
-
-#include <allocate.h>
 
 #include <app/buffer.h>
 #include <app/c.h>
@@ -18,8 +14,9 @@
 #include <app/listbox.h>
 #include <app/minibuffer.h>
 #include <app/palette.h>
-
-DECLARE_SHARED_ALLOCATOR(eddy);
+#include <lsp/lsp.h>
+#include <lsp/schema/SemanticTokens.h>
+#include <lsp/schema/SemanticTokensParams.h>
 
 DA_IMPL(BufferView);
 WIDGET_CLASS_DEF(Gutter, gutter);
@@ -65,6 +62,7 @@ void gutter_process_input(Gutter *)
 
 void view_init(BufferView *view)
 {
+    //
 }
 
 // -- Editor -----------------------------------------------------------------
@@ -447,43 +445,49 @@ void editor_selection_to_clipboard(Editor *editor)
  * ---------------------------------------------------------------------------
  */
 
-void editor_cmd_up(CommandContext *ctx)
+bool do_select(JSONValue key_combo)
 {
-    Editor     *editor = (Editor *) ctx->target;
+    if (key_combo.type == JSON_TYPE_BOOLEAN) {
+        return key_combo.boolean;
+    }
+    assert(key_combo.type == JSON_TYPE_OBJECT);
+    KeyboardModifier modifier = (KeyboardModifier) json_get_int(&key_combo, "modifier", KMOD_NONE);
+    return (modifier & KMOD_SHIFT) != 0;
+}
+
+void editor_cmd_up(Editor *editor, JSONValue key_combo)
+{
     BufferView *view = editor->buffers.elements + editor->current_buffer;
-    editor_manage_selection(editor, view, ctx->trigger.modifier & KMOD_SHIFT);
+    editor_manage_selection(editor, view, do_select(key_combo));
     editor_lines_up(editor, 1);
 }
 
-void editor_cmd_select_word(CommandContext *ctx)
+void editor_cmd_select_word(Editor *editor, JSONValue unused)
 {
-    editor_select_word((Editor *) ctx->target);
+    editor_select_word(editor);
 }
 
-void editor_cmd_down(CommandContext *ctx)
+void editor_cmd_down(Editor *editor, JSONValue key_combo)
 {
-    Editor     *editor = (Editor *) ctx->target;
     BufferView *view = editor->buffers.elements + editor->current_buffer;
-    editor_manage_selection(editor, view, ctx->trigger.modifier & KMOD_SHIFT);
+    editor_manage_selection(editor, view, do_select(key_combo));
     editor_lines_down(editor, 1);
 }
 
-void editor_cmd_left(CommandContext *ctx)
+void editor_cmd_left(Editor *editor, JSONValue key_combo)
 {
-    Editor     *editor = (Editor *) ctx->target;
     BufferView *view = editor->buffers.elements + editor->current_buffer;
-    editor_manage_selection(editor, view, ctx->trigger.modifier & KMOD_SHIFT);
+    editor_manage_selection(editor, view, do_select(key_combo));
     if (view->new_cursor > 0) {
         --view->new_cursor;
     }
     view->cursor_col = -1;
 }
 
-void editor_cmd_word_left(CommandContext *ctx)
+void editor_cmd_word_left(Editor *editor, JSONValue key_combo)
 {
-    Editor     *editor = (Editor *) ctx->target;
     BufferView *view = editor->buffers.elements + editor->current_buffer;
-    editor_manage_selection(editor, view, ctx->trigger.modifier & KMOD_SHIFT);
+    editor_manage_selection(editor, view, do_select(key_combo));
     if (view->new_cursor > 0) {
         Buffer *buffer = eddy.buffers.elements + view->buffer_num;
         while (0 < ((int) view->new_cursor) && !isalnum(buffer->text.view.ptr[view->new_cursor])) {
@@ -497,24 +501,22 @@ void editor_cmd_word_left(CommandContext *ctx)
     view->cursor_col = -1;
 }
 
-void editor_cmd_right(CommandContext *ctx)
+void editor_cmd_right(Editor *editor, JSONValue key_combo)
 {
-    Editor     *editor = (Editor *) ctx->target;
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
-    editor_manage_selection(editor, view, ctx->trigger.modifier & KMOD_SHIFT);
+    editor_manage_selection(editor, view, do_select(key_combo));
     if (view->new_cursor < buffer->text.view.length - 1) {
         ++view->new_cursor;
     }
     view->cursor_col = -1;
 }
 
-void editor_cmd_word_right(CommandContext *ctx)
+void editor_cmd_word_right(Editor *editor, JSONValue key_combo)
 {
-    Editor     *editor = (Editor *) ctx->target;
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
-    editor_manage_selection(editor, view, ctx->trigger.modifier & KMOD_SHIFT);
+    editor_manage_selection(editor, view, do_select(key_combo));
     size_t len = buffer->text.view.length;
     if (view->new_cursor < len - 1) {
         while (view->new_cursor < len - 1 && !isalnum(buffer->text.view.ptr[view->new_cursor])) {
@@ -527,9 +529,8 @@ void editor_cmd_word_right(CommandContext *ctx)
     view->cursor_col = -1;
 }
 
-void editor_cmd_begin_of_line(CommandContext *ctx)
+void editor_cmd_begin_of_line(Editor *editor, JSONValue unused)
 {
-    Editor     *editor = (Editor *) ctx->target;
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
     assert(view->cursor_pos.y < buffer->lines.size);
@@ -538,9 +539,8 @@ void editor_cmd_begin_of_line(CommandContext *ctx)
     view->cursor_col = -1;
 }
 
-void editor_cmd_top_of_buffer(CommandContext *ctx)
+void editor_cmd_top_of_buffer(Editor *editor, JSONValue unused)
 {
-    Editor     *editor = (Editor *) ctx->target;
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     view->new_cursor = 0;
     view->cursor_col = -1;
@@ -548,9 +548,8 @@ void editor_cmd_top_of_buffer(CommandContext *ctx)
     view->left_column = 0;
 }
 
-void editor_cmd_end_of_line(CommandContext *ctx)
+void editor_cmd_end_of_line(Editor *editor, JSONValue unused)
 {
-    Editor     *editor = (Editor *) ctx->target;
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
     assert(view->cursor_pos.y < buffer->lines.size);
@@ -559,44 +558,38 @@ void editor_cmd_end_of_line(CommandContext *ctx)
     view->cursor_col = -1;
 }
 
-void editor_cmd_page_up(CommandContext *ctx)
+void editor_cmd_page_up(Editor *editor, JSONValue unused)
 {
-    Editor *editor = (Editor *) ctx->target;
     editor_lines_up(editor, editor->lines);
 }
 
-void editor_cmd_page_down(CommandContext *ctx)
+void editor_cmd_page_down(Editor *editor, JSONValue unused)
 {
-    Editor *editor = (Editor *) ctx->target;
     editor_lines_down(editor, editor->lines);
 }
 
-void editor_cmd_top(CommandContext *ctx)
+void editor_cmd_top(Editor *editor, JSONValue unused)
 {
-    Editor     *editor = (Editor *) ctx->target;
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     view->new_cursor = 0;
     view->cursor_col = -1;
 }
 
-void editor_cmd_bottom(CommandContext *ctx)
+void editor_cmd_bottom(Editor *editor, JSONValue unused)
 {
-    Editor     *editor = (Editor *) ctx->target;
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
     view->new_cursor = buffer->text.view.length;
     view->cursor_col = -1;
 }
 
-void editor_cmd_split_line(CommandContext *ctx)
+void editor_cmd_split_line(Editor *editor, JSONValue unused)
 {
-    Editor *editor = (Editor *) ctx->target;
     editor_character(editor, '\n');
 }
 
-void editor_cmd_merge_lines(CommandContext *ctx)
+void editor_cmd_merge_lines(Editor *editor, JSONValue unused)
 {
-    Editor     *editor = (Editor *) ctx->target;
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
     Index      *line = buffer->lines.elements + view->cursor_pos.y;
@@ -673,12 +666,11 @@ void _find_opening_brace(Editor *editor, size_t index, bool selection)
     }
 }
 
-void editor_cmd_matching_brace(CommandContext *ctx)
+void editor_cmd_matching_brace(Editor *editor, JSONValue key_combo)
 {
-    Editor     *editor = (Editor *) ctx->target;
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
-    bool        selection = ctx->trigger.modifier & KMOD_SHIFT;
+    bool        selection = do_select(key_combo);
     if (strchr(OPEN_BRACES, buffer->text.view.ptr[view->cursor])) {
         _find_closing_brace(editor, view->cursor, selection);
         return;
@@ -697,28 +689,24 @@ void editor_cmd_matching_brace(CommandContext *ctx)
     }
 }
 
-void editor_cmd_backspace(CommandContext *ctx)
+void editor_cmd_backspace(Editor *editor, JSONValue unused)
 {
-    Editor *editor = (Editor *) ctx->target;
     editor_backspace(editor);
 }
 
-void editor_cmd_delete_current_char(CommandContext *ctx)
+void editor_cmd_delete_current_char(Editor *editor, JSONValue unused)
 {
-    Editor *editor = (Editor *) ctx->target;
     editor_delete_current_char(editor);
 }
 
-void editor_cmd_clear_selection(CommandContext *ctx)
+void editor_cmd_clear_selection(Editor *editor, JSONValue unused)
 {
-    Editor     *editor = (Editor *) ctx->target;
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     view->selection = -1;
 }
 
-void editor_cmd_copy(CommandContext *ctx)
+void editor_cmd_copy(Editor *editor, JSONValue unused)
 {
-    Editor     *editor = (Editor *) ctx->target;
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     if (view->selection == -1) {
         editor_select_line(editor);
@@ -726,9 +714,8 @@ void editor_cmd_copy(CommandContext *ctx)
     editor_selection_to_clipboard(editor);
 }
 
-void editor_cmd_cut(CommandContext *ctx)
+void editor_cmd_cut(Editor *editor, JSONValue unused)
 {
-    Editor     *editor = (Editor *) ctx->target;
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     if (view->selection == -1) {
         editor_select_line(editor);
@@ -739,9 +726,8 @@ void editor_cmd_cut(CommandContext *ctx)
     view->selection = -1;
 }
 
-void editor_cmd_paste(CommandContext *ctx)
+void editor_cmd_paste(Editor *editor, JSONValue unused)
 {
-    Editor     *editor = (Editor *) ctx->target;
     char const *text = GetClipboardText();
     editor_insert_string(editor, sv_from(text));
 }
@@ -755,9 +741,8 @@ void save_as_submit(InputBox *filename_box, StringView filename)
     eddy_set_message(&eddy, "Buffer saved");
 }
 
-void editor_cmd_save_as(CommandContext *ctx)
+void editor_cmd_save_as(Editor *editor, JSONValue unused)
 {
-    Editor     *editor = (Editor *) ctx->target;
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
     InputBox   *filename_box = inputbox_create(SV("New file name", 13), save_as_submit);
@@ -768,30 +753,27 @@ void editor_cmd_save_as(CommandContext *ctx)
     inputbox_show(filename_box);
 }
 
-void editor_cmd_save(CommandContext *ctx)
+void editor_cmd_save(Editor *editor, JSONValue unused)
 {
-    Editor     *editor = (Editor *) ctx->target;
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
     if (sv_empty(buffer->name)) {
-        editor_cmd_save_as(ctx);
+        editor_cmd_save_as(editor, unused);
         return;
     }
     buffer_save(buffer);
     eddy_set_message(&eddy, "Buffer saved");
 }
 
-void editor_cmd_undo(CommandContext *ctx)
+void editor_cmd_undo(Editor *editor, JSONValue unused)
 {
-    Editor     *editor = (Editor *) ctx->target;
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
     buffer_undo(buffer);
 }
 
-void editor_cmd_redo(CommandContext *ctx)
+void editor_cmd_redo(Editor *editor, JSONValue unused)
 {
-    Editor     *editor = (Editor *) ctx->target;
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
     buffer_redo(buffer);
@@ -803,9 +785,8 @@ void switch_buffer_submit(ListBox *listbox, ListBoxEntry selection)
     editor_select_buffer(eddy.editor, buffer_ix);
 }
 
-void editor_cmd_switch_buffer(CommandContext *ctx)
+void editor_cmd_switch_buffer(Editor *editor, JSONValue unused)
 {
-    Editor  *editor = (Editor *) ctx->target;
     ListBox *listbox = widget_new(ListBox);
     listbox->submit = (ListBoxSubmit) switch_buffer_submit;
     listbox->prompt = sv_from("Select buffer");
@@ -839,9 +820,8 @@ void editor_are_you_sure_handler(ListBox *are_you_sure, QueryOption selection)
     }
 }
 
-void editor_cmd_close_buffer(CommandContext *ctx)
+void editor_cmd_close_buffer(Editor *editor, JSONValue unused)
 {
-    Editor     *editor = (Editor *) ctx->target;
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
 
@@ -860,9 +840,8 @@ void editor_cmd_close_buffer(CommandContext *ctx)
     editor_close_buffer(editor);
 }
 
-void editor_cmd_close_view(CommandContext *ctx)
+void editor_cmd_close_view(Editor *editor, JSONValue unused)
 {
-    Editor *editor = (Editor *) ctx->target;
     editor_close_view(editor);
 }
 
@@ -892,20 +871,18 @@ MiniBufferChain do_find(Editor *editor, StringView query)
     return (MiniBufferChain) { 0 };
 }
 
-void editor_cmd_find(CommandContext *ctx)
+void editor_cmd_find(Editor *editor, JSONValue unused)
 {
-    Editor     *editor = (Editor *) ctx->target;
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     sv_free(view->find_text);
     view->find_text = sv_null();
     sv_free(view->replacement);
     view->replacement = sv_null();
-    minibuffer_query(ctx->target, SV("Find", 4), (MiniBufferQueryFunction) do_find);
+    minibuffer_query(editor, SV("Find", 4), (MiniBufferQueryFunction) do_find);
 }
 
-void editor_cmd_find_next(CommandContext *ctx)
+void editor_cmd_find_next(Editor *editor, JSONValue unused)
 {
-    Editor     *editor = (Editor *) ctx->target;
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     if (sv_empty(view->find_text)) {
         return;
@@ -966,15 +943,14 @@ MiniBufferChain do_find_query(Editor *editor, StringView query)
     return (MiniBufferChain) { .fnc = (MiniBufferQueryFunction) do_replacement_query, .prompt = SV("Replace with", 12) };
 }
 
-void editor_cmd_find_replace(CommandContext *ctx)
+void editor_cmd_find_replace(Editor *editor, JSONValue unused)
 {
-    Editor     *editor = (Editor *) ctx->target;
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     sv_free(view->find_text);
     view->find_text = sv_null();
     sv_free(view->replacement);
     view->replacement = sv_null();
-    minibuffer_query(ctx->target, SV("Find", 4), (MiniBufferQueryFunction) do_find_query);
+    minibuffer_query(editor, SV("Find", 4), (MiniBufferQueryFunction) do_find_query);
 }
 
 /*
@@ -990,75 +966,75 @@ void editor_init(Editor *editor)
     editor->padding = DEFAULT_PADDING;
     editor->num_clicks = 0;
     editor->handlers.character = (WidgetHandleCharacter) editor_character;
-    widget_add_command(editor, sv_from("cursor-up"), editor_cmd_up,
+    widget_add_command(editor, "cursor-up", (WidgetCommandHandler) editor_cmd_up,
         (KeyCombo) { KEY_UP, KMOD_NONE }, (KeyCombo) { KEY_UP, KMOD_SHIFT });
-    widget_add_command(editor, sv_from("select-word"), editor_cmd_select_word,
+    widget_add_command(editor, "select-word", (WidgetCommandHandler) editor_cmd_select_word,
         (KeyCombo) { KEY_UP, KMOD_ALT });
-    widget_add_command(editor, sv_from("cursor-down"), editor_cmd_down,
+    widget_add_command(editor, "cursor-down", (WidgetCommandHandler) editor_cmd_down,
         (KeyCombo) { KEY_DOWN, KMOD_NONE }, (KeyCombo) { KEY_DOWN, KMOD_SHIFT });
-    widget_add_command(editor, sv_from("cursor-left"), editor_cmd_left,
+    widget_add_command(editor, "cursor-left", (WidgetCommandHandler) editor_cmd_left,
         (KeyCombo) { KEY_LEFT, KMOD_NONE }, (KeyCombo) { KEY_LEFT, KMOD_SHIFT });
-    widget_add_command(editor, sv_from("cursor-word-left"), editor_cmd_word_left,
+    widget_add_command(editor, "cursor-word-left", (WidgetCommandHandler) editor_cmd_word_left,
         (KeyCombo) { KEY_LEFT, KMOD_ALT }, (KeyCombo) { KEY_LEFT, KMOD_ALT | KMOD_SHIFT });
-    widget_add_command(editor, sv_from("cursor-right"), editor_cmd_right,
+    widget_add_command(editor, "cursor-right", (WidgetCommandHandler) editor_cmd_right,
         (KeyCombo) { KEY_RIGHT, KMOD_NONE }, (KeyCombo) { KEY_RIGHT, KMOD_SHIFT });
-    widget_add_command(editor, sv_from("cursor-word-right"), editor_cmd_word_right,
+    widget_add_command(editor, "cursor-word-right", (WidgetCommandHandler) editor_cmd_word_right,
         (KeyCombo) { KEY_RIGHT, KMOD_ALT }, (KeyCombo) { KEY_LEFT, KMOD_ALT | KMOD_SHIFT });
-    widget_add_command(editor, sv_from("cursor-page-up"), editor_cmd_page_up,
+    widget_add_command(editor, "cursor-page-up", (WidgetCommandHandler) editor_cmd_page_up,
         (KeyCombo) { KEY_PAGE_UP, KMOD_NONE }, (KeyCombo) { KEY_PAGE_UP, KMOD_SHIFT },
         (KeyCombo) { KEY_UP, KMOD_SUPER }, (KeyCombo) { KEY_UP, KMOD_SUPER | KMOD_SHIFT });
-    widget_add_command(editor, sv_from("cursor-page-down"), editor_cmd_page_down,
+    widget_add_command(editor, "cursor-page-down", (WidgetCommandHandler) editor_cmd_page_down,
         (KeyCombo) { KEY_PAGE_DOWN, KMOD_NONE }, (KeyCombo) { KEY_PAGE_DOWN, KMOD_SHIFT },
         (KeyCombo) { KEY_DOWN, KMOD_SUPER }, (KeyCombo) { KEY_DOWN, KMOD_SUPER | KMOD_SHIFT });
-    widget_add_command(editor, sv_from("cursor-home"), editor_cmd_begin_of_line,
+    widget_add_command(editor, "cursor-home", (WidgetCommandHandler) editor_cmd_begin_of_line,
         (KeyCombo) { KEY_HOME, KMOD_NONE }, (KeyCombo) { KEY_HOME, KMOD_SHIFT },
         (KeyCombo) { KEY_LEFT, KMOD_SUPER }, (KeyCombo) { KEY_LEFT, KMOD_SUPER | KMOD_SHIFT });
-    widget_add_command(editor, sv_from("cursor-top"), editor_cmd_top_of_buffer,
+    widget_add_command(editor, "cursor-top", (WidgetCommandHandler) editor_cmd_top_of_buffer,
         (KeyCombo) { KEY_HOME, KMOD_CONTROL }, (KeyCombo) { KEY_HOME, KMOD_SUPER | KMOD_SHIFT });
-    widget_add_command(editor, sv_from("cursor-end"), editor_cmd_end_of_line,
+    widget_add_command(editor, "cursor-end", (WidgetCommandHandler) editor_cmd_end_of_line,
         (KeyCombo) { KEY_END, KMOD_NONE }, (KeyCombo) { KEY_END, KMOD_SHIFT },
         (KeyCombo) { KEY_RIGHT, KMOD_SUPER }, (KeyCombo) { KEY_RIGHT, KMOD_SUPER | KMOD_SHIFT });
-    widget_add_command(editor, sv_from("cursor-top"), editor_cmd_top,
+    widget_add_command(editor, "cursor-top", (WidgetCommandHandler) editor_cmd_top,
         (KeyCombo) { KEY_HOME, KMOD_CONTROL }, (KeyCombo) { KEY_HOME, KMOD_CONTROL | KMOD_SHIFT });
-    widget_add_command(editor, sv_from("cursor-bottom"), editor_cmd_bottom,
+    widget_add_command(editor, "cursor-bottom", (WidgetCommandHandler) editor_cmd_bottom,
         (KeyCombo) { KEY_END, KMOD_CONTROL }, (KeyCombo) { KEY_END, KMOD_CONTROL | KMOD_SHIFT });
-    widget_add_command(editor, sv_from("split-line"), editor_cmd_split_line,
+    widget_add_command(editor, "split-line", (WidgetCommandHandler) editor_cmd_split_line,
         (KeyCombo) { KEY_ENTER, KMOD_NONE }, (KeyCombo) { KEY_KP_ENTER, KMOD_NONE });
-    widget_add_command(editor, sv_from("merge-lines"), editor_cmd_merge_lines,
+    widget_add_command(editor, "merge-lines", (WidgetCommandHandler) editor_cmd_merge_lines,
         (KeyCombo) { KEY_J, KMOD_SHIFT | KMOD_CONTROL });
-    widget_add_command(editor, sv_from("matching-brace"), editor_cmd_matching_brace,
+    widget_add_command(editor, "matching-brace", (WidgetCommandHandler) editor_cmd_matching_brace,
         (KeyCombo) { KEY_M, KMOD_CONTROL }, (KeyCombo) { KEY_M, KMOD_CONTROL | KMOD_SHIFT });
-    widget_add_command(editor, sv_from("backspace"), editor_cmd_backspace,
+    widget_add_command(editor, "backspace", (WidgetCommandHandler) editor_cmd_backspace,
         (KeyCombo) { KEY_BACKSPACE, KMOD_NONE });
-    widget_add_command(editor, sv_from("delete-current-char"), editor_cmd_delete_current_char,
+    widget_add_command(editor, "delete-current-char", (WidgetCommandHandler) editor_cmd_delete_current_char,
         (KeyCombo) { KEY_DELETE, KMOD_NONE });
-    widget_add_command(editor, sv_from("clear-selection"), editor_cmd_clear_selection,
+    widget_add_command(editor, "clear-selection", (WidgetCommandHandler) editor_cmd_clear_selection,
         (KeyCombo) { KEY_ESCAPE, KMOD_NONE });
-    widget_add_command(editor, sv_from("copy-selection"), editor_cmd_copy,
+    widget_add_command(editor, "copy-selection", (WidgetCommandHandler) editor_cmd_copy,
         (KeyCombo) { KEY_C, KMOD_CONTROL });
-    widget_add_command(editor, sv_from("cut-selection"), editor_cmd_cut,
+    widget_add_command(editor, "cut-selection", (WidgetCommandHandler) editor_cmd_cut,
         (KeyCombo) { KEY_X, KMOD_CONTROL });
-    widget_add_command(editor, sv_from("paste-from-clipboard"), editor_cmd_paste,
+    widget_add_command(editor, "paste-from-clipboard", (WidgetCommandHandler) editor_cmd_paste,
         (KeyCombo) { KEY_V, KMOD_CONTROL });
-    widget_add_command(editor, sv_from("editor-find"), editor_cmd_find,
+    widget_add_command(editor, "editor-find", (WidgetCommandHandler) editor_cmd_find,
         (KeyCombo) { KEY_F, KMOD_SUPER });
-    widget_add_command(editor, sv_from("editor-find-next"), editor_cmd_find_next,
+    widget_add_command(editor, "editor-find-next", (WidgetCommandHandler) editor_cmd_find_next,
         (KeyCombo) { KEY_G, KMOD_SUPER });
-    widget_add_command(editor, sv_from("editor-find-replace"), editor_cmd_find_replace,
+    widget_add_command(editor, "editor-find-replace", (WidgetCommandHandler) editor_cmd_find_replace,
         (KeyCombo) { KEY_R, KMOD_SUPER });
-    widget_add_command(editor, sv_from("editor-save"), editor_cmd_save,
+    widget_add_command(editor, "editor-save", (WidgetCommandHandler) editor_cmd_save,
         (KeyCombo) { KEY_S, KMOD_CONTROL });
-    widget_add_command(editor, sv_from("editor-save-as"), editor_cmd_save_as,
+    widget_add_command(editor, "editor-save-as", (WidgetCommandHandler) editor_cmd_save_as,
         (KeyCombo) { KEY_S, KMOD_CONTROL | KMOD_ALT });
-    widget_add_command(editor, sv_from("editor-undo"), editor_cmd_undo,
+    widget_add_command(editor, "editor-undo", (WidgetCommandHandler) editor_cmd_undo,
         (KeyCombo) { KEY_Z, KMOD_CONTROL });
-    widget_add_command(editor, sv_from("editor-redo"), editor_cmd_redo,
+    widget_add_command(editor, "editor-redo", (WidgetCommandHandler) editor_cmd_redo,
         (KeyCombo) { KEY_Z, KMOD_CONTROL | KMOD_SHIFT });
-    widget_add_command(editor, sv_from("editor-switch-buffer"), editor_cmd_switch_buffer,
+    widget_add_command(editor, "editor-switch-buffer", (WidgetCommandHandler) editor_cmd_switch_buffer,
         (KeyCombo) { KEY_B, KMOD_SUPER });
-    widget_add_command(editor, sv_from("editor-close-buffer"), editor_cmd_close_buffer,
+    widget_add_command(editor, "editor-close-buffer", (WidgetCommandHandler) editor_cmd_close_buffer,
         (KeyCombo) { KEY_W, KMOD_CONTROL });
-    widget_add_command(editor, sv_from("editor-close-view"), editor_cmd_close_view,
+    widget_add_command(editor, "editor-close-view", (WidgetCommandHandler) editor_cmd_close_view,
         (KeyCombo) { KEY_W, KMOD_CONTROL | KMOD_SHIFT });
 }
 

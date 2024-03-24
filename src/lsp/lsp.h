@@ -13,12 +13,39 @@
 #include <base/sv.h>
 #include <lsp/schema/CompletionItem.h>
 
-extern void                    lsp_on_open(int buffer_num);
-extern void                    lsp_did_save(int buffer_num);
-extern void                    lsp_did_close(int buffer_num);
-extern void                    lsp_did_change(int buffer_num, IntVector2 start, IntVector2 end, StringView text);
-extern void                    lsp_semantic_tokens(int buffer_num);
-extern int                     lsp_format(int buffer_num);
-extern OptionalCompletionItems lsp_request_completions(BufferView *view);
+typedef struct {
+    StringView        method;
+    OptionalJSONValue params;
+} Notification;
+
+typedef struct {
+    void             *sender;
+    int               id;
+    StringView        method;
+    OptionalJSONValue params;
+} Request;
+
+typedef struct {
+    int               id;
+    OptionalJSONValue result;
+    OptionalJSONValue error;
+} Response;
+
+ERROR_OR(Response);
+
+extern PaletteIndex semantic_token_colors[];
+
+extern JSONValue    notification_encode(Notification *notification);
+extern Notification notification_decode(JSONValue *json);
+extern void         notification_free(Notification *notification);
+extern JSONValue    request_encode(Request *request);
+extern void         request_free(Request *request);
+extern bool         response_success(Response *response);
+extern bool         response_error(Response *response);
+extern Response     response_decode(JSONValue *json);
+extern void         response_free(Response *response);
+extern void         lsp_initialize();
+extern ErrorOrInt   lsp_message(void *sender, char const *method, OptionalJSONValue params);
+extern ErrorOrInt   lsp_notification(char const *method, OptionalJSONValue params);
 
 #endif /* __LSP_LSP_H__ */

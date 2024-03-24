@@ -5,6 +5,7 @@
  */
 
 #include "json.h"
+#include "optional.h"
 #include "sv.h"
 #include <allocate.h>
 #include <lsp/schema/lsp_base.h>
@@ -226,47 +227,3 @@ OptionalNull Null_decode(OptionalJSONValue json)
 }
 
 // ---------------------------------------------------------------------------
-
-JSONValue notification_encode(Notification *notification)
-{
-    JSONValue ret = json_object();
-    json_set_cstr(&ret, "jsonrpc", "2.0");
-    json_set_cstr(&ret, "method", notification->method);
-    if (notification->params.has_value) {
-        json_set(&ret, "params", notification->params.value);
-    }
-    return ret;
-}
-
-JSONValue request_encode(Request *request)
-{
-    JSONValue ret = json_object();
-    json_set_cstr(&ret, "jsonrpc", "2.0");
-    json_set_int(&ret, "id", request->id);
-    json_set_cstr(&ret, "method", request->method);
-    if (request->params.has_value) {
-        json_set(&ret, "params", request->params.value);
-    }
-    return ret;
-}
-
-bool response_success(Response *response)
-{
-    return response->result.has_value;
-}
-
-bool response_error(Response *response)
-{
-    return response->error.has_value;
-}
-
-Response response_decode(JSONValue *json)
-{
-    Response ret = { 0 };
-    // trace(CAT_LSP, "response_decode():\n%.*s\n", SV_ARG(json_encode(*json)));
-    ret.id = json_get_int(json, "id", 0);
-    ret.result = json_get(json, "result");
-    ret.error = json_get(json, "error");
-    assert(response_success(&ret) ^ response_error(&ret));
-    return ret;
-}

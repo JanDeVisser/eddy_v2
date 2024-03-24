@@ -4,9 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "config.h"
-#include "optional.h"
-#include "sv.h"
+#include "widget.h"
 #include <errno.h>
 #include <pwd.h>
 #include <stdlib.h>
@@ -180,10 +178,9 @@ void eddy_are_you_sure_handler(ListBox *are_you_sure, QueryOption selection)
     }
 }
 
-void eddy_cmd_quit(CommandContext *ctx)
+void eddy_cmd_quit(Eddy *eddy, JSONValue unused)
 {
-    Eddy *eddy = (Eddy *) ctx->target;
-    bool  has_modified_buffers = false;
+    bool has_modified_buffers = false;
     for (size_t ix = 0; ix < eddy->buffers.size; ++ix) {
         Buffer *buffer = da_element_Buffer(&eddy->buffers, ix);
         if (buffer->saved_version < buffer->version) {
@@ -201,21 +198,20 @@ void eddy_cmd_quit(CommandContext *ctx)
 
 void run_command_submit(ListBox *listbox, ListBoxEntry selection)
 {
-    Command *cmd = (Command *) selection.payload;
-    da_append_Command(&eddy.pending_commands, *cmd);
-    eddy_set_message(&eddy, "Selected command '%.*s'", SV_ARG(cmd->name));
+    WidgetCommand *cmd = (WidgetCommand *) selection.payload;
+    app_submit((App *) &eddy, cmd->owner, cmd->command, json_null());
+    eddy_set_message(&eddy, "Selected command '%.*s'", SV_ARG(cmd->command));
 }
 
-void eddy_cmd_run_command(CommandContext *ctx)
+void eddy_cmd_run_command(Eddy *eddy, JSONValue unused)
 {
-    Eddy    *eddy = (Eddy *) ctx->target;
     ListBox *listbox = widget_new(ListBox);
     listbox->prompt = sv_from("Select commmand");
     listbox->submit = run_command_submit;
     for (Widget *w = eddy->focus; w; w = w->parent) {
         for (size_t cix = 0; cix < w->commands.size; ++cix) {
-            Command *command = w->commands.elements + cix;
-            da_append_ListBoxEntry(&listbox->entries, (ListBoxEntry) { command->name, command });
+            WidgetCommand *command = w->commands.elements + cix;
+            da_append_ListBoxEntry(&listbox->entries, (ListBoxEntry) { command->command, command });
         }
     }
     listbox_show(listbox);
@@ -237,7 +233,7 @@ void eddy_open_fs_handler(ListBox *listbox, DirEntry entry)
     sv_free(canonical);
 }
 
-void eddy_cmd_open_file(CommandContext *ctx)
+void eddy_cmd_open_file(Eddy *eddy, JSONValue unused)
 {
     ListBox *listbox = file_selector_create(sv_from("Select file"), eddy_open_fs_handler, FSFile);
     listbox_show(listbox);
@@ -292,15 +288,15 @@ ErrorOrInt fill_search_listbox(ListBox *listbox, StringView dir)
     RETURN(Int, 0);
 }
 
-void eddy_cmd_search_file(CommandContext *ctx)
+void eddy_cmd_search_file(Eddy *eddy, JSONValue unused)
 {
     ListBox *listbox = widget_new(ListBox);
     listbox->submit = file_search_submit;
     listbox->free_entry = free_search_entry;
-    for (size_t ix = 0; ix < eddy.source_dirs.size; ++ix) {
-        ErrorOrInt error_maybe = fill_search_listbox(listbox, eddy.source_dirs.strings[ix]);
+    for (size_t ix = 0; ix < eddy->source_dirs.size; ++ix) {
+        ErrorOrInt error_maybe = fill_search_listbox(listbox, eddy->source_dirs.strings[ix]);
         if (ErrorOrInt_is_error(error_maybe)) {
-            eddy_set_message(&eddy, "Could not list source directory '%.*': %s", SV_ARG(eddy.source_dirs.strings[ix]), Error_to_string(error_maybe.error));
+            eddy_set_message(eddy, "Could not list source directory '%.*': %s", SV_ARG(eddy->source_dirs.strings[ix]), Error_to_string(error_maybe.error));
             listbox_free(listbox);
             return;
         }
@@ -360,15 +356,15 @@ void eddy_init(Eddy *eddy)
     }
     editor_select_buffer(eddy->editor, 0);
 
-    widget_add_command(eddy, sv_from("eddy-quit"), eddy_cmd_quit,
+    widget_add_command(eddy, "eddy-quit", (WidgetCommandHandler) eddy_cmd_quit,
         (KeyCombo) { KEY_Q, KMOD_CONTROL });
-    widget_add_command(eddy, sv_from("eddy-run-command"), eddy_cmd_run_command,
+    widget_add_command(eddy, "eddy-run-command", (WidgetCommandHandler) eddy_cmd_run_command,
         (KeyCombo) { KEY_X, KMOD_SUPER });
-    widget_add_command(eddy, sv_from("eddy-open-file"), eddy_cmd_open_file,
+    widget_add_command(eddy, "eddy-open-file", (WidgetCommandHandler) eddy_cmd_open_file,
         (KeyCombo) { KEY_O, KMOD_CONTROL });
-    widget_add_command(eddy, sv_from("eddy-search-file"), eddy_cmd_search_file,
+    widget_add_command(eddy, "eddy-search-file", (WidgetCommandHandler) eddy_cmd_search_file,
         (KeyCombo) { KEY_O, KMOD_SUPER });
-    widget_add_command(eddy, sv_from("cmake-build"), cmake_cmd_build,
+    widget_add_command(eddy, "cmake-build", (WidgetCommandHandler) cmake_cmd_build,
         (KeyCombo) { KEY_F9, KMOD_NONE });
 
     eddy->viewport.width = WINDOW_WIDTH;
@@ -566,6 +562,7 @@ Buffer *eddy_new_buffer(Eddy *eddy)
         }
     }
     Buffer *b = da_append_Buffer(&eddy->buffers, (Buffer) { 0 });
+    in_place_widget(Buffer, b, eddy);
     b->buffer_ix = eddy->buffers.size - 1;
     buffer_build_indices(b);
     return b;

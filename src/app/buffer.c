@@ -4,13 +4,31 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "json.h"
 #include <ctype.h>
 
-#include <buffer.h>
-#include <c.h>
-#include <eddy.h>
-#include <io.h>
-#include <lexer.h>
+#include <app/buffer.h>
+#include <app/c.h>
+#include <app/eddy.h>
+#include <app/listbox.h>
+#include <base/io.h>
+#include <base/lexer.h>
+#include <lsp/lsp.h>
+#include <lsp/schema/CompletionItem.h>
+#include <lsp/schema/CompletionList.h>
+#include <lsp/schema/CompletionParams.h>
+#include <lsp/schema/DidChangeTextDocumentParams.h>
+#include <lsp/schema/DidCloseTextDocumentParams.h>
+#include <lsp/schema/DidOpenTextDocumentParams.h>
+#include <lsp/schema/DidSaveTextDocumentParams.h>
+#include <lsp/schema/DocumentFormattingParams.h>
+#include <lsp/schema/InitializeParams.h>
+#include <lsp/schema/InitializeResult.h>
+#include <lsp/schema/SemanticTokenTypes.h>
+#include <lsp/schema/SemanticTokens.h>
+#include <lsp/schema/SemanticTokensParams.h>
+#include <lsp/schema/ServerCapabilities.h>
+#include <lsp/schema/TextEdit.h>
 
 DA_IMPL(Index);
 DA_IMPL(DisplayToken);
@@ -18,7 +36,19 @@ DA_IMPL(Buffer);
 
 DA_IMPL(BufferEvent);
 
+SIMPLE_WIDGET_CLASS_DEF(Buffer, buffer);
+
+void buffer_semantic_tokens_response(Buffer *buffer, JSONValue resp);
 void buffer_apply(Buffer *buffer, BufferEvent event);
+
+void buffer_init(Buffer *buffer)
+{
+    widget_register(
+        buffer,
+        "lsp-textDocument/semanticTokens/full",
+        (WidgetCommandHandler) buffer_semantic_tokens_response);
+    buffer->listeners = NULL;
+}
 
 ErrorOrBuffer buffer_open(Buffer *buffer, StringView name)
 {
@@ -444,4 +474,132 @@ StringView buffer_uri(Buffer *buffer)
         buffer->uri = sv_printf("file://%.*s/%.*s", SV_ARG(eddy.project_dir), SV_ARG(buffer->name));
     }
     return buffer->uri;
+}
+
+void lsp_semantic_tokens(Buffer *buffer)
+{
+    lsp_initialize();
+
+    if (sv_empty(buffer->name)) {
+        return;
+    }
+    SemanticTokensParams semantic_tokens_params = { 0 };
+    semantic_tokens_params.textDocument = (TextDocumentIdentifier) {
+        .uri = buffer_uri(buffer),
+    };
+    OptionalJSONValue semantic_tokens_params_json = SemanticTokensParams_encode(semantic_tokens_params);
+    MUST(Int, lsp_message(buffer, "textDocument/semanticTokens/full", semantic_tokens_params_json));
+}
+
+void buffer_semantic_tokens_response(Buffer *buffer, JSONValue resp)
+{
+    Response response = response_decode(&resp);
+    if (!response_success(&response)) {
+        return;
+    }
+    if (!response.result.has_value) {
+        trace(CAT_LSP, "No response to textDocument/semanticTokens/full");
+        return;
+    }
+    OptionalSemanticTokens result_maybe = SemanticTokens_decode(response.result);
+    if (!result_maybe.has_value) {
+        trace(CAT_LSP, "Couldn't decode response to textDocument/semanticTokens/full");
+        return;
+    }
+    SemanticTokens result = result_maybe.value;
+    size_t         lineno = 0;
+    Index         *line = buffer->lines.elements + lineno;
+    size_t         offset = 0;
+    UInt32s        data = result.data;
+    for (size_t ix = 0; ix < result.data.size; ix += 5) {
+        // trace(CAT_LSP, "Semantic token[%zu]: [%du, %du, %du]", ix, data.elements[ix], data.elements[ix + 1], data.elements[ix + 2]);
+        if (data.elements[ix] > 0) {
+            lineno += data.elements[ix];
+            if (lineno >= buffer->lines.size) {
+                // trace(CAT_LSP, "Semantic token[%zu] lineno %zu > buffer->lines %zu", ix, lineno, buffer->lines.size);
+                continue;
+            }
+            line = buffer->lines.elements + lineno;
+            offset = 0;
+        }
+        offset += data.elements[ix + 1];
+        // trace(CAT_LSP, "Semantic token[%zu]: line: %zu col: %zu", ix, lineno, offset);
+        size_t length = data.elements[ix + 2];
+        for (size_t token_ix = 0; token_ix < line->num_tokens; ++token_ix) {
+            assert(line->first_token + token_ix < buffer->tokens.size);
+            DisplayToken *t = buffer->tokens.elements + line->first_token + token_ix;
+            if (t->index == line->index_of + offset && t->length == length) {
+                t->color = semantic_token_colors[data.elements[ix + 3]];
+            }
+        }
+    }
+}
+
+void lsp_on_open(Buffer *buffer)
+{
+    lsp_initialize();
+    if (sv_empty(buffer->name)) {
+        return;
+    }
+    DidOpenTextDocumentParams did_open = { 0 };
+    did_open.textDocument = (TextDocumentItem) {
+        .uri = buffer_uri(buffer),
+        .languageId = sv_from("c"),
+        .version = 0,
+        .text = buffer->text.view
+    };
+    OptionalJSONValue did_open_json = DidOpenTextDocumentParams_encode(did_open);
+    lsp_notification("textDocument/didOpen", did_open_json);
+}
+
+void lsp_did_save(Buffer *buffer)
+{
+    lsp_initialize();
+
+    if (sv_empty(buffer->name)) {
+        return;
+    }
+    DidSaveTextDocumentParams did_save = { 0 };
+    did_save.textDocument = (TextDocumentIdentifier) {
+        .uri = buffer_uri(buffer),
+    };
+    did_save.text = OptionalStringView_create(buffer->text.view);
+    OptionalJSONValue did_save_json = DidSaveTextDocumentParams_encode(did_save);
+    lsp_notification("textDocument/didSave", did_save_json);
+}
+
+void lsp_did_close(Buffer *buffer)
+{
+    lsp_initialize();
+
+    if (sv_empty(buffer->name)) {
+        return;
+    }
+    DidCloseTextDocumentParams did_close = { 0 };
+    did_close.textDocument = (TextDocumentIdentifier) {
+        .uri = buffer_uri(buffer),
+    };
+    OptionalJSONValue did_close_json = DidCloseTextDocumentParams_encode(did_close);
+    lsp_notification("textDocument/didClose", did_close_json);
+}
+
+void lsp_did_change(Buffer *buffer, IntVector2 start, IntVector2 end, StringView text)
+{
+    lsp_initialize();
+
+    if (sv_empty(buffer->name)) {
+        return;
+    }
+    DidChangeTextDocumentParams did_change = { 0 };
+    did_change.textDocument.uri = buffer_uri(buffer);
+    did_change.textDocument.version = buffer->version;
+    TextDocumentContentChangeEvent contentChange = { 0 };
+    contentChange._0.range.start.line = start.line;
+    contentChange._0.range.start.character = start.column;
+    contentChange._0.range.end.line = end.line;
+    contentChange._0.range.end.character = end.column;
+    contentChange._0.text = text;
+    da_append_TextDocumentContentChangeEvent(&did_change.contentChanges, contentChange);
+    OptionalJSONValue did_change_json = DidChangeTextDocumentParams_encode(did_change);
+    lsp_notification("textDocument/didChange", did_change_json);
 }

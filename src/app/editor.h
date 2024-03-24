@@ -7,11 +7,11 @@
 #ifndef __APP_EDITOR_H__
 #define __APP_EDITOR_H__
 
-#include "sv.h"
-#include <widget.h>
+#include <app/widget.h>
 
 typedef struct {
-    _W int     buffer_num;
+    _W;
+    int        buffer_num;
     size_t     cursor;
     IntVector2 cursor_pos;
     int        cursor_col;

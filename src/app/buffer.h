@@ -75,6 +75,7 @@ typedef struct _buffer_event_listener_list {
 } BufferEventListenerList;
 
 typedef struct buffer {
+    _W;
     StringView               name;
     StringView               uri;
     StringBuilder            text;
@@ -90,6 +91,7 @@ typedef struct buffer {
     BufferEventListenerList *listeners;
 } Buffer;
 
+SIMPLE_WIDGET_CLASS(Buffer, buffer);
 DA_WITH_NAME(Buffer, Buffers);
 ERROR_OR_ALIAS(Buffer, Buffer *);
 
@@ -114,5 +116,10 @@ extern void          buffer_redo(Buffer *buffer);
 extern StringView    buffer_sv_from_ref(Buffer *buffer, StringRef ref);
 extern void          buffer_add_listener(Buffer *buffer, BufferEventListener listener);
 extern StringView    buffer_uri(Buffer *buffer);
+extern void          lsp_on_open(Buffer *buffer);
+extern void          lsp_did_save(Buffer *buffer);
+extern void          lsp_did_close(Buffer *buffer);
+extern void          lsp_did_change(Buffer *buffer, IntVector2 start, IntVector2 end, StringView text);
+extern void          lsp_semantic_tokens(Buffer *buffer);
 
 #endif /* __APP_BUFFER_H__ */
