@@ -7,7 +7,7 @@
             "${HOME}/.fonts",
             "${EDDY_DATADIR}/fonts"
         ],
-        "font": "SourceCodePro-Regular.ttf",
+        "font": "VictorMono-Regular.ttf",
         "font_size": 20,
     }
 }
