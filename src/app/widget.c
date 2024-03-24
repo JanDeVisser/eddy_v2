@@ -292,7 +292,7 @@ void widget_command_execute(void *w, StringView command, JSONValue args)
             return;
         }
     }
-    panic("Command '%.*s' not registered for class '%s'", SV_ARG(command), widget->classname);
+    info("Command '%.*s' not registered for class '%s'", SV_ARG(command), widget->classname);
 }
 
 bool widget_contains(void *widget, Vector2 world_coordinates)

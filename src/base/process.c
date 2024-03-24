@@ -250,7 +250,7 @@ ErrorOrInt process_start(Process *p)
     }
     argv[sz + 1] = NULL;
     StringView args = sl_join(&p->arguments, sv_from(" "));
-    trace(CAT_PROCESS, "[CMD] %.*s %.*s\n", SV_ARG(p->command), SV_ARG(args));
+    trace(CAT_PROCESS, "[CMD] %.*s %.*s", SV_ARG(p->command), SV_ARG(args));
     sv_free(args);
 
     // signal(SIGCHLD, SIG_IGN);

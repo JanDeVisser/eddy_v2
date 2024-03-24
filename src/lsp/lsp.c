@@ -227,7 +227,7 @@ void lsp_read(ReadPipe *pipe)
                 goto defer_0;
             }
         }
-        panic("No request matching LSP response ID %d found", response.id);
+        info("No request matching LSP response ID %d found", response.id);
         goto defer_0;
     }
     assert(json_has(&ret, "method"));

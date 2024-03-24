@@ -15,6 +15,7 @@
 
 typedef enum log_level {
     LL_TRACE,
+    LL_INFO,
     LL_PANIC,
 } LogLevel;
 
@@ -23,7 +24,21 @@ static bool s_categories[CAT_COUNT];
 static void vemit_log_message(LogLevel level, TraceCategory category, char const *msg, va_list args);
 static void emit_log_message(LogLevel level, TraceCategory category, char const *msg, ...);
 
-static LogLevel log_level = LL_PANIC;
+static LogLevel log_level = LL_INFO;
+
+static char const *log_level_to_string(LogLevel level)
+{
+    switch (level) {
+    case LL_TRACE:
+        return "TRACE";
+    case LL_INFO:
+        return "INFO";
+    case LL_PANIC:
+        return "PANIC";
+    default:
+        UNREACHABLE();
+    }
+}
 
 static char const *trace_category_to_string(TraceCategory category)
 {
@@ -69,7 +84,11 @@ void vemit_log_message(LogLevel level, TraceCategory category, char const *msg, 
         return;
     }
     if (linelen == 0) {
-        fprintf(stderr, "[%05d:%08llx]:%7.7s: ", getpid(), (uint64_t) pthread_self(), trace_category_to_string(category));
+        char const *cat = trace_category_to_string(category);
+        if (level >= LL_INFO) {
+            cat = log_level_to_string(level);
+        }
+        fprintf(stderr, "[%05d:%08llx]:%c:%7.7s: ", getpid(), (uint64_t) pthread_self(), *log_level_to_string(level), cat);
     }
     linelen += vfprintf(stderr, msg, args);
 }
@@ -124,6 +143,20 @@ void vpanic(char const *msg, va_list args)
 {
     vemit_log_message(LL_PANIC, CAT_COUNT, msg, args);
     log_nl(LL_PANIC, CAT_COUNT);
+}
+
+void info(char const *msg, ...)
+{
+    va_list args;
+    va_start(args, msg);
+    vinfo(msg, args);
+    va_end(args);
+}
+
+void vinfo(char const *msg, va_list args)
+{
+    vemit_log_message(LL_INFO, CAT_COUNT, msg, args);
+    log_nl(LL_INFO, CAT_COUNT);
 }
 
 void trace_nonl(TraceCategory category, char const *msg, ...)
