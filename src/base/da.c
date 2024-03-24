@@ -46,8 +46,10 @@ void da_resize(DA_void *array, size_t elem_size, size_t cap, char const *type)
 void *da_append(DA_void *array, void *elem, size_t elem_size, char const *type)
 {
     da_resize(array, elem_size, array->size + 1, type);
-    memmove(array->elements + elem_size * (array->size++), elem, elem_size);
-    return array->elements + elem_size * (array->size - 1);
+    memmove(array->elements + elem_size * array->size, elem, elem_size);
+    void *ret = array->elements + elem_size * array->size;
+    ++array->size;
+    return ret;
 }
 
 void *da_element(DA_void *array, size_t ix, size_t elem_size, char const *type)
