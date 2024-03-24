@@ -52,6 +52,7 @@ extern void      condition_acquire(Condition);
 extern int       condition_try_acquire(Condition);
 extern void      condition_release(Condition);
 extern void      condition_wakeup(Condition);
+extern void      condition_broadcast(Condition);
 extern void      condition_sleep(Condition);
 
 #ifdef __cplusplus

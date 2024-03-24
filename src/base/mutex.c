@@ -201,6 +201,27 @@ void condition_wakeup(Condition condition)
     trace(CAT_THREAD, "Condition woken up");
 }
 
+void condition_broadcast(Condition condition)
+{
+    int retval = 0;
+
+    trace(CAT_THREAD, "Waking up condition");
+#ifdef HAVE_PTHREAD_H
+    errno = pthread_cond_broadcast(condition.condition);
+    if (errno) {
+        retval = -1;
+    }
+#elif defined(HAVE_INITIALIZECRITICALSECTION)
+#error Provide pthread_cond_broadcast equivalent
+    WakeConditionVariable(&condition->condition);
+#endif /* HAVE_PTHREAD_H */
+    mutex_unlock(condition.mutex);
+    if (retval) {
+        fatal("Error waking condition: %s", errorcode_to_string(errno));
+    }
+    trace(CAT_THREAD, "All threads sleeping on Condition woken up");
+}
+
 void condition_sleep(Condition condition)
 {
     int retval = 0;
