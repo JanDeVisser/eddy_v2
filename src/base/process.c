@@ -10,8 +10,6 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#define STATIC_ALLOCATOR
-#include <allocate.h>
 #include <errorcode.h>
 #include <log.h>
 #include <process.h>
@@ -212,7 +210,7 @@ static void process_dump(Process *p)
 
 Process *process_create_sl(StringView cmd, StringList *args)
 {
-    Process *p = allocate_new(Process);
+    Process *p = MALLOC(Process);
     p->command = cmd;
     p->arguments = sl_copy(args);
     return p;
@@ -245,7 +243,7 @@ ErrorOrInt process_start(Process *p)
 {
     signal(SIGCHLD, sigchld);
     size_t sz = p->arguments.size;
-    char **argv = allocate_array(char *, sz + 2);
+    char **argv = MALLOC_ARR(char *, sz + 2);
     argv[0] = (char *) sv_cstr(p->command);
     for (size_t ix = 0u; ix < sz; ++ix) {
         argv[ix + 1] = (char *) sv_cstr(p->arguments.strings[ix]);
