@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "log.h"
-#include "sv.h"
 #include <stdarg.h>
 #include <sys/syslimits.h>
 #include <unistd.h>
@@ -203,8 +201,9 @@ void lsp_read(ReadPipe *pipe)
     }
     ErrorOrJSONValue ret_maybe = json_decode(response_json);
     if (ErrorOrJSONValue_is_error(ret_maybe)) {
+        info("ERROR Parsing incoming JSON: %s", Error_to_string(ret_maybe.error));
         trace(CAT_LSP, "****** <== %.*s", SV_ARG(response_json));
-        // FIXME Queue an error so we can at least report or log it
+        eddy_set_message(&eddy, "LSP: %s", Error_to_string(ret_maybe.error));
         goto defer_0;
     }
     // trace_json(OptionalJSONValue_create(ret_maybe.value), "<==");
