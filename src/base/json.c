@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "optional.h"
-#include "sv.h"
 #include <stdarg.h>
 #include <stdlib.h>
 
@@ -683,10 +681,6 @@ ErrorOrJSONValue json_decode_value(JSONDecoder *decoder)
             IntegerParseResult parse_result = sv_parse_integer(sv, I64);
             if (parse_result.success) {
                 RETURN(JSONValue, json_integer(parse_result.integer));
-            }
-            parse_result = sv_parse_integer(sv, I64);
-            if (!parse_result.success) {
-                ERROR(JSONValue, JSONError, 0, "Unparseable integer %.*s", SV_ARG(sv));
             }
             RETURN(JSONValue, json_integer(parse_result.integer));
         }
