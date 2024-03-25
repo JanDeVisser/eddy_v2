@@ -8,14 +8,13 @@
 #include <errno.h>
 #include <unistd.h>
 
-#include <allocate.h>
 #include <stddef.h>
 #include <sv.h>
 
-DECLARE_SHARED_ALLOCATOR(sv)
-
-char  *allocate_for_length(size_t length, size_t *capacity);
-size_t buffer_capacity(char const *buffer);
+extern char  *allocate_for_length(size_t length, size_t *capacity);
+extern size_t buffer_capacity(char const *buffer);
+extern void   buffer_free(char *buffer, size_t length);
+extern void   buffer_setlength(char const *buffer, size_t length);
 
 StringView sv_from(char const *s)
 {
@@ -42,7 +41,7 @@ StringView sv_copy_chars(char const *ptr, size_t len)
         return sv_null();
     }
     StringView ret = { 0 };
-    ret.ptr = allocate_for_length(len + 1, NULL);
+    ret.ptr = allocate_for_length(len, NULL);
     ret.length = len;
     memcpy((char *) ret.ptr, ptr, len);
     ((char *) ret.ptr)[ret.length] = 0;
@@ -64,7 +63,7 @@ ErrorOrStringView sv_read(int fd, size_t num)
         RETURN(StringView, sv_null());
     }
     StringView ret = { 0 };
-    ret.ptr = allocate_for_length(num + 1, NULL);
+    ret.ptr = allocate_for_length(num, NULL);
     ret.length = num;
     ((char *) ret.ptr)[num] = 0;
     size_t read_chars = read(fd, (char *) ret.ptr, num);
@@ -113,7 +112,7 @@ StringView sv_decode_quoted_str(StringView str)
     }
     bool   prev_backslash = false;
     size_t len = sv_length(str) - 2 - backslashes;
-    char  *buffer = allocate(len);
+    char  *buffer = allocate_for_length(len, NULL);
     char  *ptr = buffer;
     for (size_t ix = 1; ix < sv_length(str) - 1; ++ix) {
         if (prev_backslash || str.ptr[ix] != '\\') {
@@ -161,7 +160,7 @@ StringView sv_replace(StringView str, StringView from, StringView to)
 
 void sv_free(StringView sv)
 {
-    free_buffer((char *) sv.ptr);
+    buffer_free((char *) sv.ptr, sv.length);
 }
 
 StringView sv_null()
@@ -228,15 +227,11 @@ char const *sv_cstr(StringView sv)
     if (sv_is_cstr(sv)) {
         return sv.ptr;
     }
-    if (buffer_capacity(sv.ptr) >= sv.length + 1) {
-        ((char *) sv.ptr)[sv.length] = '\0';
-        return sv.ptr;
-    }
     char *old = (char *) sv.ptr;
-    sv.ptr = allocate_for_length(sv.length + 1, NULL);
+    sv.ptr = allocate_for_length(sv.length, NULL);
     memcpy((char *) sv.ptr, old, sv.length);
     ((char *) sv.ptr)[sv.length] = '\0';
-    free_buffer(old);
+    buffer_free(old, sv.length);
     return sv.ptr;
 }
 

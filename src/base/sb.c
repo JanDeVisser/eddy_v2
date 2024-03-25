@@ -4,20 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "mem.h"
 #include <ctype.h>
+#include <stddef.h>
 #include <stdint.h>
 
-#include <allocate.h>
 #include <sv.h>
 
-DECLARE_SHARED_ALLOCATOR(sv)
-SHARED_ALLOCATOR_IMPL(sv)
-
-#define BLOCKSIZES(S) S(64) S(128) S(256) S(512) S(1024) S(2048) S(4096) S(8192) S(16384)
-
-static char *sb_freelist[10] = {
-    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
-};
+extern char  *allocate_for_length(size_t length, size_t *capacity);
+extern size_t buffer_capacity(char const *buffer);
+extern void   buffer_free(char *buffer, size_t length);
 
 #define SENTINEL 0xBABECAFE
 
@@ -25,56 +21,48 @@ char *allocate_for_length(size_t length, size_t *capacity)
 {
     char  *ret = NULL;
     size_t cap = (!capacity || !*capacity) ? 32 : *capacity;
-    while (cap < length)
+    while (cap < length + 1) {
         cap *= 2;
-    size_t bit = 0;
-    for (size_t c = cap; c > 1; c >>= 1) {
-        bit++;
     }
-    assert(bit >= 5);
-    if (bit < 15) {
-        if (sb_freelist[bit - 5]) {
-            ret = sb_freelist[bit - 5];
-            sb_freelist[bit - 5] = *((char **) ret);
-        }
-    }
-    if (!ret) {
-        ret = allocate(cap + 2 * sizeof(size_t));
-        *((size_t *) ret + 1) = SENTINEL;
-        trace(CAT_SV, "SALOC:0x%08llx:%5zu:%2zu", (uint64_t) ret, cap, bit - 5);
-    } else {
-        trace(CAT_SV, "SRUSE:0x%08llx:%5zu:%2zu", (uint64_t) ret, cap, bit - 5);
-    }
-    *((size_t *) ret) = cap;
+    size_t buffer_sz = cap + 2 * sizeof(size_t);
+    ret = MALLOC_ARR(char, buffer_sz);
+    size_t *blockptr = (size_t *) ret;
+    ret += 2 * sizeof(size_t);
+    blockptr[1] = SENTINEL;
+    blockptr[0] = cap | (length << 32);
+    trace(CAT_SV, "SALOC:0x%08llx:%5zu", (uint64_t) ret, cap);
     if (capacity) {
         *capacity = cap;
     }
-    return ret + 2 * sizeof(size_t);
+    return ret;
 }
 
 size_t buffer_capacity(char const *buffer)
 {
-    return (buffer && *((size_t *) buffer - 1) == SENTINEL) ? *((size_t *) buffer - 2) : 0;
+    if (!buffer) {
+        return 0;
+    }
+    size_t *blockptr = ((size_t *) buffer) - 2;
+    if (blockptr[1] != SENTINEL) {
+        return 0;
+    }
+    size_t ret = blockptr[0] & 0xFFFFFFFF;
+    size_t length = blockptr[0] >> 32;
+    assert(ret >= length);
+    return ret;
 }
 
-void free_buffer(char *buffer)
+void buffer_free(char *buffer, size_t length)
 {
     size_t capacity = buffer_capacity(buffer);
     if (!capacity) {
         return;
     }
-    size_t bit = 0;
-    for (size_t c = capacity; c > 1; c >>= 1) {
-        bit++;
-    }
-    assert(bit >= 5);
-    trace(CAT_SV, "SFREE:0x%08llx:%5zu:%2zu", (uint64_t) buffer, capacity, bit - 5);
-    if (bit < 15) {
-        *((size_t *) buffer - 2) = 0;
-        *((char **) buffer) = sb_freelist[bit - 5];
-        sb_freelist[bit - 5] = buffer - 2 * sizeof(size_t);
-    } else {
-        free(buffer - 2 * sizeof(size_t));
+    size_t *blockptr = ((size_t *) buffer) - 2;
+    size_t  block_cap = blockptr[0] & 0xFFFFFFFF;
+    size_t  block_length = blockptr[0] >> 32;
+    if (block_length == length) {
+        free(blockptr);
     }
 }
 
@@ -89,10 +77,10 @@ static void sb_reallocate(StringBuilder *sb, size_t new_len)
         return;
     }
     size_t allocated_cap = 0;
-    ret = allocate_for_length(new_len + 1, &allocated_cap);
+    ret = allocate_for_length(new_len, &allocated_cap);
     if (sb->view.ptr) {
         memcpy(ret, sb->view.ptr, sb->view.length);
-        free_buffer((char *) sb->view.ptr);
+        buffer_free((char *) sb->view.ptr, sb->view.length);
     }
     sb->view.ptr = ret;
 }
@@ -132,11 +120,10 @@ StringBuilder sb_copy_chars(char const *ptr, size_t len)
     }
     StringBuilder sb = sb_create();
     size_t        cap = buffer_capacity(sb.view.ptr);
-    sb.view.ptr = allocate_for_length(len + 1, &cap);
-    if (len > 0) {
-        memcpy((char *) sb.view.ptr, ptr, len);
-        sb.view.length = len;
-    }
+    sb.view.ptr = allocate_for_length(len, &cap);
+    memcpy((char *) sb.view.ptr, ptr, len);
+    sb.view.length = len;
+    ((char *) sb.ptr)[len] = 0;
     trace(CAT_SV, "SBCPC:0x%08llx:%5zu:%.60s", (uint64_t) sb.view.ptr, buffer_capacity(sb.view.ptr), sb.view.ptr);
     return sb;
 }
@@ -162,7 +149,7 @@ StringRef sb_append_chars(StringBuilder *sb, char const *ptr, size_t len)
     if (ptr == NULL || len == 0) {
         return (StringRef) { 0 };
     }
-    sb_reallocate(sb, sb->view.length + len + 1);
+    sb_reallocate(sb, sb->view.length + len);
     char *p = (char *) sb->view.ptr;
     memcpy(p + sb->view.length, ptr, len);
     size_t index = sb->view.length;
@@ -237,7 +224,7 @@ StringRef sb_vprintf(StringBuilder *sb, char const *fmt, va_list args)
     va_copy(args2, args);
     size_t len = vsnprintf(NULL, 0, fmt, args2);
     va_end(args2);
-    sb_reallocate(sb, sb->view.length + len + 1);
+    sb_reallocate(sb, sb->view.length + len);
     size_t index = sb->view.length;
     vsnprintf((char *) sb->view.ptr + sb->view.length, len + 1, fmt, args);
     sb->view.length += len;
@@ -267,7 +254,7 @@ StringRef sb_insert_chars(StringBuilder *sb, char const *ptr, size_t len, size_t
     if (at >= sb->view.length) {
         return sb_append_chars(sb, ptr, len);
     }
-    sb_reallocate(sb, sb->view.length + len + 1);
+    sb_reallocate(sb, sb->view.length + len);
     char *p = (char *) sb->view.ptr;
     memmove(p + at + len, p + at, sb->view.length - at);
     memcpy(p + at, ptr, len);

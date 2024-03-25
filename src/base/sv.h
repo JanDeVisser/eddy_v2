@@ -78,7 +78,6 @@ typedef struct StringScanner {
 #define SV(S, L) \
     (StringView) { .ptr = (S), .length = (L) }
 
-extern void               free_buffer(char *buffer);
 extern StringView         sv_null();
 extern void               sv_free(StringView sv);
 extern StringView         sv_copy(StringView sv);
