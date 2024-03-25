@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "log.h"
 #include <math.h>
 
 #include <widget.h>
@@ -12,7 +11,6 @@
 DA_IMPL(Rect);
 DA_IMPL(WidgetCommand);
 DA_IMPL(CommandBinding);
-DA_IMPL(PendingCommand);
 DA_IMPL_TYPE(Widget, Widget *);
 
 WIDGET_CLASS_DEF(Layout, layout);
@@ -173,7 +171,7 @@ void widget_render_sized_text(void *w, float x, float y, StringView text, Font f
         ((char *) text.ptr)[text.length] = 0;
     }
     if (x < 0 || y < 0) {
-        Vector2 m = MeasureTextEx(font, text.ptr, /* font.baseSize */ 20.0 * size, 2);
+        Vector2 m = MeasureTextEx(font, text.ptr, font.baseSize * size, 2);
         if (x < 0) {
             x = widget->viewport.width - m.x + x;
         }
@@ -182,7 +180,7 @@ void widget_render_sized_text(void *w, float x, float y, StringView text, Font f
         }
     }
     Vector2 pos = { widget->viewport.x + x, widget->viewport.y + y };
-    DrawTextEx(font, text.ptr, pos, /* font.baseSize */ 20.0 * size, 2, color);
+    DrawTextEx(font, text.ptr, pos, font.baseSize * size, 2, color);
     if (ch) {
         ((char *) text.ptr)[text.length] = ch;
     }
@@ -234,14 +232,53 @@ void widget_draw_line(void *w, float x0, float y0, float x1, float y1, Color col
 
 void widget_draw_rectangle(void *w, float x, float y, float width, float height, Color color)
 {
-    Widget *widget = (Widget *) w;
-    DrawRectangleRec(widget_normalize(w, x, y, width, height), color);
+    Widget   *widget = (Widget *) w;
+    Rectangle r = widget_normalize(w, x, y, width, height);
+    DrawRectangleRec(r, color);
+}
+
+void widget_draw_rectangle_no_normalize(void *w, float x, float y, float width, float height, Color color)
+{
+    Widget   *widget = (Widget *) w;
+    Rectangle r = { .x = widget->viewport.x + x, .y = widget->viewport.y + y, .width = width, .height = height };
+    DrawRectangleRec(r, color);
 }
 
 void widget_draw_outline(void *w, float x, float y, float width, float height, Color color)
 {
     Widget *widget = (Widget *) w;
     DrawRectangleLinesEx(widget_normalize(w, x, y, width, height), 1, color);
+}
+
+void widget_draw_outline_no_normalize(void *w, float x, float y, float width, float height, Color color)
+{
+    Widget   *widget = (Widget *) w;
+    Rectangle r = { .x = widget->viewport.x + x, .y = widget->viewport.y + y, .width = width, .height = height };
+    DrawRectangleLinesEx(r, 1, color);
+}
+
+void widget_draw_hover_panel(void *w, float x, float y, StringList text, Color bgcolor, Color textcolor)
+{
+    Widget *widget = (Widget *) w;
+    assert(text.size > 0);
+    size_t longest_line = 0;
+    size_t maxlen = 0;
+    for (size_t ix = 0; ix < text.size; ++ix) {
+        if (text.strings[ix].length > maxlen) {
+            maxlen = text.strings[ix].length;
+            longest_line = ix;
+        }
+    }
+    char buffer[maxlen + 1];
+    sv_cstr(text.strings[longest_line], buffer);
+    Vector2 text_size = MeasureTextEx(app->font, buffer, app->font.baseSize, 2);
+    size_t  width = text_size.x + 12;
+    size_t  height = (app->cell.y + 2) * text.size + 12;
+    widget_draw_rectangle_no_normalize(w, x, y, width, height, bgcolor);
+    widget_draw_outline_no_normalize(w, x + 2, y + 2, width - 4, height - 4, textcolor);
+    for (size_t ix = 0; ix < text.size; ++ix) {
+        widget_render_text(w, x + 6, y + (app->cell.y + 2) * ix + 6, text.strings[ix], app->font, textcolor);
+    }
 }
 
 void widget_register(void *w, char const *command, WidgetCommandHandler handler)
@@ -300,6 +337,17 @@ bool widget_contains(void *widget, Vector2 world_coordinates)
     Widget *w = (Widget *) widget;
     Rect    r = w->viewport;
     return (r.x < world_coordinates.x) && (world_coordinates.x < r.x + r.width) && (r.y < world_coordinates.y) && (world_coordinates.y < r.y + r.height);
+}
+
+OptionalIntVector2 widget_coordinates(void *widget, Vector2 world_coordinates)
+{
+    if (!widget_contains(widget, world_coordinates)) {
+        RETURN_EMPTY(IntVector2);
+    }
+    Widget    *w = (Widget *) widget;
+    Rect       r = w->viewport;
+    IntVector2 ret = (IntVector2) { .x = world_coordinates.x - r.x, .y = world_coordinates.y - r.y };
+    RETURN_VALUE(IntVector2, ret);
 }
 
 void layout_init(Layout *)

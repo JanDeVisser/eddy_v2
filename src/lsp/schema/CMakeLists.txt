@@ -72,6 +72,12 @@ CompletionItemLabelDetails.c
 CompletionItemKind.c
 CompletionItem.c
 CompletionList.c
+Diagnostic.c
+DiagnosticSeverity.c
+DiagnosticTag.c
+DiagnosticRelatedInformation.c
+CodeDescription.c
+PublishDiagnosticsParams.c
 )
 
 target_link_libraries(lspschema base)

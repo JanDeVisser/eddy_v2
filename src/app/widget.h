@@ -9,6 +9,7 @@
 
 #include "da.h"
 #include "json.h"
+#include "optional.h"
 #include <raylib.h>
 
 #include <base/mutex.h>
@@ -106,6 +107,8 @@ typedef struct {
         int y;
     };
 } IntVector2;
+
+OPTIONAL(IntVector2);
 
 typedef struct {
     union {
@@ -348,6 +351,13 @@ typedef struct {
 
 DA_WITH_NAME(PendingCommand, PendingCommands);
 
+typedef struct draw_floating {
+    Widget    *target;
+    WidgetDraw draw;
+} DrawFloating;
+
+DA_WITH_NAME(DrawFloating, DrawFloatings);
+
 #define _APP_FIELDS                   \
     _LAYOUT_FIELDS;                   \
     int             argc;             \
@@ -360,6 +370,7 @@ DA_WITH_NAME(PendingCommand, PendingCommands);
     char            last_key[64];     \
     bool            quit;             \
     double          time;             \
+    DrawFloatings   floatings;        \
     Widgets         modals;           \
     Mutex           commands_mutex;   \
     PendingCommands pending_commands; \
@@ -392,45 +403,48 @@ typedef struct {
 typedef App *(*AppCreate)(void);
 typedef bool (*LayoutFindByPredicate)(Layout *layout, Widget *w, void *ctx);
 
-extern char const      *SizePolicy_name(SizePolicy policy);
-extern int              iclamp(int v, int min, int max);
-extern int              imin(int i1, int i2);
-extern int              imax(int i1, int i2);
-extern bool             icontains(int f, int min, int max);
-extern float            fclamp(float v, float min, float max);
-extern bool             fcontains(float f, float min, float max);
-extern char const      *rect_tostring(Rect r);
-extern bool             is_modifier_down(KeyboardModifier modifier);
-extern char const      *modifier_string(KeyboardModifier modifier);
-extern bool             _is_key_pressed(int key, char const *keystr, ...);
-extern KeyboardModifier modifier_current();
-extern Rectangle        widget_normalize(void *w, float left, float top, float width, float height);
-extern void             widget_render_text(void *w, float x, float y, StringView text, Font font, Color color);
-extern void             widget_render_sized_text(void *w, float x, float y, StringView text, Font font, float size, Color color);
-extern void             widget_render_text_bitmap(void *w, float x, float y, StringView text, Color color);
-extern void             widget_draw_rectangle(void *w, float x, float y, float width, float height, Color color);
-extern void             widget_draw_outline(void *w, float x, float y, float width, float height, Color color);
-extern void             widget_draw_line(void *w, float x0, float y0, float x1, float y1, Color color);
-void                    widget_register(void *w, char const *command, WidgetCommandHandler handler);
-void                    _widget_bind(void *w, char const *command, ...);
-void                    widget_vbind(void *w, char const *command, va_list bindings);
-void                    _widget_add_command(void *w, char const *command, WidgetCommandHandler handler, ...);
-extern void             widget_command_execute(void *w, StringView command, JSONValue args);
-extern bool             widget_contains(void *widget, Vector2 world_coordinates);
-extern Widget          *layout_find_by_predicate(Layout *layout, LayoutFindByPredicate predicate, void *ctx);
-extern Widget          *layout_find_by_draw_function(Layout *layout, WidgetDraw draw_fnc);
-extern Widget          *layout_find_by_classname(Layout *layout, StringView classname);
-extern void             layout_add_widget(Layout *layout, void *widget);
-extern void             layout_traverse(Layout *layout, void (*fnc)(Widget *));
-extern void             layout_dump(Layout *layout);
-extern void             app_initialize(AppCreate create, int argc, char **argv);
-extern void             app_start();
-extern void             app_init(App *app);
-extern void             app_draw(App *app);
-extern void             app_process_input(App *app);
-extern void             app_on_resize(App *app);
-extern void             app_on_process_input(App *app);
-extern void             app_submit(App *app, void *target, StringView command, JSONValue args);
+extern char const        *SizePolicy_name(SizePolicy policy);
+extern int                iclamp(int v, int min, int max);
+extern int                imin(int i1, int i2);
+extern int                imax(int i1, int i2);
+extern bool               icontains(int f, int min, int max);
+extern float              fclamp(float v, float min, float max);
+extern bool               fcontains(float f, float min, float max);
+extern char const        *rect_tostring(Rect r);
+extern bool               is_modifier_down(KeyboardModifier modifier);
+extern char const        *modifier_string(KeyboardModifier modifier);
+extern bool               _is_key_pressed(int key, char const *keystr, ...);
+extern KeyboardModifier   modifier_current();
+extern Rectangle          widget_normalize(void *w, float left, float top, float width, float height);
+extern void               widget_render_text(void *w, float x, float y, StringView text, Font font, Color color);
+extern void               widget_render_sized_text(void *w, float x, float y, StringView text, Font font, float size, Color color);
+extern void               widget_render_text_bitmap(void *w, float x, float y, StringView text, Color color);
+extern void               widget_draw_rectangle(void *w, float x, float y, float width, float height, Color color);
+extern void               widget_draw_outline(void *w, float x, float y, float width, float height, Color color);
+extern void               widget_draw_line(void *w, float x0, float y0, float x1, float y1, Color color);
+extern void               widget_draw_hover_panel(void *w, float x, float y, StringList text, Color bgcolor, Color textcolor);
+void                      widget_register(void *w, char const *command, WidgetCommandHandler handler);
+void                      _widget_bind(void *w, char const *command, ...);
+void                      widget_vbind(void *w, char const *command, va_list bindings);
+void                      _widget_add_command(void *w, char const *command, WidgetCommandHandler handler, ...);
+extern void               widget_command_execute(void *w, StringView command, JSONValue args);
+extern bool               widget_contains(void *widget, Vector2 world_coordinates);
+extern OptionalIntVector2 widget_coordinates(void *widget, Vector2 world_coordinates);
+extern Widget            *layout_find_by_predicate(Layout *layout, LayoutFindByPredicate predicate, void *ctx);
+extern Widget            *layout_find_by_draw_function(Layout *layout, WidgetDraw draw_fnc);
+extern Widget            *layout_find_by_classname(Layout *layout, StringView classname);
+extern void               layout_add_widget(Layout *layout, void *widget);
+extern void               layout_traverse(Layout *layout, void (*fnc)(Widget *));
+extern void               layout_dump(Layout *layout);
+extern void               app_initialize(AppCreate create, int argc, char **argv);
+extern void               app_start();
+extern void               app_init(App *app);
+extern void               app_draw(App *app);
+extern void               app_process_input(App *app);
+extern void               app_on_resize(App *app);
+extern void               app_on_process_input(App *app);
+extern void               app_submit(App *app, void *target, StringView command, JSONValue args);
+extern void               app_draw_floating(App *app, void *target, WidgetDraw draw);
 
 #define is_key_pressed(key, ...) (_is_key_pressed((key), #key __VA_OPT__(, ) __VA_ARGS__, KMOD_COUNT))
 #define widget_add_command(w, cmd, handler, ...) _widget_add_command((w), (cmd), (handler) __VA_OPT__(, ) __VA_ARGS__, (KeyCombo) { KEY_NULL, KMOD_NONE })

@@ -28,13 +28,32 @@ SIMPLE_WIDGET_CLASS_DEF(BufferView, view);
 void gutter_init(Gutter *gutter)
 {
     gutter->policy = SP_CHARACTERS;
-    gutter->policy_size = 4;
+    gutter->policy_size = 5;
     gutter->padding = DEFAULT_PADDING;
     gutter->background = palettes[PALETTE_DARK][PI_BACKGROUND];
 }
 
 void gutter_resize(Gutter *)
 {
+}
+
+void draw_diagnostic_float(Gutter *gutter)
+{
+    if (!gutter->memo) {
+        gutter->memo = layout_find_by_draw_function((Layout *) gutter->parent, (WidgetDraw) editor_draw);
+    }
+    Editor     *editor = (Editor *) gutter->memo;
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
+
+    StringList hover_text = { 0 };
+    for (size_t ix = gutter->first_diagnostic_hover; ix < gutter->num_diagnostics_hover; ++ix) {
+        sl_push(&hover_text, buffer->diagnostics.elements[gutter->first_diagnostic_hover + ix].message);
+    }
+    if (hover_text.size > 0) {
+        widget_draw_hover_panel(gutter, gutter->viewport.width - 3, eddy.cell.y * gutter->row_diagnostic_hover + 6, hover_text,
+            palettes[PALETTE_DARK][PI_BACKGROUND], palettes[PALETTE_DARK][PI_DEFAULT]);
+    }
 }
 
 void gutter_draw(Gutter *gutter)
@@ -51,11 +70,39 @@ void gutter_draw(Gutter *gutter)
             sv_from(TextFormat("%4d", lineno + 1)),
             eddy.font,
             palettes[PALETTE_DARK][PI_LINE_NUMBER]);
+        Index *line = buffer->lines.elements + lineno;
+        if (line->num_diagnostics > 0) {
+            widget_draw_rectangle(gutter, -6, eddy.cell.y * row, 6, eddy.cell.y, palettes[PALETTE_DARK][PI_ERROR_MARKER]);
+        }
+    }
+    if (gutter->num_diagnostics_hover > 0) {
+        app_draw_floating(app, gutter, (WidgetDraw) draw_diagnostic_float);
     }
 }
 
-void gutter_process_input(Gutter *)
+void gutter_process_input(Gutter *gutter)
 {
+    gutter->row_diagnostic_hover = 0;
+    gutter->first_diagnostic_hover = 0;
+    gutter->num_diagnostics_hover = 0;
+    Vector2 mouse = GetMousePosition();
+    if (widget_contains(gutter, mouse)) {
+        IntVector2 gutter_coords = MUST_OPTIONAL(IntVector2, widget_coordinates(gutter, mouse));
+        int        row = gutter_coords.y / eddy.cell.y;
+        if (!gutter->memo) {
+            gutter->memo = layout_find_by_draw_function((Layout *) gutter->parent, (WidgetDraw) editor_draw);
+        }
+        Editor     *editor = (Editor *) gutter->memo;
+        BufferView *view = editor->buffers.elements + editor->current_buffer;
+        Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
+        size_t      lineno = view->top_line + row;
+        Index      *line = buffer->lines.elements + lineno;
+        if (line->num_diagnostics > 0) {
+            gutter->row_diagnostic_hover = row;
+            gutter->first_diagnostic_hover = line->first_diagnostic;
+            gutter->num_diagnostics_hover = line->num_diagnostics;
+        }
+    }
 }
 
 // -- BufferView -------------------------------------------------------------

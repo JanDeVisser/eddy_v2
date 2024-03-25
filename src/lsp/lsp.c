@@ -382,7 +382,7 @@ void lsp_initialize()
         return;
     }
     widget_register(app, "lsp-initialize", handle_initialize_response);
-    lsp = process_create(SV("clangd", 6));
+    lsp = process_create(SV("clangd", 6), "--use-dirty-headers", "--background-index");
     lsp->stderr_file = SV("/tmp/clangd.log", 15);
     lsp->out.on_read = lsp_read;
     process_background(lsp);

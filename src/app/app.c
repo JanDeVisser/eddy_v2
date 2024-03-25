@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "json.h"
-#include "log.h"
-#include "sv.h"
 #include <widget.h>
+
+DA_IMPL(PendingCommand);
+DA_IMPL(DrawFloating);
 
 void app_init(App *app)
 {
@@ -28,9 +28,21 @@ void app_init(App *app)
     }
 }
 
+void app_draw_floating(App *app, void *target, WidgetDraw draw)
+{
+    assert(target != NULL);
+    assert(draw != NULL);
+    da_append_DrawFloating(&app->floatings, (DrawFloating) { .target = (Widget *) target, .draw = draw });
+}
+
 void app_draw(App *app)
 {
+    app->floatings.size = 0;
     layout_draw((Layout *) app);
+    for (size_t ix = 0; ix < app->floatings.size; ++ix) {
+        DrawFloating *floating = app->floatings.elements + ix;
+        floating->draw(floating->target);
+    }
     for (size_t ix = 0; ix < app->modals.size; ++ix) {
         Widget *m = app->modals.elements[ix];
         m->handlers.draw(m);

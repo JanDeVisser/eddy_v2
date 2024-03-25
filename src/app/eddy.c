@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "widget.h"
 #include <errno.h>
 #include <pwd.h>
 #include <stdlib.h>
@@ -21,6 +20,9 @@
 #include <base/io.h>
 #include <base/json.h>
 #include <base/options.h>
+#include <lsp/lsp.h>
+#include <lsp/schema/Diagnostic.h>
+#include <lsp/schema/PublishDiagnosticsParams.h>
 
 #define WINDOW_WIDTH 1600
 #define WINDOW_HEIGHT 768
@@ -42,7 +44,7 @@ void app_state_read(AppState *app_state)
     char const *state_fname = TextFormat("%s/.eddy/state", pw->pw_dir);
     if (stat(state_fname, &sb) == 0) {
         int state_fd = open(state_fname, O_RDONLY);
-        read(state_fd, app_state, sizeof(app_state));
+        read(state_fd, app_state, sizeof(AppState));
         close(state_fd);
     } else {
         app_state_write(app_state);
@@ -188,9 +190,9 @@ void eddy_cmd_quit(Eddy *eddy, JSONValue unused)
             break;
         }
     }
-    StringView prompt = sv_from("Are you sure you want to quit?");
+    StringView prompt = SV("Are you sure you want to quit?", 30);
     if (has_modified_buffers) {
-        prompt = sv_from("There are modified files. Are you sure you want to quit?");
+        prompt = SV("There are modified files. Are you sure you want to quit?", 56);
     }
     ListBox *are_you_sure = listbox_create_query(prompt, eddy_are_you_sure_handler, QueryOptionYesNo);
     listbox_show(are_you_sure);
@@ -235,7 +237,7 @@ void eddy_open_fs_handler(ListBox *listbox, DirEntry entry)
 
 void eddy_cmd_open_file(Eddy *eddy, JSONValue unused)
 {
-    ListBox *listbox = file_selector_create(sv_from("Select file"), eddy_open_fs_handler, FSFile);
+    ListBox *listbox = file_selector_create(SV("Select file", 11), eddy_open_fs_handler, FSFile);
     listbox_show(listbox);
 }
 
@@ -304,6 +306,49 @@ void eddy_cmd_search_file(Eddy *eddy, JSONValue unused)
     listbox_show(listbox);
 }
 
+void eddy_cmd_set_message(Eddy *eddy, JSONValue message)
+{
+    assert(message.type == JSON_TYPE_STRING);
+    minibuffer_set_message_sv(message.string);
+}
+
+void eddy_cmd_display_messagebox(Eddy *eddy, JSONValue message)
+{
+    assert(message.type == JSON_TYPE_STRING);
+    ListBox *box = messagebox_create(message.string);
+    listbox_show(box);
+}
+
+void eddy_publish_diagnostics_handler(Eddy *eddy, JSONValue notif)
+{
+    Notification                     notification = notification_decode(&notif);
+    OptionalPublishDiagnosticsParams params_maybe = PublishDiagnosticsParams_decode(notification.params);
+    if (!params_maybe.has_value) {
+        info("Could not decode textdocument/publishDiagnostics notification");
+        return;
+    }
+    PublishDiagnosticsParams params = params_maybe.value;
+    for (size_t ix = 0; ix < eddy->buffers.size; ++ix) {
+        Buffer *buffer = eddy->buffers.elements + ix;
+        if (sv_eq(params.uri, buffer_uri(buffer))) {
+            da_free_Diagnostic(&buffer->diagnostics);
+            buffer->diagnostics = params.diagnostics;
+            params.diagnostics = (Diagnostics) { 0 };
+            ++buffer->version;
+
+            trace(CAT_LSP, "Diagnostics for '%.*s':", SV_ARG(params.uri));
+            for (size_t dix = 0; dix < buffer->diagnostics.size; ++dix) {
+                Diagnostic *d = buffer->diagnostics.elements + dix;
+                trace(CAT_LSP, "%.*s:%d:%d %.*s", SV_ARG(buffer->name), d->range.start.line, d->range.start.character, SV_ARG(d->message));
+            }
+            trace(CAT_LSP, "----");
+
+            return;
+        }
+    }
+    info("Received diagnostics for unknown document '%.*s'", SV_ARG(params.uri));
+}
+
 Eddy *eddy_create()
 {
     app_state_read(&state);
@@ -366,6 +411,9 @@ void eddy_init(Eddy *eddy)
         (KeyCombo) { KEY_O, KMOD_SUPER });
     widget_add_command(eddy, "cmake-build", (WidgetCommandHandler) cmake_cmd_build,
         (KeyCombo) { KEY_F9, KMOD_NONE });
+    widget_register(eddy, "lsp-textDocument/publishDiagnostics", (WidgetCommandHandler) eddy_publish_diagnostics_handler);
+    widget_register(eddy, "display-message", (WidgetCommandHandler) eddy_cmd_set_message);
+    widget_register(eddy, "show-message-box", (WidgetCommandHandler) eddy_cmd_display_messagebox);
 
     eddy->viewport.width = WINDOW_WIDTH;
     eddy->viewport.height = WINDOW_HEIGHT;
@@ -479,8 +527,9 @@ void eddy_load_font(Eddy *eddy)
             sb_replace_all(&d, SV("${EDDY_DATADIR}", 15), sv_from(EDDY_DATADIR));
             StringView path = sv_printf("%.*s/%.*s", SV_ARG(d.view), SV_ARG(font.string));
             if (fs_file_exists(path) && !fs_is_directory(path)) {
-                printf("Found font file %.*s\n", SV_ARG(path));
-                eddy->font = LoadFontEx(sv_cstr(path), /* json_int_value(font_size) */ 20.0, NULL, 0);
+                trace(CAT_EDIT, "Found font file %.*s", SV_ARG(path));
+                char buf[path.length + 1];
+                eddy->font = LoadFontEx(sv_cstr(path, buf), json_int_value(font_size), NULL, 0);
                 sv_free(d.view);
                 sv_free(path);
                 return;
@@ -497,13 +546,14 @@ void eddy_open_dir(Eddy *eddy, StringView dir)
 {
     dir = fs_canonical(dir);
     MUST(Int, fs_assert_dir(dir));
-    if (chdir(sv_cstr(dir)) != 0) {
+    char buf[dir.length + 1];
+    if (chdir(sv_cstr(dir, buf)) != 0) {
         fatal("Cannot open project directory '%.*s': Could not chdir(): %s", SV_ARG(dir), strerror(errno));
     }
     eddy->project_dir = dir;
-    MUST(Int, fs_assert_dir(sv_from(".eddy")));
-    if (fs_file_exists(sv_from(".eddy/state"))) {
-        StringView s = MUST(StringView, read_file_by_name(sv_from(".eddy/state")));
+    MUST(Int, fs_assert_dir(SV(".eddy", 5)));
+    if (fs_file_exists(SV(".eddy/state", 11))) {
+        StringView s = MUST(StringView, read_file_by_name(SV(".eddy/state", 11)));
         JSONValue  state = MUST(JSONValue, json_decode(s));
         JSONValue  files = json_get_default(&state, "files", json_array());
         assert(files.type == JSON_TYPE_ARRAY);
@@ -581,11 +631,7 @@ void eddy_set_message(Eddy *eddy, char const *fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
-    minibuffer_set_vmessage(fmt, args);
+    JSONValue msg = json_string(sv_vprintf(fmt, args));
     va_end(args);
-}
-
-void eddy_clear_message(Eddy *eddy)
-{
-    minibuffer_clear_message();
+    app_submit((App *) eddy, (Widget *) app, SV("display-message", 15), msg);
 }

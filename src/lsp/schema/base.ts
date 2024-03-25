@@ -430,3 +430,56 @@ export interface CompletionList {
 	};
 	items: CompletionItem[];
 }
+
+export interface PublishDiagnosticsClientCapabilities {
+	relatedInformation?: boolean;
+	tagSupport?: {
+		valueSet: DiagnosticTag[];
+	};
+	versionSupport?: boolean;
+	codeDescriptionSupport?: boolean;
+	dataSupport?: boolean;
+}
+
+export interface Diagnostic {
+	range: Range;
+	severity?: DiagnosticSeverity;
+	code?: integer | string;
+	codeDescription?: CodeDescription;
+	source?: string;
+	message: string;
+	tags?: DiagnosticTag[];
+	relatedInformation?: DiagnosticRelatedInformation[];
+	data?: LSPAny;
+}
+
+export type DiagnosticSeverity = integer;
+export namespace DiagnosticSeverity {
+	export const Error: integer = 1;
+	export const Warning: integer = 2;
+	export const Information: integer = 3;
+	export const Hint: integer = 4;
+}
+
+
+export type DiagnosticTag = integer;
+export namespace DiagnosticTag {
+	export const Unnecessary: integer = 1;
+	export const Deprecated: integer = 2;
+}
+
+
+export interface DiagnosticRelatedInformation {
+	location: Location;
+	message: string;
+}
+
+export interface CodeDescription {
+	href: URI;
+}
+
+interface PublishDiagnosticsParams {
+	uri: DocumentUri;
+	version?: integer;
+	diagnostics: Diagnostic[];
+}

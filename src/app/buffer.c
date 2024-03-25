@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "json.h"
 #include <ctype.h>
 
 #include <app/buffer.h>
@@ -17,6 +16,7 @@
 #include <lsp/schema/CompletionItem.h>
 #include <lsp/schema/CompletionList.h>
 #include <lsp/schema/CompletionParams.h>
+#include <lsp/schema/Diagnostic.h>
 #include <lsp/schema/DidChangeTextDocumentParams.h>
 #include <lsp/schema/DidCloseTextDocumentParams.h>
 #include <lsp/schema/DidOpenTextDocumentParams.h>
@@ -116,6 +116,16 @@ void buffer_build_indices(Buffer *buffer)
     size_t lineno = 0;
     // printf("Buffer size: %zu\n", buffer->text.view.length);
     // printf("%5zu: ", lineno);
+    int dix = 0;
+    current->first_diagnostic = 0;
+    current->num_diagnostics = 0;
+    if (dix < buffer->diagnostics.size) {
+        current->first_diagnostic = dix;
+        while (dix < buffer->diagnostics.size && buffer->diagnostics.elements[dix].range.start.line == 0) {
+            ++current->num_diagnostics;
+            ++dix;
+        }
+    }
     while (true) {
         Token t = lexer_next(&lexer);
         lexer_lex(&lexer);
@@ -129,8 +139,17 @@ void buffer_build_indices(Buffer *buffer)
             if (t.kind == TK_END_OF_FILE) {
                 break;
             }
+            ++lineno;
             current = da_append_Index(&buffer->lines, (Index) { t.location + 1, { buffer->text.view.ptr + t.location + 1, 0 }, 0, 0 });
-            // ++lineno;
+            current->first_diagnostic = 0;
+            current->num_diagnostics = 0;
+            if (dix < buffer->diagnostics.size) {
+                current->first_diagnostic = dix;
+                while (dix < buffer->diagnostics.size && buffer->diagnostics.elements[dix].range.start.line == lineno) {
+                    ++current->num_diagnostics;
+                    ++dix;
+                }
+            }
             // printf("%5zu: ", lineno);
             continue;
         }

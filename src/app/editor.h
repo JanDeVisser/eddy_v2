@@ -42,9 +42,13 @@ WIDGET_CLASS(Editor, editor);
 
 typedef struct {
     _W;
+    size_t row_diagnostic_hover;
+    size_t first_diagnostic_hover;
+    size_t num_diagnostics_hover;
 } Gutter;
 
 WIDGET_CLASS(Gutter, gutter);
+
 extern void       editor_new(Editor *editor);
 extern ErrorOrInt editor_open(Editor *editor, StringView file);
 extern void       editor_select_buffer(Editor *editor, int buffer_num);

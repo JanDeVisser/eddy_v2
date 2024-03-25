@@ -7,9 +7,10 @@
 #ifndef __APP_BUFFER_H__
 #define __APP_BUFFER_H__
 
-#include <palette.h>
-#include <sv.h>
-#include <widget.h>
+#include <app/palette.h>
+#include <app/widget.h>
+#include <base/sv.h>
+#include <lsp/schema/Diagnostic.h>
 
 typedef enum {
     ETCursorMove,
@@ -62,6 +63,8 @@ typedef struct {
     StringView line;
     size_t     first_token;
     size_t     num_tokens;
+    size_t     first_diagnostic;
+    size_t     num_diagnostics;
 } Index;
 
 DA_WITH_NAME(Index, Indices);
@@ -88,6 +91,7 @@ typedef struct buffer {
     size_t                   indexed_version;
     size_t                   version;
     size_t                   undo_pointer;
+    Diagnostics              diagnostics;
     BufferEventListenerList *listeners;
 } Buffer;
 
