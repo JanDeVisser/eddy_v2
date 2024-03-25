@@ -251,16 +251,29 @@ ListBox *listbox_create_query(StringView query, QueryResult handler, QueryOption
     QueryDef *def = ret->memo;
     def->handler = handler;
     def->options = options;
-    if (options | QueryOptionYes) {
+    if (options & QueryOptionYes) {
         da_append_ListBoxEntry(&ret->entries, (ListBoxEntry) { sv_from("Yes"), (void *) (size_t) QueryOptionYes });
     }
-    if (options | QueryOptionNo) {
+    if (options & QueryOptionNo) {
         da_append_ListBoxEntry(&ret->entries, (ListBoxEntry) { sv_from("No"), (void *) (size_t) QueryOptionCancel });
     }
-    if (options | QueryOptionCancel) {
+    if (options & QueryOptionCancel) {
         da_append_ListBoxEntry(&ret->entries, (ListBoxEntry) { sv_from("Cancel"), (void *) (size_t) QueryOptionCancel });
     }
+    if (options & QueryOptionOK) {
+        da_append_ListBoxEntry(&ret->entries, (ListBoxEntry) { sv_from("OK"), (void *) (size_t) QueryOptionOK });
+    }
     return ret;
+}
+
+void messagebox_handler(ListBox *listbox, QueryOption selected)
+{
+    //
+}
+
+ListBox *messagebox_create(StringView text)
+{
+    return listbox_create_query(text, messagebox_handler, QueryOptionOK);
 }
 
 // -- F I L E S E L E C T O R -----------------------------------------------

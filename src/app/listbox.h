@@ -23,6 +23,8 @@ typedef enum : uint8_t {
     QueryOptionYesNo = 0x03,
     QueryOptionCancel = 0x04,
     QueryOptionYesNoCancel = 0x07,
+    QueryOptionOK = 0x08,
+    QueryOptionOKCancel = 0x0C,
 } QueryOption;
 
 typedef struct {
@@ -101,9 +103,10 @@ extern void      listbox_refresh(ListBox *listbox);
 extern void      listbox_show(ListBox *listbox);
 extern void      listbox_free(ListBox *listbox);
 extern ListBox  *listbox_create_query(StringView query, QueryResult handler, QueryOption options);
+extern ListBox  *messagebox_create(StringView text);
 extern ListBox  *file_selector_create(StringView prompt, FileSelectorResult handler, FileSelectorOption options);
 extern void      listbox_draw_entries(ListBox *listbox, size_t y_offset);
-extern void      inputbox_show(InputBox *inputbox);
 extern InputBox *inputbox_create(StringView prompt, InputBoxSubmit submit);
+extern void      inputbox_show(InputBox *inputbox);
 
 #endif /* __APP_LISTBOX_H__ */
