@@ -39,6 +39,7 @@ WIDGET_CLASS(MiniBuffer, minibuffer);
 
 extern void minibuffer_set_vmessage(char const *fmt, va_list args);
 extern void minibuffer_set_message(char const *fmt, ...);
+extern void minibuffer_set_message_sv(StringView message);
 extern void minibuffer_clear_message();
 extern void minibuffer_query(void *w, StringView prompt, MiniBufferQueryFunction fnc);
 

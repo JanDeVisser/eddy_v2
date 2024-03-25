@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "raylib.h"
 #include <math.h>
 #include <stdarg.h>
 
@@ -170,6 +169,13 @@ void minibuffer_set_vmessage(char const *fmt, va_list args)
     assert(minibuffer);
     minibuffer_set_vmessage_internal(minibuffer, fmt, args);
     va_end(args);
+}
+
+void minibuffer_set_message_sv(StringView message)
+{
+    MiniBuffer *minibuffer = (MiniBuffer *) layout_find_by_classname((Layout *) &eddy, SV("MiniBuffer", 10));
+    minibuffer->message = sv_copy(message);
+    minibuffer->time = eddy.time;
 }
 
 void minibuffer_clear_message()
