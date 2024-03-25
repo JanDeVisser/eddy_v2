@@ -18,7 +18,8 @@ DA_IMPL(DirEntry);
 size_t fs_file_size(StringView file_name)
 {
     struct stat st;
-    if (stat(sv_cstr(file_name), &st) == 0) {
+    char        buf[file_name.length + 1];
+    if (stat(sv_cstr(file_name, buf), &st) == 0) {
         fatal("fs_file_size(%.*s): Cannot stat '%.*s'", SV_ARG(file_name), SV_ARG(file_name));
     }
     return st.st_size;
@@ -26,13 +27,15 @@ size_t fs_file_size(StringView file_name)
 
 bool fs_file_exists(StringView file_name)
 {
-    return access(sv_cstr(file_name), F_OK) == 0;
+    char buf[file_name.length + 1];
+    return access(sv_cstr(file_name, buf), F_OK) == 0;
 }
 
 bool fs_is_directory(StringView file_name)
 {
     struct stat st;
-    if (stat(sv_cstr(file_name), &st) != 0) {
+    char        buf[file_name.length + 1];
+    if (stat(sv_cstr(file_name, buf), &st) != 0) {
         fatal("fs_is_directory(%.*s): Cannot stat '%.*s'", SV_ARG(file_name), SV_ARG(file_name));
     }
     return (st.st_mode & S_IFDIR) != 0;
@@ -41,7 +44,8 @@ bool fs_is_directory(StringView file_name)
 bool fs_is_symlink(StringView file_name)
 {
     struct stat st;
-    if (stat(sv_cstr(file_name), &st) != 0) {
+    char        buf[file_name.length + 1];
+    if (stat(sv_cstr(file_name, buf), &st) != 0) {
         fatal("fs_is_symlink(%.*s): Cannot stat '%.*s'", SV_ARG(file_name), SV_ARG(file_name));
     }
     return S_ISLNK(st.st_mode);
@@ -50,10 +54,12 @@ bool fs_is_symlink(StringView file_name)
 bool fs_is_newer(StringView file_name1, StringView file_name2)
 {
     struct stat st1, st2;
-    if (stat(sv_cstr(file_name1), &st1) != 0) {
+    char        buf1[file_name1.length + 1];
+    if (stat(sv_cstr(file_name1, buf1), &st1) != 0) {
         fatal("fs_is_newer(%.*s, %.*s): Cannot stat '%.*s'", SV_ARG(file_name1), SV_ARG(file_name2), SV_ARG(file_name1));
     }
-    if (stat(sv_cstr(file_name2), &st2) != 0) {
+    char buf2[file_name2.length + 1];
+    if (stat(sv_cstr(file_name2, buf2), &st2) != 0) {
         fatal("fs_is_newer(%.*s, %.*s): Cannot stat '%.*s'", SV_ARG(file_name1), SV_ARG(file_name2), SV_ARG(file_name2));
     }
     if (st1.st_mtimespec.tv_sec == st2.st_mtimespec.tv_sec) {
@@ -70,7 +76,8 @@ ErrorOrInt fs_assert_dir(StringView dir)
         }
         ERROR(Int, IOError, 0, "'fs_assert_dir('%.*s'): Exists and is not a directory", SV_ARG(dir));
     }
-    if (mkdir(sv_cstr(dir), 0700) != 0) {
+    char buf[dir.length + 1];
+    if (mkdir(sv_cstr(dir, buf), 0700) != 0) {
         ERROR(Int, IOError, errno, "fs_assert_dir('%.*s'): Cannot create: %s", SV_ARG(dir), strerror(errno));
     }
     RETURN(Int, 0);
@@ -86,7 +93,8 @@ ErrorOrStringView fs_follow(StringView file_name)
     }
     char followed[PATH_MAX + 1];
     memset(followed, '\0', PATH_MAX + 1);
-    int len = readlink(sv_cstr(file_name), followed, PATH_MAX);
+    char buf[file_name.length + 1];
+    int  len = readlink(sv_cstr(file_name, buf), followed, PATH_MAX);
     if (len < 0) {
         ERROR(StringView, IOError, 0, "fs_follow('%.*s'): Error reading symlink: %s", SV_ARG(file_name), strerror(errno));
     }
@@ -97,7 +105,8 @@ ErrorOrStringView fs_follow(StringView file_name)
 
 ErrorOrInt fs_unlink(StringView file_name)
 {
-    if (unlink(sv_cstr(file_name)) < 0) {
+    char buf[file_name.length + 1];
+    if (unlink(sv_cstr(file_name, buf)) < 0) {
         ERROR(Int, IOError, 0, "Error unlinking '%.*s': %s", SV_ARG(file_name), strerror(errno));
     }
     RETURN(Int, 0);

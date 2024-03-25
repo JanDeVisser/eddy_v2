@@ -27,7 +27,8 @@ int main(int argc, char **argv)
     socket_t const listen_fd = MUST(Socket, unix_socket_listen(path));
     printf("[S] Listening to socket\n");
 
-    Process *client = process_create(sv_from("http_client"), sv_cstr(path));
+    char     buf[path.length + 1];
+    Process *client = process_create(sv_from("http_client"), sv_cstr(path, buf));
     MUST(Int, process_start(client));
     printf("[S] Started client, pid = %d\n", client->pid);
 

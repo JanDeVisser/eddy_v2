@@ -243,10 +243,17 @@ ErrorOrInt process_start(Process *p)
 {
     signal(SIGCHLD, sigchld);
     size_t sz = p->arguments.size;
-    char **argv = MALLOC_ARR(char *, sz + 2);
-    argv[0] = (char *) sv_cstr(p->command);
+    size_t bufsz = p->command.length + 1;
     for (size_t ix = 0u; ix < sz; ++ix) {
-        argv[ix + 1] = (char *) sv_cstr(p->arguments.strings[ix]);
+        bufsz += p->arguments.strings[ix].length + 1;
+    }
+    char  buf[bufsz];
+    char *argv[sz + 2];
+    argv[0] = (char *) sv_cstr(p->command, buf);
+    char *bufptr = buf + p->command.length + 1;
+    for (size_t ix = 0u; ix < sz; ++ix) {
+        argv[ix + 1] = (char *) sv_cstr(p->arguments.strings[ix], bufptr);
+        bufptr = bufptr + p->arguments.strings[ix].length + 1;
     }
     argv[sz + 1] = NULL;
     StringView args = sl_join(&p->arguments, sv_from(" "));
@@ -268,15 +275,17 @@ ErrorOrInt process_start(Process *p)
         if (sv_empty(p->stdout_file)) {
             read_pipe_connect_child(&p->out, STDOUT_FILENO);
         } else {
-            int fd = open(sv_cstr(p->stdout_file), O_WRONLY | O_CREAT | O_TRUNC, 0777);
-            assert_msg(fd, "Couldn not open stdout stream '%.*s' for '%.*s': %s",
+            char stdout_file_buffer[p->stdout_file.length + 1];
+            int  fd = open(sv_cstr(p->stdout_file, stdout_file_buffer), O_WRONLY | O_CREAT | O_TRUNC, 0777);
+            assert_msg(fd, "Could not open stdout stream '%.*s' for '%.*s': %s",
                 SV_ARG(p->stdout_file), SV_ARG(p->command), strerror(errno));
             while (dup2(fd, STDOUT_FILENO) == -1 && (errno == EINTR)) { }
         }
         if (sv_empty(p->stderr_file)) {
             read_pipe_connect_child(&p->err, STDERR_FILENO);
         } else {
-            int fd = open(sv_cstr(p->stderr_file), O_WRONLY | O_CREAT | O_TRUNC, 0777);
+            char stderr_file_buffer[p->stderr_file.length + 1];
+            int  fd = open(sv_cstr(p->stderr_file, stderr_file_buffer), O_WRONLY | O_CREAT | O_TRUNC, 0777);
             assert_msg(fd, "Couldn not open stderr stream '%.*s' for '%.*s': %s",
                 SV_ARG(p->stderr_file), SV_ARG(p->command), strerror(errno));
             while (dup2(fd, STDERR_FILENO) == -1 && (errno == EINTR)) { }

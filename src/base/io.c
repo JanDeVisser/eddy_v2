@@ -92,7 +92,8 @@ ErrorOrSockAddrIn tcpip_address_resolve(StringView ip_address)
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = PF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
-    if ((error = getaddrinfo(sv_cstr(ip_address), NULL, &hints, &res0)) != 0) {
+    char buf[ip_address.length + 1];
+    if ((error = getaddrinfo(sv_cstr(ip_address, buf), NULL, &hints, &res0)) != 0) {
         ERROR(SockAddrIn, IOError, 0, "Error resolving IP address '%.*s': %s",
             SV_ARG(ip_address), gai_strerror(error));
     }
@@ -292,7 +293,8 @@ ErrorOrSize socket_writeln(socket_t socket, StringView sv)
 
 ErrorOrStringView read_file_by_name(StringView file_name)
 {
-    int fd = open(sv_cstr(file_name), O_RDONLY);
+    char buf[file_name.length + 1];
+    int  fd = open(sv_cstr(file_name, buf), O_RDONLY);
     if (fd < 0) {
         ERROR(StringView, IOError, errno, "Could not open file");
     }
@@ -303,7 +305,8 @@ ErrorOrStringView read_file_by_name(StringView file_name)
 
 ErrorOrStringView read_file_at(int dir_fd, StringView file_name)
 {
-    int fd = openat(dir_fd, sv_cstr(file_name), O_RDONLY);
+    char buf[file_name.length + 1];
+    int  fd = openat(dir_fd, sv_cstr(file_name, buf), O_RDONLY);
     if (fd < 0) {
         ERROR(StringView, IOError, errno, "Could not open file");
     }
@@ -324,7 +327,8 @@ ErrorOrStringView read_file(int fd)
 
 ErrorOrSize write_file_by_name(StringView file_name, StringView contents)
 {
-    int fd = open(sv_cstr(file_name), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    char buf[file_name.length + 1];
+    int  fd = open(sv_cstr(file_name, buf), O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (fd < 0) {
         ERROR(Size, IOError, errno, "Could not open file");
     }
@@ -335,7 +339,8 @@ ErrorOrSize write_file_by_name(StringView file_name, StringView contents)
 
 ErrorOrSize write_file_at(int dir_fd, StringView file_name, StringView contents)
 {
-    int fd = openat(dir_fd, sv_cstr(file_name), O_RDONLY);
+    char buf[file_name.length + 1];
+    int  fd = openat(dir_fd, sv_cstr(file_name, buf), O_RDONLY);
     if (fd < 0) {
         ERROR(Size, IOError, errno, "Could not open file");
     }

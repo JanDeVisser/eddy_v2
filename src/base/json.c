@@ -220,7 +220,8 @@ JSONValue json_copy(JSONValue value)
         ret.object = (JSONNVPairs) { 0 };
         for (size_t ix = 0; ix < value.object.size; ++ix) {
             JSONNVPair pair = *(da_element_JSONNVPair(&value.object, ix));
-            json_set(&ret, sv_cstr(pair.name), json_copy(pair.value));
+            char       attr_name[pair.name.length + 1];
+            json_set(&ret, sv_cstr(pair.name, attr_name), json_copy(pair.value));
         }
     } break;
     case JSON_TYPE_ARRAY: {

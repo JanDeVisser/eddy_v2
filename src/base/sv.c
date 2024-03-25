@@ -222,17 +222,12 @@ bool sv_is_cstr(StringView sv)
     return ret;
 }
 
-char const *sv_cstr(StringView sv)
+char const *sv_cstr(StringView sv, char *buffer)
 {
-    if (sv_is_cstr(sv)) {
-        return sv.ptr;
-    }
-    char *old = (char *) sv.ptr;
-    sv.ptr = allocate_for_length(sv.length, NULL);
-    memcpy((char *) sv.ptr, old, sv.length);
-    ((char *) sv.ptr)[sv.length] = '\0';
-    buffer_free(old, sv.length);
-    return sv.ptr;
+    memcpy(buffer, sv.ptr, sv.length);
+    buffer[sv.length] = '\0';
+    // printf("sv_cstr(%.*s): %s\n", SV_ARG(sv), buffer);
+    return buffer;
 }
 
 int sv_cmp(StringView s1, StringView s2)

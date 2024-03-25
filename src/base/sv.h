@@ -97,7 +97,7 @@ extern bool               sv_not_empty(StringView sv);
 extern bool               sv_is_whitespace(StringView sv);
 extern size_t             sv_length(StringView sv);
 extern bool               sv_is_cstr(StringView sv);
-extern char const        *sv_cstr(StringView sv);
+extern char const        *sv_cstr(StringView sv, char *buffer);
 extern int                sv_cmp(StringView s1, StringView s2);
 extern int                sv_icmp(StringView s1, StringView s2);
 extern bool               sv_eq(StringView s1, StringView s2);
