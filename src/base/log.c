@@ -254,5 +254,5 @@ void log_init()
 #undef TRACECATEGORY
     }
     linelen = 0;
-    panic("Logging initialized");
+    info("Logging initialized");
 }
