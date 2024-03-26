@@ -11,6 +11,7 @@ add_executable(
         minibuffer.c
         palette.c
         scribble.c
+        theme.c
         widget.c
 )
 

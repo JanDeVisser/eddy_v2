@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "error_or.h"
+#include "sv.h"
+#include "theme.h"
 #include <errno.h>
 #include <pwd.h>
 #include <stdlib.h>
@@ -26,6 +29,8 @@
 
 #define WINDOW_WIDTH 1600
 #define WINDOW_HEIGHT 768
+
+void eddy_load_theme(Eddy *eddy);
 
 AppState state = { 0 };
 Eddy     eddy = { 0 };
@@ -429,6 +434,7 @@ void eddy_on_start(Eddy *eddy)
 {
     eddy->monitor = GetCurrentMonitor();
     eddy_load_font(eddy);
+    eddy_load_theme(eddy);
 }
 
 void eddy_on_terminate(Eddy *eddy)
@@ -540,6 +546,35 @@ void eddy_load_font(Eddy *eddy)
         font = default_font;
     }
     fatal("Could not load font!");
+}
+
+void print_colours(char const *label, Colours colours)
+{
+    StringView s = colours_to_string(colours);
+    printf("%s: %.*s\n", label, SV_ARG(s));
+    sv_free(s);
+}
+
+void eddy_load_theme(Eddy *eddy)
+{
+    JSONValue    appearance = json_get_default(&eddy->settings, "appearance", json_object());
+    JSONValue    theme_name = json_get_default(&appearance, "theme", json_string(SV("darcula", 7)));
+    ErrorOrTheme theme_maybe = theme_load(theme_name.string);
+    if (ErrorOrTheme_is_error(theme_maybe)) {
+        info("Error loading theme: %s", Error_to_string(theme_maybe.error));
+        eddy_set_message(eddy, "Error loading theme: %s", Error_to_string(theme_maybe.error));
+        return;
+    }
+    eddy->theme = theme_maybe.value;
+    print_colours("editor", eddy->theme.editor);
+    print_colours("selection", eddy->theme.selection);
+    print_colours("line highlight", eddy->theme.linehighlight);
+    print_colours("gutter", eddy->theme.gutter);
+    for (int ix = 0; ix < eddy->theme.token_colours.size; ++ix) {
+        StringView s = colours_to_string(eddy->theme.token_colours.elements[ix].colours);
+        printf("%.*s: %.*s\n", SV_ARG(eddy->theme.token_colours.elements[ix].name), SV_ARG(s));
+        sv_free(s);
+    }
 }
 
 void eddy_open_dir(Eddy *eddy, StringView dir)

@@ -309,10 +309,10 @@ void handle_initialize_response(Widget *app, JSONValue response_json)
                     semantic_token_colors[i] = PI_KNOWN_IDENTIFIER;
                     break;
                 case SemanticTokenTypesVariable:
-                    semantic_token_colors[i] = PI_KNOWN_IDENTIFIER;
+                    semantic_token_colors[i] = PI_VARIABLE;
                     break;
                 case SemanticTokenTypesProperty:
-                    semantic_token_colors[i] = PI_KNOWN_IDENTIFIER;
+                    semantic_token_colors[i] = PI_PROPERTY;
                     break;
                 case SemanticTokenTypesEnumMember:
                     semantic_token_colors[i] = PI_KNOWN_IDENTIFIER;
@@ -324,10 +324,10 @@ void handle_initialize_response(Widget *app, JSONValue response_json)
                     semantic_token_colors[i] = PI_FUNCTION;
                     break;
                 case SemanticTokenTypesMethod:
-                    semantic_token_colors[i] = PI_KNOWN_IDENTIFIER;
+                    semantic_token_colors[i] = PI_FUNCTION;
                     break;
                 case SemanticTokenTypesMacro:
-                    semantic_token_colors[i] = PI_KNOWN_IDENTIFIER;
+                    semantic_token_colors[i] = PI_PREPROCESSOR_DEFINE;
                     break;
                 case SemanticTokenTypesKeyword:
                     semantic_token_colors[i] = PI_KEYWORD;

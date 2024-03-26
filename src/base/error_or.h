@@ -152,6 +152,7 @@ extern char const *Error_to_string(Error error);
 ERROR_OR_ALIAS(Char, char *);
 ERROR_OR_ALIAS(VoidPtr, void *);
 ERROR_OR_ALIAS(UInt64, uint64_t);
+ERROR_OR_ALIAS(UChar, uint8_t);
 ERROR_OR_ALIAS(Int, int);
 ERROR_OR_ALIAS(Size, size_t);
 ERROR_OR_ALIAS(Bool, bool);

@@ -19,12 +19,13 @@
     S(PUNCTUATION)                \
     S(PREPROCESSOR)               \
     S(PREPROCESSOR_ARG)           \
+    S(PREPROCESSOR_DEFINE)        \
     S(IDENTIFIER)                 \
     S(KNOWN_IDENTIFIER)           \
-    S(PREPROC_IDENTIFIER)         \
+    S(VARIABLE)                   \
+    S(PROPERTY)                   \
     S(FUNCTION)                   \
     S(COMMENT)                    \
-    S(MULTI_LINE_COMMENT)         \
     S(BACKGROUND)                 \
     S(CURSOR)                     \
     S(SELECTION)                  \
@@ -48,9 +49,11 @@ typedef enum {
 
 #define PALETTES(S) \
     S(DARK)         \
-    S(LIGHT)        \
-    S(RETRO_BLUE)   \
     S(MAX)
+
+// S(LIGHT)        \
+    // S(RETRO_BLUE)   \
+
 
 typedef enum {
 #undef PALETTE

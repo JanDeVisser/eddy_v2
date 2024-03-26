@@ -7,11 +7,10 @@
 #ifndef __APP_EDDY_H__
 #define __APP_EDDY_H__
 
-#include "json.h"
-#include "sv.h"
-#include <buffer.h>
-#include <editor.h>
-#include <widget.h>
+#include <app/buffer.h>
+#include <app/editor.h>
+#include <app/theme.h>
+#include <app/widget.h>
 
 typedef enum {
     AS_MONITOR = 0,
@@ -41,6 +40,7 @@ typedef struct {
     StringList source_dirs;
     CMake      cmake;
     JSONValue  settings;
+    Theme      theme;
 } Eddy;
 
 APP_CLASS(Eddy, eddy);

@@ -9,5 +9,6 @@
         ],
         "font": "VictorMono-Regular.ttf",
         "font_size": 20,
+        "theme": "darcula"
     }
 }
