@@ -3,6 +3,7 @@
 cmake-*/
 build/
 .idea/
+etc/syntax/
 test/not_yet_working/
 test/scribble/.compiled
 test/scribble/.scribble
