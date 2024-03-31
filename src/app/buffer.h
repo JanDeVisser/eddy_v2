@@ -7,9 +7,9 @@
 #ifndef __APP_BUFFER_H__
 #define __APP_BUFFER_H__
 
-#include <app/palette.h>
 #include <app/widget.h>
 #include <base/sv.h>
+#include <base/token.h>
 #include <lsp/schema/Diagnostic.h>
 
 typedef enum {
@@ -50,10 +50,10 @@ typedef struct {
 DA_WITH_NAME(BufferEvent, BufferEvents);
 
 typedef struct {
-    size_t       index;
-    size_t       length;
-    size_t       line;
-    PaletteIndex color;
+    size_t index;
+    size_t length;
+    size_t line;
+    Color  color;
 } DisplayToken;
 
 DA_WITH_NAME(DisplayToken, DisplayTokens);

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "log.h"
 #include "sv.h"
 #include <ctype.h>
 #include <errno.h>
@@ -20,11 +21,14 @@
 #include <base/json.h>
 
 DA_IMPL(TokenColour);
+DA_IMPL(SemanticTokenColour);
+DA_IMPL(TokenThemeMapping);
+DA_IMPL(SemanticMapping);
 
 ErrorOrColour colour_parse_hex_color(StringView color, int prefixlen, int num_components)
 {
     Colour ret = { 0 };
-    ret.a = 0xFF;
+    ret.color.a = 0xFF;
     char buf[3];
     buf[2] = 0;
     assert(color.length == prefixlen + num_components * 2);
@@ -68,7 +72,7 @@ ErrorOrColour colour_parse_color(StringView color)
             ERROR(Colour, ParserError, 0, "Could not parse hex color string '%.*s'", SV_ARG(color));
         }
         Colour ret = { 0 };
-        ret.a = 0xFF;
+        ret.color.a = 0xFF;
         for (size_t ix = 0; ix < 4; ++ix) {
             IntegerParseResult res = sv_parse_u8(components.strings[ix]);
             if (!res.success) {
@@ -82,16 +86,16 @@ ErrorOrColour colour_parse_color(StringView color)
 
 StringView colour_to_rgb(Colour colour)
 {
-    if (colour.a < 0xFF) {
-        int perc = (int) (((float) colour.a) / 255.0) * 100.0;
-        return sv_printf("rgb(%d %d %d / %d%%)", colour.r, colour.g, colour.b, perc);
+    if (colour.color.a < 0xFF) {
+        int perc = (int) (((float) colour.color.a) / 255.0) * 100.0;
+        return sv_printf("rgb(%d %d %d / %d%%)", colour.color.r, colour.color.g, colour.color.b, perc);
     }
-    return sv_printf("rgb(%d %d %d)", colour.r, colour.g, colour.b);
+    return sv_printf("rgb(%d %d %d)", colour.color.r, colour.color.g, colour.color.b);
 }
 
 StringView colour_to_hex(Colour colour)
 {
-    return sv_printf("#%02x%02x%02x%02x", colour.r, colour.g, colour.b, colour.a);
+    return sv_printf("#%02x%02x%02x%02x", colour.color.r, colour.color.g, colour.color.b, colour.color.a);
 }
 
 StringView colours_to_string(Colours colours)
@@ -148,24 +152,24 @@ ErrorOrColour colour_decode(OptionalJSONValue json)
     }
     case JSON_TYPE_OBJECT: {
         Colour ret = { 0 };
-        ret.r = TRY_TO(UChar, Colour, colour_decode_component(json_get(&json.value, "r")));
+        ret.color.r = TRY_TO(UChar, Colour, colour_decode_component(json_get(&json.value, "r")));
         if (json_has(&json.value, "red")) {
-            ret.r = TRY_TO(UChar, Colour, colour_decode_component(json_get(&json.value, "red")));
+            ret.color.r = TRY_TO(UChar, Colour, colour_decode_component(json_get(&json.value, "red")));
         }
-        ret.g = TRY_TO(UChar, Colour, colour_decode_component(json_get(&json.value, "g")));
+        ret.color.g = TRY_TO(UChar, Colour, colour_decode_component(json_get(&json.value, "g")));
         if (json_has(&json.value, "green")) {
-            ret.r = TRY_TO(UChar, Colour, colour_decode_component(json_get(&json.value, "green")));
+            ret.color.r = TRY_TO(UChar, Colour, colour_decode_component(json_get(&json.value, "green")));
         }
-        ret.b = TRY_TO(UChar, Colour, colour_decode_component(json_get(&json.value, "b")));
+        ret.color.b = TRY_TO(UChar, Colour, colour_decode_component(json_get(&json.value, "b")));
         if (json_has(&json.value, "blue")) {
-            ret.r = TRY_TO(UChar, Colour, colour_decode_component(json_get(&json.value, "blue")));
+            ret.color.b = TRY_TO(UChar, Colour, colour_decode_component(json_get(&json.value, "blue")));
         }
-        ret.a = 0xFF;
+        ret.color.a = 0xFF;
         if (json_has(&json.value, "a")) {
-            ret.a = TRY_TO(UChar, Colour, colour_decode_component(json_get(&json.value, "a")));
+            ret.color.a = TRY_TO(UChar, Colour, colour_decode_component(json_get(&json.value, "a")));
         }
         if (json_has(&json.value, "alpha")) {
-            ret.a = TRY_TO(UChar, Colour, colour_decode_component(json_get(&json.value, "alpha")));
+            ret.color.a = TRY_TO(UChar, Colour, colour_decode_component(json_get(&json.value, "alpha")));
         }
         RETURN(Colour, ret);
     }
@@ -176,10 +180,7 @@ ErrorOrColour colour_decode(OptionalJSONValue json)
 
 ErrorOrTokenColour token_colour_decode(JSONValue *json)
 {
-    TokenColour ret = { 0 };
-    StringView  s = json_encode(*json);
-    printf("%.*s\n", SV_ARG(s));
-    sv_free(s);
+    TokenColour       ret = { 0 };
     OptionalJSONValue name = json_get(json, "name");
     if (name.has_value) {
         if (name.value.type != JSON_TYPE_STRING) {
@@ -200,6 +201,9 @@ ErrorOrTokenColour token_colour_decode(JSONValue *json)
     }
     if (scope.value.type == JSON_TYPE_STRING) {
         ret.scope = sv_split(sv_copy(scope.value.string), SV(",", 1));
+        for (size_t ix = 0; ix < ret.scope.size; ++ix) {
+            ret.scope.strings[ix] = sv_strip(ret.scope.strings[ix]);
+        }
     } else {
         for (size_t ix = 0; ix < json_len(&scope.value); ++ix) {
             JSONValue entry = MUST_OPTIONAL(JSONValue, json_at(&scope.value, ix));
@@ -219,6 +223,44 @@ ErrorOrTokenColour token_colour_decode(JSONValue *json)
     RETURN(TokenColour, ret);
 }
 
+ErrorOrSemanticTokenColour semantic_token_colour_decode(SemanticTokenTypes type, OptionalJSONValue settings)
+{
+    if (!settings.has_value) {
+        ERROR(SemanticTokenColour, IOError, 0, "'semanticTokenColors' entry must specify settings");
+    }
+    if (settings.value.type != JSON_TYPE_OBJECT) {
+        ERROR(SemanticTokenColour, IOError, 0, "'semanticTokenColors' entry settings must be an object");
+    }
+    SemanticTokenColour ret = { 0 };
+    ret.token_type = type;
+    ret.colours.fg = TRY_TO(Colour, SemanticTokenColour, colour_decode(json_get(&settings.value, "foreground")));
+    ret.colours.bg = TRY_TO(Colour, SemanticTokenColour, colour_decode(json_get(&settings.value, "background")));
+    RETURN(SemanticTokenColour, ret);
+}
+
+void theme_get_mapping(Theme *theme, TokenKind kind, char const *scope)
+{
+    OptionalInt index = theme_index_for_scope(theme, sv_from(scope));
+    if (index.has_value) {
+        trace(CAT_EDIT, "Mapping token kind %s to scope '%s', color %.*s", TokenKind_name(kind), scope, SV_ARG(colour_to_rgb(theme->token_colours.elements[index.value].colours.fg)));
+        da_append_TokenThemeMapping(&theme->token_mappings, (TokenThemeMapping) { .kind = kind, .code = -1, .theme_index = index.value });
+        return;
+    }
+    trace(CAT_EDIT, "Mapping token kind %s to scope '%s' which is not found", TokenKind_name(kind), scope);
+}
+
+void theme_build_theme_index_mappings(Theme *theme)
+{
+    theme_get_mapping(theme, TK_COMMENT, "comment");
+    theme_get_mapping(theme, TK_KEYWORD, "keyword");
+    theme_get_mapping(theme, TK_IDENTIFIER, "identifier");
+    theme_get_mapping(theme, TK_NUMBER, "constant.numeric");
+    theme_get_mapping(theme, TK_SYMBOL, "punctuation");
+    theme_get_mapping(theme, TK_QUOTED_STRING, "string");
+    theme_get_mapping(theme, TK_DIRECTIVE, "keyword.control.directive");
+    theme_get_mapping(theme, TK_DIRECTIVE_ARG, "string");
+}
+
 ErrorOrTheme theme_decode(Theme *theme, JSONValue *json)
 {
     JSONValue colors = json_get_default(json, "colors", json_object());
@@ -231,8 +273,8 @@ ErrorOrTheme theme_decode(Theme *theme, JSONValue *json)
         theme->editor.bg = (Colour) { .rgba = 0x000000FF };
     }
     theme->editor.fg = TRY_TO(Colour, Theme, colour_decode(json_get(&colors, "editor.foreground")));
-    if (theme->editor.bg.rgba == 0) {
-        theme->editor.bg = (Colour) { .rgba = 0xFFFFFFFF };
+    if (theme->editor.fg.rgba == 0) {
+        theme->editor.fg = (Colour) { .rgba = 0xFFFFFFFF };
     }
     theme->selection.bg = TRY_TO(Colour, Theme, colour_decode(json_get(&colors, "editor.selectionBackground")));
     theme->selection.fg = TRY_TO(Colour, Theme, colour_decode(json_get(&colors, "editor.selectionForeground")));
@@ -277,6 +319,23 @@ ErrorOrTheme theme_decode(Theme *theme, JSONValue *json)
         }
         da_append_TokenColour(&theme->token_colours, tc);
     }
+
+    JSONValue semantic_token_colors = json_get_default(json, "semanticTokenColors", json_object());
+    if (semantic_token_colors.type != JSON_TYPE_OBJECT) {
+        ERROR(Theme, ParserError, 0, "'semanticTokenColors' section of theme definition must be a JSON object");
+    }
+    for (size_t ix = 0; ix < json_len(&semantic_token_colors); ++ix) {
+        JSONValue                  pair = MUST_OPTIONAL(JSONValue, json_at(&semantic_token_colors, ix));
+        OptionalSemanticTokenTypes type = SemanticTokenTypes_decode(json_at(&pair, 0));
+        if (!type.has_value) {
+            continue;
+        }
+        OptionalJSONValue   settings = json_at(json, 1);
+        SemanticTokenColour semantic_token_colour = TRY_TO(SemanticTokenColour, Theme, semantic_token_colour_decode(type.value, settings));
+        da_append_SemanticTokenColour(&theme->semantic_colours, semantic_token_colour);
+    }
+
+    theme_build_theme_index_mappings(theme);
     RETURN(Theme, *theme);
 }
 
@@ -290,13 +349,12 @@ ErrorOrTheme theme_load(StringView name)
     sv_free(eddy_fname);
     if (!fs_file_exists(theme_fname)) {
         sv_free(theme_fname);
-        theme_fname = sv_printf(EDDY_DATADIR "/%.*s.json", SV_ARG(name));
-        if (!fs_file_exists(sv_from(EDDY_DATADIR "/settings.json"))) {
+        theme_fname = sv_printf(EDDY_DATADIR "/themes/%.*s.json", SV_ARG(name));
+        if (!fs_file_exists(theme_fname)) {
             ERROR(Theme, IOError, 0, "Theme file '%.*s.json' not found", SV_ARG(name));
         }
     }
     StringView s = TRY_TO(StringView, Theme, read_file_by_name(theme_fname));
-    sv_free(theme_fname);
     sv_free(theme_fname);
     JSONValue theme = TRY_TO(JSONValue, Theme, json_decode(s));
     sv_free(s);
@@ -307,13 +365,96 @@ ErrorOrTheme theme_load(StringView name)
 
 OptionalInt theme_index_for_scope(Theme *theme, StringView scope)
 {
+    int    tc_match = -1;
+    int    tc_scope_match = -1;
+    size_t matchlen = 0;
     for (int tc_ix = 0; tc_ix < theme->token_colours.size; ++tc_ix) {
         TokenColour *tc = theme->token_colours.elements + tc_ix;
         for (size_t scope_ix = 0; scope_ix < tc->scope.size; ++scope_ix) {
-            if (sv_eq(scope, tc->scope.strings[scope_ix])) {
-                RETURN_VALUE(Int, tc_ix);
+            if (sv_startswith(scope, tc->scope.strings[scope_ix]) && tc->scope.strings[scope_ix].length > matchlen) {
+                tc_match = tc_ix;
+                tc_scope_match = scope_ix;
+                matchlen = tc->scope.strings[scope_ix].length;
             }
         }
     }
+    if (tc_match >= 0) {
+        RETURN_VALUE(Int, tc_match);
+    }
     RETURN_EMPTY(Int);
+}
+
+OptionalColours theme_token_colours(Theme *theme, Token t)
+{
+    for (size_t ix = 0; ix < theme->token_mappings.size; ++ix) {
+        TokenThemeMapping *mapping = theme->token_mappings.elements + ix;
+        if (mapping->kind == t.kind) {
+            RETURN_VALUE(Colours, theme->token_colours.elements[mapping->theme_index].colours);
+        }
+    }
+    RETURN_EMPTY(Colours);
+}
+
+OptionalColours theme_semantic_colours(Theme *theme, int semantic_index)
+{
+    for (size_t ix = 0; ix < theme->semantic_mappings.size; ++ix) {
+        SemanticMapping *mapping = theme->semantic_mappings.elements + ix;
+        if (mapping->semantic_index == semantic_index) {
+            if (mapping->semantic_theme_index < 0 && mapping->token_theme_index >= 0) {
+                RETURN_VALUE(Colours, theme->token_colours.elements[mapping->token_theme_index].colours);
+            }
+            if (mapping->semantic_theme_index >= 0) {
+                RETURN_VALUE(Colours, theme->semantic_colours.elements[mapping->semantic_theme_index].colours);
+            }
+            RETURN_EMPTY(Colours);
+        }
+    }
+    RETURN_EMPTY(Colours);
+}
+
+typedef struct {
+    SemanticTokenTypes semantic_type;
+    char const        *scope;
+} SemanticTypeToScopeMapping;
+
+SemanticTypeToScopeMapping semantic_scope_mapping[] = {
+    { SemanticTokenTypesType, "entity.name.type" },
+    { SemanticTokenTypesClass, "entity.name.type.class" },
+    { SemanticTokenTypesEnum, "entity.name.type.enum" },
+    { SemanticTokenTypesParameter, "variable.parameter" },
+    { SemanticTokenTypesVariable, "variable.other.readwrite" },
+    { SemanticTokenTypesProperty, "variable.other.property" },
+    { SemanticTokenTypesEnumMember, "variable.other.enummember" },
+    { SemanticTokenTypesFunction, "entity.name.function" },
+    { SemanticTokenTypesMacro, "entity.name.function.preprocessor" },
+    { SemanticTokenTypesKeyword, "keyword" },
+    { SemanticTokenTypesComment, "comment" },
+    { SemanticTokenTypesString, "string" },
+    { SemanticTokenTypesNumber, "constant.numeric" },
+    { SemanticTokenTypesOperator, "keyword.operator" },
+};
+
+void theme_map_semantic_type(Theme *theme, int semantic_index, SemanticTokenTypes type)
+{
+    for (size_t ix = 0; ix < theme->semantic_colours.size; ++ix) {
+        SemanticTokenColour *colour = theme->semantic_colours.elements + ix;
+        if (colour->token_type == type) {
+            trace(CAT_LSP, "Mapping SemanticTokenType %d = '%.*s' to theme semantic index %zu", semantic_index, SV_ARG(SemanticTokenTypes_to_string(type)), ix);
+            da_append_SemanticMapping(&theme->semantic_mappings, (SemanticMapping) { .semantic_index = semantic_index, .semantic_theme_index = ix, .token_theme_index = -1 });
+            return;
+        }
+    }
+    for (size_t ix = 0; ix < sizeof(semantic_scope_mapping) / sizeof(SemanticTypeToScopeMapping); ++ix) {
+        if (semantic_scope_mapping[ix].semantic_type == type) {
+            OptionalInt theme_ix_maybe = theme_index_for_scope(theme, sv_from(semantic_scope_mapping[ix].scope));
+            int         theme_ix = -1;
+            if (theme_ix_maybe.has_value) {
+                theme_ix = theme_ix_maybe.value;
+            }
+            trace(CAT_LSP, "Mapping SemanticTokenType %d = '%.*s' to scope '%s'", semantic_index, SV_ARG(SemanticTokenTypes_to_string(type)), semantic_scope_mapping[ix].scope);
+            da_append_SemanticMapping(&theme->semantic_mappings, (SemanticMapping) { .semantic_index = semantic_index, .semantic_theme_index = -1, .token_theme_index = theme_ix });
+            return;
+        }
+    }
+    trace(CAT_LSP, "SemanticTokenType %d = '%.*s' not mapped", semantic_index, SV_ARG(SemanticTokenTypes_to_string(type)));
 }

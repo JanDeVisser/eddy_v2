@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "theme.h"
 #include "widget.h"
 #include <ctype.h>
 #include <math.h>
@@ -135,10 +136,7 @@ void listbox_refresh(ListBox *listbox)
 {
     listbox_sort(listbox);
     listbox_filter(listbox);
-    if (listbox->shrink && listbox->no_search && listbox->entries.size < listbox->lines) {
-        listbox->viewport.height = 19 + eddy.cell.y + listbox->entries.size * (eddy.cell.y + 2);
-        listbox->lines = listbox->entries.size;
-    }
+    listbox_resize(listbox);
     listbox->selection = 0;
     listbox->top_line = 0;
     listbox->search.view.length = 0;
@@ -171,6 +169,12 @@ void listbox_resize(ListBox *listbox)
     if (listbox->shrink && listbox->no_search && listbox->entries.size < listbox->lines) {
         listbox->lines = listbox->entries.size;
     }
+    char    prompt[listbox->prompt.length + 1];
+    Vector2 m = MeasureTextEx(eddy.font, sv_cstr(listbox->prompt, prompt), eddy.font.baseSize, 2);
+    if (m.x > listbox->viewport.width - 16) {
+        listbox->viewport.width = m.x + 16;
+        listbox->viewport.x = (eddy.viewport.width - m.x) / 2;
+    }
     listbox->viewport.height = 19 + eddy.cell.y + listbox->lines * (eddy.cell.y + 2);
 }
 
@@ -180,15 +184,17 @@ void listbox_draw_entries(ListBox *listbox, size_t y_offset)
     size_t          maxlen = (listbox->viewport.width - 28) / (eddy.cell.x * listbox->textsize);
     ListBoxEntries *entries = (listbox->no_search || sv_empty(listbox->search.view)) ? &listbox->entries : &listbox->matches;
     for (size_t ix = listbox->top_line; ix < entries->size && ix < listbox->top_line + listbox->lines; ++ix) {
+        Color text_color = colour_to_color(eddy.theme.editor.fg);
         if (ix == listbox->selection) {
-            widget_draw_rectangle(listbox, 8, y_offset - 1, -8, eddy.cell.y * listbox->textsize + 1, palettes[PALETTE_DARK][PI_SELECTION]);
+            widget_draw_rectangle(listbox, 8, y_offset - 1, -8, eddy.cell.y * listbox->textsize + 1, colour_to_color(eddy.theme.selection.bg));
+            text_color = colour_to_color(eddy.theme.selection.fg);
         }
         StringView sv = entries->elements[ix].text;
         if (to_string_view) {
             sv = to_string_view(entries->elements[ix]);
         }
         sv.length = iclamp(sv.length, 0, maxlen);
-        widget_render_sized_text(listbox, 10, y_offset, sv, eddy.font, listbox->textsize, palettes[PALETTE_DARK][PI_DEFAULT]);
+        widget_render_sized_text(listbox, 10, y_offset, sv, eddy.font, listbox->textsize, text_color);
         y_offset += (eddy.cell.y * listbox->textsize) + 2;
     }
 }
@@ -479,14 +485,14 @@ void inputbox_resize(InputBox *inputbox)
 
 void inputbox_draw(InputBox *inputbox)
 {
-    widget_draw_rectangle(inputbox, 0.0, 0.0, 0.0, 0.0, DARKGRAY);
-    widget_draw_outline(inputbox, 2, 2, -2.0, -2.0, RAYWHITE);
-    widget_render_text(inputbox, 8, 8, inputbox->prompt, eddy.font, RAYWHITE);
-    widget_draw_line(inputbox, 2, eddy.cell.y + 10, -2, eddy.cell.y + 10, RAYWHITE);
-    widget_render_text(inputbox, 10, eddy.cell.y + 14, inputbox->text.view, eddy.font, RAYWHITE);
+    widget_draw_rectangle(inputbox, 0.0, 0.0, 0.0, 0.0, colour_to_color(eddy.theme.editor.bg));
+    widget_draw_outline(inputbox, 2, 2, -2.0, -2.0, colour_to_color(eddy.theme.editor.fg));
+    widget_render_text(inputbox, 8, 8, inputbox->prompt, eddy.font, colour_to_color(eddy.theme.editor.fg));
+    widget_draw_line(inputbox, 2, eddy.cell.y + 10, -2, eddy.cell.y + 10, colour_to_color(eddy.theme.editor.fg));
+    widget_render_text(inputbox, 10, eddy.cell.y + 14, inputbox->text.view, eddy.font, colour_to_color(eddy.theme.editor.fg));
     double t = GetTime();
     if ((t - floor(t)) < 0.5) {
-        widget_draw_rectangle(inputbox, 10 + inputbox->cursor * eddy.cell.x, eddy.cell.y + 12, 2, eddy.cell.y + 2, palettes[PALETTE_DARK][PI_CURSOR]);
+        widget_draw_rectangle(inputbox, 10 + inputbox->cursor * eddy.cell.x, eddy.cell.y + 12, 2, eddy.cell.y + 2, colour_to_color(eddy.theme.editor.fg));
     }
 }
 

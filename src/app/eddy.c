@@ -4,10 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "error_or.h"
-#include "sv.h"
-#include "theme.h"
 #include <errno.h>
+#include <math.h>
 #include <pwd.h>
 #include <stdlib.h>
 #include <sys/fcntl.h>
@@ -18,7 +16,6 @@
 #include <app/eddy.h>
 #include <app/listbox.h>
 #include <app/minibuffer.h>
-#include <app/palette.h>
 #include <base/fs.h>
 #include <base/io.h>
 #include <base/json.h>
@@ -61,7 +58,7 @@ void app_state_write(AppState *app_state)
     struct passwd *pw = getpwuid(getuid());
     char const    *state_fname = TextFormat("%s/.eddy/state", pw->pw_dir);
     int            state_fd = open(state_fname, O_RDWR | O_CREAT | O_TRUNC, 0600);
-    write(state_fd, app_state, sizeof(app_state));
+    write(state_fd, app_state, sizeof(AppState));
     close(state_fd);
 }
 
@@ -92,24 +89,8 @@ void sb_cursor_draw(Label *label)
     BufferView *view = editor->buffers.elements + eddy.editor->current_buffer;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
     size_t      len = buffer->lines.elements[view->cursor_pos.line].line.length;
-    if (view->selection != -1) {
-        label->text = sv_from(TextFormat("row:col %d:%d sel: %zu-%zu len %zu pos %zu col %d clk %d vp %d:%d",
-            view->cursor_pos.line + 1, view->cursor_pos.column + 1,
-            view->selection, view->cursor,
-            len, view->cursor, view->cursor_col, editor->num_clicks,
-            view->left_column, view->top_line));
-    } else {
-        label->text = sv_from(TextFormat("row:col %d:%d len %zu pos %zu col %d clk %d vp %d:%d",
-            view->cursor_pos.line + 1, view->cursor_pos.column + 1,
-            len, view->cursor, view->cursor_col, editor->num_clicks,
-            view->left_column, view->top_line));
-    }
-    label_draw(label);
-}
-
-void sb_last_key_draw(Label *label)
-{
-    label->text = sv_from(eddy.last_key);
+    float       where = ((float) view->cursor_pos.line / (float) buffer->lines.size) * 100.0;
+    label->text = sv_from(TextFormat("ln %d (%d%%) col %d", view->cursor_pos.line + 1, (int) roundf(where), view->cursor_pos.column + 1));
     label_draw(label);
 }
 
@@ -140,21 +121,17 @@ void sb_init(StatusBar *status_bar)
     status_bar->handlers.on_draw = (WidgetOnDraw) sb_on_draw;
     layout_add_widget((Layout *) status_bar, (Widget *) widget_new_with_policy(Spacer, SP_CHARACTERS, 1));
     Label *file_name = (Label *) widget_new(Label);
-    file_name->policy_size = 64;
+    file_name->policy_size = 40;
     file_name->color = DARKGRAY;
     file_name->handlers.draw = (WidgetDraw) sb_file_name_draw;
     layout_add_widget((Layout *) status_bar, (Widget *) file_name);
     layout_add_widget((Layout *) status_bar, (Widget *) widget_new(Spacer));
     Label *cursor = widget_new(Label);
-    cursor->policy_size = 30;
+    cursor->policy_size = 21;
     cursor->color = DARKGRAY;
     cursor->handlers.draw = (WidgetDraw) sb_cursor_draw;
     layout_add_widget((Layout *) status_bar, (Widget *) cursor);
     Label *last_key = widget_new(Label);
-    last_key->policy_size = 16;
-    last_key->color = DARKGRAY;
-    last_key->handlers.draw = (WidgetDraw) sb_last_key_draw;
-    layout_add_widget((Layout *) status_bar, (Widget *) last_key);
     Label *fps = widget_new(Label);
     fps->policy_size = 4;
     fps->handlers.draw = (WidgetDraw) sb_fps_draw;
@@ -187,6 +164,10 @@ void eddy_are_you_sure_handler(ListBox *are_you_sure, QueryOption selection)
 
 void eddy_cmd_quit(Eddy *eddy, JSONValue unused)
 {
+    if (eddy->modals.size > 0) {
+        // User probably clicked the close window button twice
+        return;
+    }
     bool has_modified_buffers = false;
     for (size_t ix = 0; ix < eddy->buffers.size; ++ix) {
         Buffer *buffer = da_element_Buffer(&eddy->buffers, ix);
@@ -195,12 +176,15 @@ void eddy_cmd_quit(Eddy *eddy, JSONValue unused)
             break;
         }
     }
+    int        selection = 0;
     StringView prompt = SV("Are you sure you want to quit?", 30);
     if (has_modified_buffers) {
+        selection = 1;
         prompt = SV("There are modified files. Are you sure you want to quit?", 56);
     }
     ListBox *are_you_sure = listbox_create_query(prompt, eddy_are_you_sure_handler, QueryOptionYesNo);
     listbox_show(are_you_sure);
+    are_you_sure->selection = selection;
 }
 
 void run_command_submit(ListBox *listbox, ListBoxEntry selection)
@@ -336,22 +320,26 @@ void eddy_publish_diagnostics_handler(Eddy *eddy, JSONValue notif)
     for (size_t ix = 0; ix < eddy->buffers.size; ++ix) {
         Buffer *buffer = eddy->buffers.elements + ix;
         if (sv_eq(params.uri, buffer_uri(buffer))) {
+            size_t prev_num = buffer->diagnostics.size;
             da_free_Diagnostic(&buffer->diagnostics);
             buffer->diagnostics = params.diagnostics;
             params.diagnostics = (Diagnostics) { 0 };
-            ++buffer->version;
-
-            trace(CAT_LSP, "Diagnostics for '%.*s':", SV_ARG(params.uri));
-            for (size_t dix = 0; dix < buffer->diagnostics.size; ++dix) {
-                Diagnostic *d = buffer->diagnostics.elements + dix;
-                trace(CAT_LSP, "%.*s:%d:%d %.*s", SV_ARG(buffer->name), d->range.start.line, d->range.start.character, SV_ARG(d->message));
+            if (buffer->diagnostics.size != prev_num) {
+                bool is_saved = buffer->version == buffer->saved_version;
+                ++buffer->version;
+                if (is_saved) {
+                    buffer->saved_version = buffer->version;
+                }
             }
-            trace(CAT_LSP, "----");
-
             return;
         }
     }
     info("Received diagnostics for unknown document '%.*s'", SV_ARG(params.uri));
+}
+
+void eddy_query_close(Eddy *eddy)
+{
+    app_submit((App *) eddy, eddy, SV("eddy-quit", 9), json_null());
 }
 
 Eddy *eddy_create()
@@ -409,7 +397,7 @@ void eddy_init(Eddy *eddy)
     widget_add_command(eddy, "eddy-quit", (WidgetCommandHandler) eddy_cmd_quit,
         (KeyCombo) { KEY_Q, KMOD_CONTROL });
     widget_add_command(eddy, "eddy-run-command", (WidgetCommandHandler) eddy_cmd_run_command,
-        (KeyCombo) { KEY_X, KMOD_SUPER });
+        (KeyCombo) { KEY_X, KMOD_ALT });
     widget_add_command(eddy, "eddy-open-file", (WidgetCommandHandler) eddy_cmd_open_file,
         (KeyCombo) { KEY_O, KMOD_CONTROL });
     widget_add_command(eddy, "eddy-search-file", (WidgetCommandHandler) eddy_cmd_search_file,
@@ -427,6 +415,7 @@ void eddy_init(Eddy *eddy)
     eddy->handlers.on_terminate = (WidgetOnTerminate) eddy_on_terminate;
     eddy->handlers.on_draw = (WidgetDraw) eddy_on_draw;
     eddy->handlers.process_input = (WidgetProcessInput) eddy_process_input;
+    eddy->queryclose = (AppQueryClose) eddy_query_close;
     app_init((App *) eddy);
 }
 
@@ -434,7 +423,6 @@ void eddy_on_start(Eddy *eddy)
 {
     eddy->monitor = GetCurrentMonitor();
     eddy_load_font(eddy);
-    eddy_load_theme(eddy);
 }
 
 void eddy_on_terminate(Eddy *eddy)
@@ -465,7 +453,7 @@ void eddy_on_draw(Eddy *eddy)
             }
         }
     }
-    ClearBackground(palettes[PALETTE_DARK][PI_BACKGROUND]);
+    ClearBackground(colour_to_color(eddy->theme.editor.bg));
 }
 
 void eddy_read_settings(Eddy *eddy)
@@ -540,19 +528,12 @@ void eddy_load_font(Eddy *eddy)
                 sv_free(path);
                 return;
             }
-            printf("Font file %.*s does not exist\n", SV_ARG(path));
+            info("Font file %.*s does not exist", SV_ARG(path));
             sv_free(path);
         }
         font = default_font;
     }
     fatal("Could not load font!");
-}
-
-void print_colours(char const *label, Colours colours)
-{
-    StringView s = colours_to_string(colours);
-    printf("%s: %.*s\n", label, SV_ARG(s));
-    sv_free(s);
 }
 
 void eddy_load_theme(Eddy *eddy)
@@ -566,15 +547,6 @@ void eddy_load_theme(Eddy *eddy)
         return;
     }
     eddy->theme = theme_maybe.value;
-    print_colours("editor", eddy->theme.editor);
-    print_colours("selection", eddy->theme.selection);
-    print_colours("line highlight", eddy->theme.linehighlight);
-    print_colours("gutter", eddy->theme.gutter);
-    for (int ix = 0; ix < eddy->theme.token_colours.size; ++ix) {
-        StringView s = colours_to_string(eddy->theme.token_colours.elements[ix].colours);
-        printf("%.*s: %.*s\n", SV_ARG(eddy->theme.token_colours.elements[ix].name), SV_ARG(s));
-        sv_free(s);
-    }
 }
 
 void eddy_open_dir(Eddy *eddy, StringView dir)
@@ -587,17 +559,6 @@ void eddy_open_dir(Eddy *eddy, StringView dir)
     }
     eddy->project_dir = dir;
     MUST(Int, fs_assert_dir(SV(".eddy", 5)));
-    if (fs_file_exists(SV(".eddy/state", 11))) {
-        StringView s = MUST(StringView, read_file_by_name(SV(".eddy/state", 11)));
-        JSONValue  state = MUST(JSONValue, json_decode(s));
-        JSONValue  files = json_get_default(&state, "files", json_array());
-        assert(files.type == JSON_TYPE_ARRAY);
-        for (int ix = 0; ix < json_len(&files); ++ix) {
-            JSONValue f = MUST_OPTIONAL(JSONValue, json_at(&files, ix));
-            assert(f.type == JSON_TYPE_STRING);
-            MUST(Buffer, eddy_open_buffer(eddy, f.string));
-        }
-    }
     JSONValue prj = json_object();
     if (fs_file_exists(sv_from(".eddy/project.json"))) {
         StringView s = MUST(StringView, read_file_by_name(sv_from(".eddy/project.json")));
@@ -619,6 +580,18 @@ void eddy_open_dir(Eddy *eddy, StringView dir)
     eddy->cmake.cmakelists = sv_copy(json_get_string(&cmake, "cmakelists", SV("CMakeLists.txt", 14)));
     eddy->cmake.build_dir = sv_copy(json_get_string(&cmake, "build", SV("build", 5)));
     eddy_read_settings(eddy);
+    eddy_load_theme(eddy);
+    if (fs_file_exists(SV(".eddy/state", 11))) {
+        StringView s = MUST(StringView, read_file_by_name(SV(".eddy/state", 11)));
+        JSONValue  state = MUST(JSONValue, json_decode(s));
+        JSONValue  files = json_get_default(&state, "files", json_array());
+        assert(files.type == JSON_TYPE_ARRAY);
+        for (int ix = 0; ix < json_len(&files); ++ix) {
+            JSONValue f = MUST_OPTIONAL(JSONValue, json_at(&files, ix));
+            assert(f.type == JSON_TYPE_STRING);
+            MUST(Buffer, eddy_open_buffer(eddy, f.string));
+        }
+    }
 }
 
 ErrorOrBuffer eddy_open_buffer(Eddy *eddy, StringView file)

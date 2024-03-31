@@ -330,11 +330,26 @@ OptionalInt json_find(JSONValue *array, JSONValue elem)
     RETURN_EMPTY(Int);
 }
 
-OptionalJSONValue json_at(JSONValue *array, size_t index)
+OptionalJSONValue json_at(JSONValue *json, size_t index)
 {
-    assert(array->type == JSON_TYPE_ARRAY);
-    if (index < array->array.size) {
-        RETURN_VALUE(JSONValue, *da_element_JSONValue(&array->array, index));
+    assert(json->type == JSON_TYPE_ARRAY || json->type == JSON_TYPE_OBJECT);
+    switch (json->type) {
+    case JSON_TYPE_ARRAY:
+        if (index < json->array.size) {
+            RETURN_VALUE(JSONValue, *da_element_JSONValue(&json->array, index));
+        }
+        break;
+    case JSON_TYPE_OBJECT:
+        if (index < json->object.size) {
+            JSONNVPair *pair = json->object.elements + index;
+            JSONValue   ret = json_array();
+            json_append(&ret, json_string(pair->name));
+            json_append(&ret, json_copy(pair->value));
+            RETURN_VALUE(JSONValue, ret);
+        }
+        break;
+    default:
+        UNREACHABLE();
     }
     RETURN_EMPTY(JSONValue);
 }

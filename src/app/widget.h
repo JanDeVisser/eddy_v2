@@ -124,6 +124,7 @@ typedef struct {
 } IntRectangle;
 
 typedef struct _widget Widget;
+typedef struct _app    App;
 
 DA_STRUCT_WITH_NAME(Widget, Widget *, Widgets);
 
@@ -141,6 +142,7 @@ typedef void (*WidgetProcessInput)(Widget *);
 typedef void (*WidgetAfterProcessInput)(Widget *);
 typedef void (*WidgetOnTerminate)(Widget *);
 typedef void (*WidgetCommandHandler)(Widget *, JSONValue);
+typedef void (*AppQueryClose)(App *);
 
 typedef struct {
     WidgetInit              init;
@@ -369,6 +371,7 @@ DA_WITH_NAME(DrawFloating, DrawFloatings);
     Ints            queue;            \
     char            last_key[64];     \
     bool            quit;             \
+    AppQueryClose   queryclose;       \
     double          time;             \
     DrawFloatings   floatings;        \
     Widgets         modals;           \
@@ -376,7 +379,7 @@ DA_WITH_NAME(DrawFloating, DrawFloatings);
     PendingCommands pending_commands; \
     size_t          frame_count
 
-typedef struct {
+typedef struct _app {
     _APP_FIELDS;
 } App;
 

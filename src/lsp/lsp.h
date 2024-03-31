@@ -33,8 +33,6 @@ typedef struct {
 
 ERROR_OR(Response);
 
-extern PaletteIndex semantic_token_colors[];
-
 extern JSONValue    notification_encode(Notification *notification);
 extern Notification notification_decode(JSONValue *json);
 extern void         notification_free(Notification *notification);

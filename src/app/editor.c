@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "raylib.h"
+#include "sv.h"
 #include <ctype.h>
 #include <math.h>
 
@@ -13,7 +15,6 @@
 #include <app/editor.h>
 #include <app/listbox.h>
 #include <app/minibuffer.h>
-#include <app/palette.h>
 #include <lsp/lsp.h>
 #include <lsp/schema/SemanticTokens.h>
 #include <lsp/schema/SemanticTokensParams.h>
@@ -30,7 +31,7 @@ void gutter_init(Gutter *gutter)
     gutter->policy = SP_CHARACTERS;
     gutter->policy_size = 5;
     gutter->padding = DEFAULT_PADDING;
-    gutter->background = palettes[PALETTE_DARK][PI_BACKGROUND];
+    gutter->background = colour_to_color(eddy.theme.gutter.bg);
 }
 
 void gutter_resize(Gutter *)
@@ -52,7 +53,7 @@ void draw_diagnostic_float(Gutter *gutter)
     }
     if (hover_text.size > 0) {
         widget_draw_hover_panel(gutter, gutter->viewport.width - 3, eddy.cell.y * gutter->row_diagnostic_hover + 6, hover_text,
-            palettes[PALETTE_DARK][PI_BACKGROUND], palettes[PALETTE_DARK][PI_DEFAULT]);
+            colour_to_color(eddy.theme.editor.bg), colour_to_color(eddy.theme.editor.fg));
     }
 }
 
@@ -69,10 +70,10 @@ void gutter_draw(Gutter *gutter)
         widget_render_text(gutter, 0, eddy.cell.y * row,
             sv_from(TextFormat("%4d", lineno + 1)),
             eddy.font,
-            palettes[PALETTE_DARK][PI_LINE_NUMBER]);
+            colour_to_color(eddy.theme.gutter.fg));
         Index *line = buffer->lines.elements + lineno;
         if (line->num_diagnostics > 0) {
-            widget_draw_rectangle(gutter, -6, eddy.cell.y * row, 6, eddy.cell.y, palettes[PALETTE_DARK][PI_ERROR_MARKER]);
+            widget_draw_rectangle(gutter, -6, eddy.cell.y * row, 6, eddy.cell.y, RED);
         }
     }
     if (gutter->num_diagnostics_hover > 0) {
@@ -137,6 +138,7 @@ void editor_select_view(Editor *editor, int view_ix)
 {
     assert(view_ix >= 0 && view_ix < editor->buffers.size);
     BufferView *view = editor->buffers.elements + view_ix;
+    Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
     assert(view);
     editor->current_buffer = view_ix;
     view->cursor_flash = app->time;
@@ -144,6 +146,8 @@ void editor_select_view(Editor *editor, int view_ix)
     if (view->mode) {
         app->focus = view->mode;
     }
+    char name[buffer->name.length + 1];
+    SetWindowTitle(sv_cstr(buffer->name, name));
 }
 
 void editor_select_buffer(Editor *editor, int buffer_num)
@@ -333,7 +337,16 @@ void editor_lines_down(Editor *editor, int count)
     if (view->cursor_col < 0) {
         view->cursor_col = view->cursor_pos.x;
     }
-    view->cursor_pos.y = iclamp(view->cursor_pos.y + count, 0, buffer->lines.size - 1);
+    view->cursor_pos.y = iclamp(view->cursor_pos.y + count, 0, imax(0, buffer->lines.size - 1));
+}
+
+void editor_goto(Editor *editor, int line, int col)
+{
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
+    view->new_cursor = -1;
+    view->cursor_pos.y = iclamp(line, 0, buffer->lines.size - 1);
+    view->cursor_col = iclamp(col, 0, imax(0, buffer->lines.elements[view->cursor_pos.y].line.length - 1));
 }
 
 void editor_select_line(Editor *editor)
@@ -1000,6 +1013,34 @@ void editor_cmd_find_replace(Editor *editor, JSONValue unused)
     minibuffer_query(editor, SV("Find", 4), (MiniBufferQueryFunction) do_find_query);
 }
 
+MiniBufferChain do_goto(Editor *editor, StringView query)
+{
+    StringList coords = sv_split(query, SV(":", 1));
+    int        line = -1;
+    int        col = -1;
+    if (coords.size > 0) {
+        IntegerParseResult line_maybe = sv_parse_u32(sv_strip(coords.strings[0]));
+        if (line_maybe.success) {
+            line = line_maybe.integer.i32;
+            if (coords.size > 1) {
+                IntegerParseResult col_maybe = sv_parse_u32(sv_strip(coords.strings[1]));
+                if (line_maybe.success) {
+                    col = (int) col_maybe.integer.u32;
+                }
+            }
+        }
+    }
+    if (line >= 1) {
+        editor_goto(editor, line - 1, (col >= 1) ? col - 1 : col);
+    }
+    return (MiniBufferChain) { 0 };
+}
+
+void editor_cmd_goto(Editor *editor, JSONValue unused)
+{
+    minibuffer_query(editor, SV("Move to", 7), (MiniBufferQueryFunction) do_goto);
+}
+
 /*
  * ---------------------------------------------------------------------------
  * Life cycle
@@ -1009,7 +1050,7 @@ void editor_cmd_find_replace(Editor *editor, JSONValue unused)
 void editor_init(Editor *editor)
 {
     editor->policy = SP_STRETCH;
-    editor->background = palettes[PALETTE_DARK][PI_BACKGROUND];
+    editor->background = colour_to_color(eddy.theme.editor.bg);
     editor->padding = DEFAULT_PADDING;
     editor->num_clicks = 0;
     editor->handlers.character = (WidgetHandleCharacter) editor_character;
@@ -1058,15 +1099,17 @@ void editor_init(Editor *editor)
     widget_add_command(editor, "clear-selection", (WidgetCommandHandler) editor_cmd_clear_selection,
         (KeyCombo) { KEY_ESCAPE, KMOD_NONE });
     widget_add_command(editor, "copy-selection", (WidgetCommandHandler) editor_cmd_copy,
-        (KeyCombo) { KEY_C, KMOD_CONTROL });
+        (KeyCombo) { KEY_C, KMOD_SUPER });
     widget_add_command(editor, "cut-selection", (WidgetCommandHandler) editor_cmd_cut,
-        (KeyCombo) { KEY_X, KMOD_CONTROL });
+        (KeyCombo) { KEY_X, KMOD_SUPER });
     widget_add_command(editor, "paste-from-clipboard", (WidgetCommandHandler) editor_cmd_paste,
-        (KeyCombo) { KEY_V, KMOD_CONTROL });
+        (KeyCombo) { KEY_V, KMOD_SUPER });
     widget_add_command(editor, "editor-find", (WidgetCommandHandler) editor_cmd_find,
         (KeyCombo) { KEY_F, KMOD_SUPER });
     widget_add_command(editor, "editor-find-next", (WidgetCommandHandler) editor_cmd_find_next,
         (KeyCombo) { KEY_G, KMOD_SUPER });
+    widget_add_command(editor, "editor-goto", (WidgetCommandHandler) editor_cmd_goto,
+        (KeyCombo) { KEY_L, KMOD_SUPER });
     widget_add_command(editor, "editor-find-replace", (WidgetCommandHandler) editor_cmd_find_replace,
         (KeyCombo) { KEY_R, KMOD_SUPER });
     widget_add_command(editor, "editor-save", (WidgetCommandHandler) editor_cmd_save,
@@ -1074,9 +1117,9 @@ void editor_init(Editor *editor)
     widget_add_command(editor, "editor-save-as", (WidgetCommandHandler) editor_cmd_save_as,
         (KeyCombo) { KEY_S, KMOD_CONTROL | KMOD_ALT });
     widget_add_command(editor, "editor-undo", (WidgetCommandHandler) editor_cmd_undo,
-        (KeyCombo) { KEY_Z, KMOD_CONTROL });
+        (KeyCombo) { KEY_Z, KMOD_SUPER });
     widget_add_command(editor, "editor-redo", (WidgetCommandHandler) editor_cmd_redo,
-        (KeyCombo) { KEY_Z, KMOD_CONTROL | KMOD_SHIFT });
+        (KeyCombo) { KEY_Z, KMOD_SUPER | KMOD_SHIFT });
     widget_add_command(editor, "editor-switch-buffer", (WidgetCommandHandler) editor_cmd_switch_buffer,
         (KeyCombo) { KEY_B, KMOD_SUPER });
     widget_add_command(editor, "editor-close-buffer", (WidgetCommandHandler) editor_cmd_close_buffer,
@@ -1097,7 +1140,7 @@ void editor_draw(Editor *editor)
     editor_update_cursor(editor);
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
-    widget_draw_rectangle(editor, 0, 0, 0, 0, palettes[PALETTE_DARK][PI_BACKGROUND]);
+    widget_draw_rectangle(editor, 0, 0, 0, 0, colour_to_color(eddy.theme.editor.bg));
 
     int selection_start = -1, selection_end = -1;
     if (view->selection != -1) {
@@ -1122,7 +1165,7 @@ void editor_draw(Editor *editor)
                 widget_draw_rectangle(editor,
                     eddy.cell.x * selection_offset, eddy.cell.y * row,
                     width * eddy.cell.x, eddy.cell.y + 5,
-                    palettes[PALETTE_DARK][PI_SELECTION]);
+                    colour_to_color(eddy.theme.selection.fg));
             }
         }
         if (line.num_tokens == 0) {
@@ -1137,20 +1180,35 @@ void editor_draw(Editor *editor)
         for (size_t ix = line.first_token; ix < line.first_token + line.num_tokens; ++ix) {
             DisplayToken *token = buffer->tokens.elements + ix;
             int           start_col = (int) token->index - (int) line.index_of;
+
+            // token ends before left edge
             if (start_col + (int) token->length <= (int) view->left_column) {
                 continue;
             }
+
+            // token starts after right edge. We're done here; go to next line
             if (start_col >= view->left_column + editor->columns) {
                 break;
             }
-            start_col = iclamp(start_col, view->left_column, start_col);
-            int        length = iclamp((int) token->length, 0, editor->columns - start_col);
+
+            // Cut off at left edge
+            if (start_col < view->left_column) {
+                start_col = view->left_column;
+            }
+
+            // Length taking left edge into account
+            int length = token->length - (start_col - ((int) token->index - (int) line.index_of));
+            // If start + length overflows right edge, clip length:
+            if (start_col + length > view->left_column + editor->columns) {
+                length = view->left_column + editor->columns - start_col;
+            }
+
             StringView text = (StringView) { line.line.ptr + start_col, length };
             if (frame == 0) {
                 trace_nonl(CAT_EDIT, "[%zu %.*s]", ix, SV_ARG(text));
             }
-            widget_render_text(editor, eddy.cell.x * start_col, eddy.cell.y * row,
-                text, eddy.font, palettes[PALETTE_DARK][token->color]);
+            widget_render_text(editor, eddy.cell.x * (start_col - view->left_column), eddy.cell.y * row,
+                text, eddy.font, token->color);
         }
         if (frame == 0) {
             trace_nl(CAT_EDIT);
@@ -1165,7 +1223,7 @@ void editor_draw(Editor *editor)
     if (time - floor(time) < 0.5) {
         int x = view->cursor_pos.x - view->left_column;
         int y = view->cursor_pos.y - view->top_line;
-        widget_draw_rectangle(editor, x * eddy.cell.x, y * eddy.cell.y, 2, eddy.cell.y + 1, palettes[PALETTE_DARK][PI_CURSOR]);
+        widget_draw_rectangle(editor, x * eddy.cell.x, y * eddy.cell.y, 2, eddy.cell.y + 1, colour_to_color(eddy.theme.editor.fg));
     }
     DrawLine(editor->viewport.x + 80 * eddy.cell.x, editor->viewport.y,
         editor->viewport.x + 80 * eddy.cell.x, editor->viewport.y + editor->viewport.height,
@@ -1179,7 +1237,17 @@ void editor_draw(Editor *editor)
 void editor_process_input(Editor *editor)
 {
     assert(editor->num_clicks >= 0 && editor->num_clicks < 3);
-    if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT) && widget_contains(editor, GetMousePosition())) {
+    if (!widget_contains(editor, GetMousePosition())) {
+        return;
+    }
+    float mouse_move = GetMouseWheelMove();
+    if (mouse_move < 0) {
+        editor_lines_down(editor, -mouse_move);
+    }
+    if (mouse_move > 0) {
+        editor_lines_up(editor, mouse_move);
+    }
+    if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
         BufferView *view = editor->buffers.elements + editor->current_buffer;
         Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
         int         line = imin((GetMouseY() - editor->viewport.y) / eddy.cell.y + view->top_line,

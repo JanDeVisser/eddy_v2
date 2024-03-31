@@ -4,12 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "log.h"
+#include "sv.h"
 #include <ctype.h>
 
 #include <app/buffer.h>
 #include <app/c.h>
 #include <app/eddy.h>
 #include <app/listbox.h>
+#include <app/theme.h>
 #include <base/io.h>
 #include <base/lexer.h>
 #include <lsp/lsp.h>
@@ -66,40 +69,6 @@ void buffer_close(Buffer *buffer)
     buffer_apply(buffer, event);
 }
 
-PaletteIndex token_palette_index(Token t)
-{
-    switch (t.kind) {
-    case TK_KEYWORD:
-        return PI_KEYWORD;
-    case TK_IDENTIFIER:
-        return PI_IDENTIFIER;
-    case TK_NUMBER:
-        return PI_NUMBER;
-    case TK_QUOTED_STRING: {
-        switch (t.code) {
-        case TC_SINGLE_QUOTED_STRING:
-        case TC_UNTERMINATED_SINGLE_QUOTED_STRING:
-            return PI_CHAR_LITERAL;
-        case TC_DOUBLE_QUOTED_STRING:
-        case TC_UNTERMINATED_DOUBLE_QUOTED_STRING:
-            return PI_STRING;
-        default:
-            return PI_DEFAULT;
-        }
-    }
-    case TK_SYMBOL:
-        return PI_PUNCTUATION;
-    case TK_COMMENT:
-        return PI_COMMENT;
-    case TK_DIRECTIVE:
-        return PI_PREPROCESSOR;
-    case TK_DIRECTIVE_ARG:
-        return PI_PREPROCESSOR_ARG;
-    default:
-        return PI_DEFAULT;
-    }
-}
-
 void buffer_build_indices(Buffer *buffer)
 {
     assert(buffer->indexed_version <= buffer->version);
@@ -114,8 +83,8 @@ void buffer_build_indices(Buffer *buffer)
     lexer_push_source(&lexer, buffer->text.view, buffer->name);
     Index *current = da_append_Index(&buffer->lines, (Index) { 0, buffer->text.view });
     size_t lineno = 0;
-    // printf("Buffer size: %zu\n", buffer->text.view.length);
-    // printf("%5zu: ", lineno);
+    trace(CAT_EDIT, "Buffer size: %zu", buffer->text.view.length);
+    trace_nonl(CAT_EDIT, "%5zu: ", lineno);
     int dix = 0;
     current->first_diagnostic = 0;
     current->num_diagnostics = 0;
@@ -130,11 +99,11 @@ void buffer_build_indices(Buffer *buffer)
         Token t = lexer_next(&lexer);
         lexer_lex(&lexer);
         if (token_matches(t, TK_WHITESPACE, TC_NEWLINE) || token_matches_kind(t, TK_END_OF_FILE)) {
-            // if (current->num_tokens == 0) {
-            //     printf("[EOL]\n");
-            // } else {
-            //     printf("[EOL] %zu..%zu\n", current->first_token, current->first_token + current->num_tokens-1);
-            // }
+            if (current->num_tokens == 0) {
+                trace(CAT_EDIT, "[EOL]");
+            } else {
+                trace(CAT_EDIT, "[EOL] %zu..%zu", current->first_token, current->first_token + current->num_tokens - 1);
+            }
             current->line.length = t.location - current->index_of;
             if (t.kind == TK_END_OF_FILE) {
                 break;
@@ -150,22 +119,27 @@ void buffer_build_indices(Buffer *buffer)
                     ++dix;
                 }
             }
-            // printf("%5zu: ", lineno);
+            trace_nonl(CAT_EDIT, "%5zu: ", lineno);
             continue;
         }
-        PaletteIndex pi = token_palette_index(t);
-        // if (token_matches(t, TK_WHITESPACE, TC_WHITESPACE)) {
-        //     printf("%*.s", (int) t.text.length, "");
-        // } else {
-        //     printf("[%.*s %s %s]", SV_ARG(t.text), TokenKind_name(t.kind), PaletteIndex_name(pi));
-        // }
+        OptionalColours colours = theme_token_colours(&eddy.theme, t);
+        Colour          colour = colours.has_value ? colours.value.fg : eddy.theme.editor.fg;
+        if (token_matches(t, TK_WHITESPACE, TC_WHITESPACE)) {
+            trace_nonl(CAT_EDIT, "%*.s", (int) t.text.length, "");
+        } else {
+            StringView s = colour_to_rgb(colour);
+            trace_nonl(CAT_EDIT, "[%.*s %s %.*s]", SV_ARG(t.text), TokenKind_name(t.kind), SV_ARG(s));
+            sv_free(s);
+        }
         if (current->num_tokens == 0) {
             current->first_token = buffer->tokens.size;
         }
         ++current->num_tokens;
-        da_append_DisplayToken(&buffer->tokens, (DisplayToken) { t.location, t.text.length, lineno, pi });
+        da_append_DisplayToken(&buffer->tokens, (DisplayToken) { t.location, t.text.length, lineno, colour_to_color(colour) });
     }
-    // printf("\n[EOF]\n=====================\n");
+    trace_nl(CAT_EDIT);
+    trace(CAT_EDIT, "[EOF]");
+    trace(CAT_EDIT, "=====================");
     buffer->indexed_version = buffer->version;
     BufferEvent event = { .type = ETIndexed };
     for (BufferEventListenerList *list_entry = buffer->listeners; list_entry != NULL; list_entry = list_entry->next) {
@@ -530,26 +504,44 @@ void buffer_semantic_tokens_response(Buffer *buffer, JSONValue resp)
     Index         *line = buffer->lines.elements + lineno;
     size_t         offset = 0;
     UInt32s        data = result.data;
+    size_t         token_ix = 0;
     for (size_t ix = 0; ix < result.data.size; ix += 5) {
-        // trace(CAT_LSP, "Semantic token[%zu]: [%du, %du, %du]", ix, data.elements[ix], data.elements[ix + 1], data.elements[ix + 2]);
+        trace(CAT_LSP, "Semantic token[%zu] = (Δline %d, Δcol %d, length %d type %d %d)", ix, data.elements[ix], data.elements[ix + 1], data.elements[ix + 2], data.elements[ix + 3], data.elements[ix + 4]);
         if (data.elements[ix] > 0) {
             lineno += data.elements[ix];
             if (lineno >= buffer->lines.size) {
                 // trace(CAT_LSP, "Semantic token[%zu] lineno %zu > buffer->lines %zu", ix, lineno, buffer->lines.size);
-                continue;
+                break;
             }
             line = buffer->lines.elements + lineno;
             offset = 0;
+            token_ix = 0;
         }
         offset += data.elements[ix + 1];
-        // trace(CAT_LSP, "Semantic token[%zu]: line: %zu col: %zu", ix, lineno, offset);
-        size_t length = data.elements[ix + 2];
-        for (size_t token_ix = 0; token_ix < line->num_tokens; ++token_ix) {
+        size_t     length = data.elements[ix + 2];
+        StringView text = { line->line.ptr + offset, length };
+        trace(CAT_LSP, "Semantic token[%zu]: line: %zu col: %zu length: %zu %.*s", ix, lineno, offset, length, SV_ARG(text));
+        OptionalColours colours = theme_semantic_colours(&eddy.theme, data.elements[ix + 3]);
+        if (!colours.has_value) {
+            trace(CAT_LSP, "SemanticTokenType index %d not mapped", data.elements[ix + 3]);
+            continue;
+        }
+        if (log_category_on(CAT_LSP)) {
+            StringView s = colour_to_rgb(colours.value.fg);
+            trace(CAT_LSP, "Semantic token[%zu] = color '%.*s'", ix, SV_ARG(s));
+            sv_free(s);
+        }
+        for (; token_ix < line->num_tokens; ++token_ix) {
             assert(line->first_token + token_ix < buffer->tokens.size);
             DisplayToken *t = buffer->tokens.elements + line->first_token + token_ix;
             if (t->index == line->index_of + offset && t->length == length) {
-                t->color = semantic_token_colors[data.elements[ix + 3]];
+                t->color = colour_to_color(colours.value.fg);
+                break;
             }
+        }
+        if (token_ix == line->num_tokens) {
+            info("SemanticTokens OUT OF SYNC");
+            break;
         }
     }
 }

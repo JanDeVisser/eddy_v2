@@ -4,12 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "log.h"
 #include <stdarg.h>
 #include <sys/syslimits.h>
 #include <unistd.h>
 
 #include <app/eddy.h>
-#include <app/palette.h>
+#include <app/theme.h>
 #include <base/json.h>
 #include <base/process.h>
 #include <base/threadonce.h>
@@ -22,13 +23,11 @@
 DA_WITH_NAME(Request, Requests);
 DA_IMPL(Request);
 
-PaletteIndex semantic_token_colors[30];
-
 THREAD_ONCE(lsp_init);
 static Condition          init_condition;
 static Process           *lsp = NULL;
 static bool               lsp_ready = false;
-static ServerCapabilities server_capabilties = { 0 };
+static ServerCapabilities server_capabilities = { 0 };
 static Requests           request_queue = { 0 };
 static StringScanner      lsp_scanner = { 0 };
 
@@ -176,72 +175,75 @@ void handle_initialize_response(Widget *app, JSONValue response_json);
 void lsp_read(ReadPipe *pipe)
 {
     trace(CAT_LSP, "lsp_read");
-    sb_append_sv((StringBuilder *) &lsp_scanner.string, read_pipe_current(pipe));
-    if (!ss_expect_sv(&lsp_scanner, SV("Content-Length:", 15))) {
-        trace(CAT_LSP, "No content-length header");
-        return;
-    }
-    ss_skip_whitespace(&lsp_scanner);
-    size_t resp_content_length = ss_read_number(&lsp_scanner);
-    if (!resp_content_length) {
-        trace(CAT_LSP, "No content-length value");
-        ss_rewind(&lsp_scanner);
-        return;
-    }
-    if (!ss_expect_sv(&lsp_scanner, SV("\r\n\r\n", 4))) {
-        trace(CAT_LSP, "No header-content separator");
-        ss_rewind(&lsp_scanner);
-        return;
-    }
-    StringView response_json = ss_read(&lsp_scanner, resp_content_length);
-    if (response_json.length < resp_content_length) {
-        trace(CAT_LSP, "Short content");
-        ss_rewind(&lsp_scanner);
-        return;
-    }
-    ErrorOrJSONValue ret_maybe = json_decode(response_json);
-    if (ErrorOrJSONValue_is_error(ret_maybe)) {
-        info("ERROR Parsing incoming JSON: %s", Error_to_string(ret_maybe.error));
-        trace(CAT_LSP, "****** <== %.*s", SV_ARG(response_json));
-        eddy_set_message(&eddy, "LSP: %s", Error_to_string(ret_maybe.error));
-        goto defer_0;
-    }
-    // trace_json(OptionalJSONValue_create(ret_maybe.value), "<==");
-    JSONValue ret = ret_maybe.value;
-    if (json_has(&ret, "id")) {
-        Response response = response_decode(&ret);
-        trace(CAT_LSP, "<== %d", response.id);
-        for (size_t ix = 0; ix < request_queue.size; ++ix) {
-            Request *req = request_queue.elements + ix;
-            if (req->id == response.id) {
-                if (sv_eq_cstr(req->method, "initialize")) {
-                    trace(CAT_LSP, "<== ** initialize **");
-                    handle_initialize_response(req->sender, ret);
-                    goto defer_0;
-                }
-                trace(CAT_LSP, "<== %.*s", SV_ARG(req->method));
-                StringView cmd = sv_printf("lsp-%.*s", SV_ARG(req->method));
-                app_submit(app, req->sender, cmd, ret);
-                sv_free(cmd);
+    do {
+        sb_append_sv((StringBuilder *) &lsp_scanner.string, read_pipe_current(pipe));
+        do {
+            if (!ss_expect_sv(&lsp_scanner, SV("Content-Length:", 15))) {
+                trace(CAT_LSP, "No content-length header");
+                return;
+            }
+            ss_skip_whitespace(&lsp_scanner);
+            size_t resp_content_length = ss_read_number(&lsp_scanner);
+            if (!resp_content_length) {
+                trace(CAT_LSP, "No content-length value");
+                ss_rewind(&lsp_scanner);
+                return;
+            }
+            if (!ss_expect_sv(&lsp_scanner, SV("\r\n\r\n", 4))) {
+                trace(CAT_LSP, "No header-content separator");
+                ss_rewind(&lsp_scanner);
+                return;
+            }
+            StringView response_json = ss_read(&lsp_scanner, resp_content_length);
+            if (response_json.length < resp_content_length) {
+                trace(CAT_LSP, "Short content");
+                ss_rewind(&lsp_scanner);
+                return;
+            }
+            ErrorOrJSONValue ret_maybe = json_decode(response_json);
+            if (ErrorOrJSONValue_is_error(ret_maybe)) {
+                info("ERROR Parsing incoming JSON: %s", Error_to_string(ret_maybe.error));
+                trace(CAT_LSP, "****** <== %.*s", SV_ARG(response_json));
+                eddy_set_message(&eddy, "LSP: %s", Error_to_string(ret_maybe.error));
                 goto defer_0;
             }
-        }
-        info("No request matching LSP response ID %d found", response.id);
-        goto defer_0;
-    }
-    assert(json_has(&ret, "method"));
-    Notification notification = notification_decode(&ret);
-    trace(CAT_LSP, "|== %.*s", SV_ARG(notification.method));
-    StringView cmd = sv_printf("lsp-%.*s", SV_ARG(notification.method));
-    app_submit(app, app, cmd, ret);
-    sv_free(cmd);
-    notification_free(&notification);
-defer_0:
-    if (lsp_scanner.point.index == lsp_scanner.string.length) {
+            // trace_json(OptionalJSONValue_create(ret_maybe.value), "<==");
+            JSONValue ret = ret_maybe.value;
+            if (json_has(&ret, "id")) {
+                Response response = response_decode(&ret);
+                trace(CAT_LSP, "<== %d", response.id);
+                for (size_t ix = 0; ix < request_queue.size; ++ix) {
+                    Request *req = request_queue.elements + ix;
+                    if (req->id == response.id) {
+                        if (sv_eq_cstr(req->method, "initialize")) {
+                            trace(CAT_LSP, "<== ** initialize **");
+                            handle_initialize_response(req->sender, ret);
+                            goto defer_0;
+                        }
+                        trace(CAT_LSP, "<== %.*s", SV_ARG(req->method));
+                        StringView cmd = sv_printf("lsp-%.*s", SV_ARG(req->method));
+                        app_submit(app, req->sender, cmd, ret);
+                        sv_free(cmd);
+                        goto defer_0;
+                    }
+                }
+                info("No request matching LSP response ID %d found", response.id);
+                goto defer_0;
+            }
+            assert(json_has(&ret, "method"));
+            Notification notification = notification_decode(&ret);
+            trace(CAT_LSP, "|== %.*s`", SV_ARG(notification.method));
+            StringView cmd = sv_printf("lsp-%.*s", SV_ARG(notification.method));
+            app_submit(app, app, cmd, ret);
+            sv_free(cmd);
+            notification_free(&notification);
+        defer_0:
+            ss_reset(&lsp_scanner);
+        } while (lsp_scanner.point.index < lsp_scanner.string.length);
         lsp_scanner.point = (TextPosition) { 0 };
         lsp_scanner.string.length = 0;
-    }
-    ss_reset(&lsp_scanner);
+        ss_reset(&lsp_scanner);
+    } while (pipe->current.length > 0);
 }
 
 ErrorOrInt lsp_notification(char const *method, OptionalJSONValue params)
@@ -275,88 +277,18 @@ void handle_initialize_response(Widget *app, JSONValue response_json)
                 trace(CAT_LSP, "LSP server version: %.*s", SV_ARG(result.serverInfo.version.value));
             }
         }
-        server_capabilties = result.capabilities;
-        assert(server_capabilties.semanticTokensProvider.has_value);
+        server_capabilities = result.capabilities;
+        assert(server_capabilities.semanticTokensProvider.has_value);
         // trace(CAT_LSP, "#Token types: %zu", server_capabilties.semanticTokensProvider.value.legend.tokenTypes.size);
-        for (int i = 0; i < server_capabilties.semanticTokensProvider.value.legend.tokenTypes.size; ++i) {
-            StringView                 tokenType = server_capabilties.semanticTokensProvider.value.legend.tokenTypes.strings[i];
+        for (int i = 0; i < server_capabilities.semanticTokensProvider.value.legend.tokenTypes.size; ++i) {
+            StringView                 tokenType = server_capabilities.semanticTokensProvider.value.legend.tokenTypes.strings[i];
             OptionalSemanticTokenTypes semantic_token_type_maybe = SemanticTokenTypes_parse(tokenType);
-            if (semantic_token_type_maybe.has_value) {
-                // trace(CAT_LSP, "%d: '%.*s' %d", i, SV_ARG(tokenType), semantic_token_type);
-                switch (semantic_token_type_maybe.value) {
-                case SemanticTokenTypesNamespace:
-                    semantic_token_colors[i] = PI_KNOWN_IDENTIFIER;
-                    break;
-                case SemanticTokenTypesType:
-                    semantic_token_colors[i] = PI_KNOWN_IDENTIFIER;
-                    break;
-                case SemanticTokenTypesClass:
-                    semantic_token_colors[i] = PI_KNOWN_IDENTIFIER;
-                    break;
-                case SemanticTokenTypesEnum:
-                    semantic_token_colors[i] = PI_KNOWN_IDENTIFIER;
-                    break;
-                case SemanticTokenTypesInterface:
-                    semantic_token_colors[i] = PI_KNOWN_IDENTIFIER;
-                    break;
-                case SemanticTokenTypesStruct:
-                    semantic_token_colors[i] = PI_KNOWN_IDENTIFIER;
-                    break;
-                case SemanticTokenTypesTypeParameter:
-                    semantic_token_colors[i] = PI_KNOWN_IDENTIFIER;
-                    break;
-                case SemanticTokenTypesParameter:
-                    semantic_token_colors[i] = PI_KNOWN_IDENTIFIER;
-                    break;
-                case SemanticTokenTypesVariable:
-                    semantic_token_colors[i] = PI_VARIABLE;
-                    break;
-                case SemanticTokenTypesProperty:
-                    semantic_token_colors[i] = PI_PROPERTY;
-                    break;
-                case SemanticTokenTypesEnumMember:
-                    semantic_token_colors[i] = PI_KNOWN_IDENTIFIER;
-                    break;
-                case SemanticTokenTypesEvent:
-                    semantic_token_colors[i] = PI_DEFAULT;
-                    break;
-                case SemanticTokenTypesFunction:
-                    semantic_token_colors[i] = PI_FUNCTION;
-                    break;
-                case SemanticTokenTypesMethod:
-                    semantic_token_colors[i] = PI_FUNCTION;
-                    break;
-                case SemanticTokenTypesMacro:
-                    semantic_token_colors[i] = PI_PREPROCESSOR_DEFINE;
-                    break;
-                case SemanticTokenTypesKeyword:
-                    semantic_token_colors[i] = PI_KEYWORD;
-                    break;
-                case SemanticTokenTypesModifier:
-                    semantic_token_colors[i] = PI_KEYWORD;
-                    break;
-                case SemanticTokenTypesComment:
-                    semantic_token_colors[i] = PI_COMMENT;
-                    break;
-                case SemanticTokenTypesString:
-                    semantic_token_colors[i] = PI_STRING;
-                    break;
-                case SemanticTokenTypesNumber:
-                    semantic_token_colors[i] = PI_NUMBER;
-                    break;
-                case SemanticTokenTypesRegexp:
-                    semantic_token_colors[i] = PI_STRING;
-                    break;
-                case SemanticTokenTypesOperator:
-                    semantic_token_colors[i] = PI_DEFAULT;
-                    break;
-                case SemanticTokenTypesDecorator:
-                    semantic_token_colors[i] = PI_KNOWN_IDENTIFIER;
-                    break;
-                default:
-                    semantic_token_colors[i] = PI_STRING;
-                }
+            if (!semantic_token_type_maybe.has_value) {
+                trace(CAT_LSP, "SemanticTokenType %d = '%.*s' not recognized", i, SV_ARG(tokenType));
+                continue;
             }
+            SemanticTokenTypes type = semantic_token_type_maybe.value;
+            theme_map_semantic_type(&eddy.theme, i, type);
         }
     }
     MUST(Int, lsp_notification("initialized", OptionalJSONValue_create(json_object())));

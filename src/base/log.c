@@ -166,7 +166,7 @@ void trace_nonl(TraceCategory category, char const *msg, ...)
     }
     va_list args;
     va_start(args, msg);
-    vtrace(category, msg, args);
+    vtrace_nonl(category, msg, args);
     va_end(args);
 }
 

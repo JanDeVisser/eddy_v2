@@ -79,16 +79,16 @@ void mb_query_resize(MiniBufferQuery *mbq)
 void mb_query_draw(MiniBufferQuery *mbq)
 {
     if (!sv_empty(mbq->prompt)) {
-        widget_render_text(mbq, 0, 0, mbq->prompt, eddy.font, palettes[PALETTE_DARK][PI_DEFAULT]);
-        widget_render_text(mbq, mbq->prompt.length * eddy.cell.x, 0, SV(": ", 2), eddy.font, palettes[PALETTE_DARK][PI_DEFAULT]);
+        widget_render_text(mbq, 0, 0, mbq->prompt, eddy.font, colour_to_color(eddy.theme.editor.fg));
+        widget_render_text(mbq, mbq->prompt.length * eddy.cell.x, 0, SV(": ", 2), eddy.font, colour_to_color(eddy.theme.editor.fg));
     }
     if (!sv_empty(mbq->text.view)) {
-        widget_render_text(mbq, (mbq->prompt.length + 2) * eddy.cell.x, 0, mbq->text.view, eddy.font, palettes[PALETTE_DARK][PI_DEFAULT]);
+        widget_render_text(mbq, (mbq->prompt.length + 2) * eddy.cell.x, 0, mbq->text.view, eddy.font, colour_to_color(eddy.theme.editor.fg));
     }
     double t = GetTime();
     if ((t - floor(t)) < 0.5) {
         int x = mbq->prompt.length + 2 + mbq->cursor;
-        widget_draw_rectangle(mbq, x * eddy.cell.x, 0, 2, eddy.cell.y + 5, palettes[PALETTE_DARK][PI_CURSOR]);
+        widget_draw_rectangle(mbq, x * eddy.cell.x, 0, 2, eddy.cell.y + 5, colour_to_color(eddy.theme.editor.fg));
     }
 }
 
@@ -114,9 +114,9 @@ void minibuffer_draw(MiniBuffer *minibuffer)
     if (minibuffer->current_query.fnc != NULL) {
         return;
     }
-    widget_draw_rectangle(minibuffer, 0, 0, minibuffer->viewport.width, minibuffer->viewport.height, palettes[PALETTE_DARK][PI_BACKGROUND]);
+    widget_draw_rectangle(minibuffer, 0, 0, minibuffer->viewport.width, minibuffer->viewport.height, colour_to_color(eddy.theme.editor.bg));
     if (!sv_empty(minibuffer->message)) {
-        widget_render_text(minibuffer, 0, 0, minibuffer->message, eddy.font, palettes[PALETTE_DARK][PI_DEFAULT]);
+        widget_render_text(minibuffer, 0, 0, minibuffer->message, eddy.font, colour_to_color(eddy.theme.editor.fg));
     }
 }
 

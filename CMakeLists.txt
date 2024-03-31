@@ -3,12 +3,9 @@ project(eddy C)
 
 set(CMAKE_C_STANDARD 23)
 
-# On MacOS the brew-distributed raylib has an annoying bug which causes a
-# +/- 1 second delay the first time IsKeyPressed is supposed to trigger.
-# Using a built-from-source raylib with PLATFORM=SDL avoids this problem.
 if(DEFINED RAYLIB)
   set(raylib_INCLUDE_DIRS "${PROJECT_SOURCE_DIR}/${RAYLIB}")
-  set(raylib_LIBRARIES "-framework IOKit -framework Cocoa -framework OpenGL -L${PROJECT_SOURCE_DIR}/${RAYLIB} -lraylib -lSDL2")
+  set(raylib_LIBRARIES "-framework IOKit -framework Cocoa -framework OpenGL -L${PROJECT_SOURCE_DIR}/${RAYLIB} -lraylib -lSDL2 -lglfw3")
 else()
   set(raylib_VERBOSE ON)
   include(cmake/raylib-config.cmake)

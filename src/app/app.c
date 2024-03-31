@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "log.h"
+#include "raylib.h"
 #include <widget.h>
 
 DA_IMPL(PendingCommand);
@@ -51,8 +53,7 @@ void app_draw(App *app)
 
 void app_on_resize(App *app)
 {
-    Vector2 measurements = MeasureTextEx(app->font, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
-        /* (float) app->font.baseSize */ 20.0, 2);
+    Vector2 measurements = MeasureTextEx(app->font, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", app->font.baseSize, 2);
     app->cell.x = measurements.x / 52.0f;
     int rows = (app->viewport.height - 10) / measurements.y;
     app->cell.y = (float) (app->viewport.height - 10) / (float) rows;
@@ -76,6 +77,9 @@ void app_initialize(AppCreate create, int argc, char **argv)
     app->commands_mutex = mutex_create();
     app->handlers.init((Widget *) app);
 
+    if (!log_category_on(CAT_RAYLIB)) {
+        SetTraceLogLevel(LOG_FATAL);
+    }
     InitWindow(app->viewport.width, app->viewport.height, app->classname);
     app->viewport.width = GetScreenWidth();
     app->viewport.height = GetScreenHeight();
@@ -83,6 +87,7 @@ void app_initialize(AppCreate create, int argc, char **argv)
     SetWindowState(FLAG_WINDOW_RESIZABLE | FLAG_WINDOW_MAXIMIZED | FLAG_VSYNC_HINT);
     Image icon = LoadImage("eddy.png");
     SetWindowIcon(icon);
+    SetMouseCursor(MOUSE_CURSOR_IBEAM);
     SetExitKey(KEY_NULL);
     SetTargetFPS(60);
     MaximizeWindow();
@@ -94,8 +99,16 @@ void app_start()
         app->handlers.on_start((Widget *) app);
     }
     layout_resize((Layout *) app);
-    while (!WindowShouldClose() && !app->quit) {
-        app->handlers.process_input((Widget *) app);
+    while (!app->quit) {
+        if (WindowShouldClose()) {
+            if (app->queryclose) {
+                app->queryclose(app);
+            } else {
+                break;
+            }
+        } else {
+            app->handlers.process_input((Widget *) app);
+        }
         BeginDrawing();
         app->handlers.draw((Widget *) app);
         EndDrawing();

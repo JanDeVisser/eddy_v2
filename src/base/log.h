@@ -32,7 +32,8 @@
     S(LSP)                 \
     S(XML)                 \
     S(TEMPLATE)            \
-    S(EDIT)
+    S(EDIT)                \
+    S(RAYLIB)
 
 typedef enum trace_category {
 #undef TRACECATEGORY
