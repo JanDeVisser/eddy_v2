@@ -366,6 +366,8 @@ DA_WITH_NAME(DrawFloating, DrawFloatings);
     char          **argv;             \
     int             monitor;          \
     Font            font;             \
+    StringView      font_path;        \
+    int             font_size;        \
     Widget         *focus;            \
     Vector2         cell;             \
     Ints            queue;            \
@@ -448,6 +450,7 @@ extern void               app_on_resize(App *app);
 extern void               app_on_process_input(App *app);
 extern void               app_submit(App *app, void *target, StringView command, JSONValue args);
 extern void               app_draw_floating(App *app, void *target, WidgetDraw draw);
+extern void               app_set_font(App *a, StringView path, int font_size);
 
 #define is_key_pressed(key, ...) (_is_key_pressed((key), #key __VA_OPT__(, ) __VA_ARGS__, KMOD_COUNT))
 #define widget_add_command(w, cmd, handler, ...) _widget_add_command((w), (cmd), (handler) __VA_OPT__(, ) __VA_ARGS__, (KeyCombo) { KEY_NULL, KMOD_NONE })

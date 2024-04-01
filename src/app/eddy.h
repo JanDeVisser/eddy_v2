@@ -59,6 +59,7 @@ extern void          eddy_close_buffer(Eddy *eddy, int buffer_num);
 extern void          eddy_set_message(Eddy *eddy, char const *fmt, ...);
 extern void          eddy_clear_message(Eddy *eddy);
 extern void          eddy_load_font(Eddy *eddy);
+void                 eddy_inc_font_size(Eddy *e, int increment);
 extern Eddy         *eddy_create();
 
 extern AppState state;

@@ -51,15 +51,38 @@ void app_draw(App *app)
     }
 }
 
-void app_on_resize(App *app)
+void app_set_font(App *a, StringView path, int font_size)
 {
-    Vector2 measurements = MeasureTextEx(app->font, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", app->font.baseSize, 2);
-    app->cell.x = measurements.x / 52.0f;
-    int rows = (app->viewport.height - 10) / measurements.y;
-    app->cell.y = (float) (app->viewport.height - 10) / (float) rows;
-    app->viewport = (Rect) { 0 };
-    app->viewport.width = GetScreenWidth();
-    app->viewport.height = GetScreenHeight();
+    if (font_size <= 3 || font_size > 48) {
+        return;
+    }
+    info("Loading font '%.*s', size %d", SV_ARG(path), font_size);
+    char       buf[path.length + 1];
+    Font       font = LoadFontEx(sv_cstr(path, buf), font_size, NULL, 0);
+    if (font.baseSize == 0) {
+        return;
+    }
+    if (a->font.baseSize > 0) {
+        UnloadFont(a->font);
+    }
+    a->font = font;
+    if (!sv_eq(a->font_path, path)) {
+        sv_free(a->font_path);
+        a->font_path = sv_copy(path);
+    }
+    a->font_size = font_size;
+    a->handlers.resize((Widget *) a);
+}
+
+void app_on_resize(App *a)
+{
+    Vector2 measurements = MeasureTextEx(app->font, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", a->font_size, 2);
+    a->cell.x = measurements.x / 52.0f;
+    int rows = (int) ((a->viewport.height - 10) / measurements.y);
+    a->cell.y = (float) (a->viewport.height - 10) / (float) rows;
+    a->viewport = (Rect) { 0 };
+    a->viewport.width = (float) GetScreenWidth();
+    a->viewport.height = (float) GetScreenHeight();
 }
 
 void app_initialize(AppCreate create, int argc, char **argv)

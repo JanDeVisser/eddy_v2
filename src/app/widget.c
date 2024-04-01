@@ -417,7 +417,8 @@ void layout_resize(Layout *layout)
 
     if (stretch_count) {
         // printf("Stretch count %d\n", stretch_count);
-        assert_msg(total > allocated, "No room left in container for %d stretched components. Available: %f Allocated: %f", stretch_count, total, allocated);
+        assert_msg(total > allocated, "No room left in container '%s' for %d stretched components. Available: %f Allocated: %f",
+            layout->classname, stretch_count, total, allocated);
         float stretch = floorf((total - allocated) / (float) stretch_count);
         for (size_t ix = 0; ix < layout->widgets.size; ++ix) {
             w = layout->widgets.elements[ix];

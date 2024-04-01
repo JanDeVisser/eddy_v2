@@ -308,6 +308,110 @@ void eddy_cmd_display_messagebox(Eddy *eddy, JSONValue message)
     listbox_show(box);
 }
 
+StringList eddy_get_font_dirs(Eddy *e)
+{
+    static StringList s_font_dirs = { 0 };
+    if (s_font_dirs.size == 0) {
+        JSONValue appearance = json_get_default(&e->settings, "appearance", json_object());
+        JSONValue directories = json_get_default(&appearance, "font_directories", json_array());
+        if (directories.type == JSON_TYPE_STRING) {
+            JSONValue dirs = json_array();
+            json_append(&dirs, json_copy(directories));
+            directories = dirs;
+        }
+        assert(directories.type == JSON_TYPE_ARRAY);
+        StringView     packaged_font_dir = fs_canonical(sv_from(EDDY_DATADIR "/fonts"));
+        struct passwd *pw = getpwuid(getuid());
+        StringBuilder  d = { 0 };
+        for (size_t ix = 0; ix < json_len(&directories); ++ix) {
+            JSONValue dir = MUST_OPTIONAL(JSONValue, json_at(&directories, ix));
+            assert(dir.type == JSON_TYPE_STRING);
+            d = (StringBuilder) {0};
+            sb_append_sv(&d, dir.string);
+            sb_replace_all(&d, SV("${HOME}", 7), sv_from(pw->pw_dir));
+            sb_replace_all(&d, SV("${EDDY_DATADIR}", 15), sv_from(EDDY_DATADIR));
+            StringView dirname = fs_canonical(d.view);
+            if (sv_eq(dirname, packaged_font_dir)) {
+                sv_free(packaged_font_dir);
+                packaged_font_dir = (StringView) { 0 };
+            }
+            sl_push(&s_font_dirs, d.view);
+        }
+        if (packaged_font_dir.length > 0) {
+            sl_push(&s_font_dirs, packaged_font_dir);
+        }
+    }
+    return s_font_dirs;
+}
+
+void eddy_inc_font_size(Eddy *e, int increment)
+{
+    app_set_font((App *) &eddy, e->font_path, e->font_size + increment);
+    eddy_set_message(e, "Font size %d", e->font_size);
+}
+
+void eddy_cmd_shrink_font(Eddy *e, JSONValue)
+{
+    eddy_inc_font_size(e, -1);
+}
+
+void eddy_cmd_enlarge_font(Eddy *e, JSONValue)
+{
+    eddy_inc_font_size(e, 1);
+}
+
+void eddy_cmd_reset_font(Eddy *e, JSONValue)
+{
+    JSONValue appearance = json_get_default(&e->settings, "appearance", json_object());
+    int font_size = json_get_int(&appearance, "font_size", 20);
+    app_set_font((App *) &eddy, e->font_path, font_size);
+    eddy_set_message(e, "Font size %d", e->font_size);
+}
+
+void select_font_submit(ListBox *listbox, ListBoxEntry selection)
+{
+    app_set_font((App*) &eddy, selection.text, eddy.font_size);
+    eddy_set_message(&eddy, "Selected font '%.*s'", SV_ARG(selection.text));
+}
+
+void eddy_cmd_select_font(Eddy *e, JSONValue message)
+{
+    ListBox *listbox = widget_new(ListBox);
+    listbox->prompt = sv_from("Select font");
+    listbox->submit = select_font_submit;
+    StringList font_dirs = eddy_get_font_dirs(e);
+    StringList fonts = { 0 };
+    for (size_t ix = 0; ix < font_dirs.size; ++ix) {
+        info("eddy_cmd_select_font: Directory %.*s", SV_ARG(font_dirs.strings[ix]));
+        ErrorOrDirListing dir_maybe = fs_directory(font_dirs.strings[ix], DirOptionFiles);
+        if (ErrorOrDirListing_is_error(dir_maybe)) {
+            info("eddy_cmd_select_font: Invalid font directory %.*s", SV_ARG(font_dirs.strings[ix]));
+            eddy_set_message(e, "Invalid font directory '%.*s'", SV_ARG(font_dirs.strings[ix]));
+            continue;
+        }
+        DirListing dir = dir_maybe.value;
+        for (size_t dix = 0; dix < dir.entries.size; ++dix) {
+            DirEntry *entry = dir.entries.elements + dix;
+            if (!sv_endswith(entry->name, SV(".ttf", 4)) && !sv_endswith(entry->name, SV(".TTF", 4))) {
+                continue;
+            }
+            StringView path = sv_printf("%.*s/%.*s", SV_ARG(font_dirs.strings[ix]), SV_ARG(entry->name));
+            char       buf[path.length + 1];
+            Font       font = LoadFontEx(sv_cstr(path, buf), 20, NULL, 0);
+            Vector2    w = MeasureTextEx(font, "W", 20, 2);
+            Vector2    i = MeasureTextEx(font, "i", 20, 2);
+            UnloadFont(font);
+            if (w.x == i.x) {
+                info("eddy_cmd_select_font: %.*s", SV_ARG(path));
+                da_append_ListBoxEntry(&listbox->entries, (ListBoxEntry) { path, NULL });
+                continue;
+            }
+            sv_free(path);
+        }
+    }
+    listbox_show(listbox);
+}
+
 void eddy_publish_diagnostics_handler(Eddy *eddy, JSONValue notif)
 {
     Notification                     notification = notification_decode(&notif);
@@ -397,15 +501,22 @@ void eddy_init(Eddy *eddy)
     widget_add_command(eddy, "eddy-quit", (WidgetCommandHandler) eddy_cmd_quit,
         (KeyCombo) { KEY_Q, KMOD_CONTROL });
     widget_add_command(eddy, "eddy-run-command", (WidgetCommandHandler) eddy_cmd_run_command,
-        (KeyCombo) { KEY_X, KMOD_ALT });
+        (KeyCombo) { KEY_P, KMOD_SUPER | KMOD_SHIFT });
     widget_add_command(eddy, "eddy-open-file", (WidgetCommandHandler) eddy_cmd_open_file,
         (KeyCombo) { KEY_O, KMOD_CONTROL });
     widget_add_command(eddy, "eddy-search-file", (WidgetCommandHandler) eddy_cmd_search_file,
         (KeyCombo) { KEY_O, KMOD_SUPER });
+    widget_add_command(eddy, "eddy-shrink-font", (WidgetCommandHandler) eddy_cmd_shrink_font,
+        (KeyCombo) { KEY_MINUS, KMOD_SUPER });
+    widget_add_command(eddy, "eddy-enlarge-font", (WidgetCommandHandler) eddy_cmd_enlarge_font,
+        (KeyCombo) { KEY_EQUAL, KMOD_SUPER });
+    widget_add_command(eddy, "eddy-reset-font", (WidgetCommandHandler) eddy_cmd_reset_font,
+        (KeyCombo) { KEY_ZERO, KMOD_SUPER });
     widget_add_command(eddy, "cmake-build", (WidgetCommandHandler) cmake_cmd_build,
         (KeyCombo) { KEY_F9, KMOD_NONE });
     widget_register(eddy, "lsp-textDocument/publishDiagnostics", (WidgetCommandHandler) eddy_publish_diagnostics_handler);
     widget_register(eddy, "display-message", (WidgetCommandHandler) eddy_cmd_set_message);
+    widget_register(eddy, "eddy-select-font", (WidgetCommandHandler) eddy_cmd_select_font);
     widget_register(eddy, "show-message-box", (WidgetCommandHandler) eddy_cmd_display_messagebox);
 
     eddy->viewport.width = WINDOW_WIDTH;
@@ -492,43 +603,25 @@ void eddy_read_settings(Eddy *eddy)
     eddy->settings = settings;
 }
 
-void eddy_load_font(Eddy *eddy)
+void eddy_load_font(Eddy *e)
 {
-    JSONValue appearance = json_get_default(&eddy->settings, "appearance", json_object());
-    JSONValue directories = json_get_default(&appearance, "font_directories", json_array());
-    if (directories.type == JSON_TYPE_STRING) {
-        JSONValue dirs = json_array();
-        json_append(&dirs, json_copy(directories));
-        directories = dirs;
-    }
-    assert(directories.type == JSON_TYPE_ARRAY);
-    json_append(&directories, json_string(sv_from(EDDY_DATADIR "/fonts")));
+    JSONValue appearance = json_get_default(&e->settings, "appearance", json_object());
     JSONValue default_font = json_string(SV("VictorMono-Medium.ttf", 21));
     JSONValue font = json_get_default(&appearance, "font", default_font);
     assert(font.type == JSON_TYPE_STRING);
     JSONValue font_size = json_get_default(&appearance, "font_size", json_int(20));
     assert(font_size.type == JSON_TYPE_INT);
 
-    struct passwd *pw = getpwuid(getuid());
-    StringBuilder  d = { 0 };
+    StringList font_dirs = eddy_get_font_dirs(e);
     for (int tries = 0; tries < 2; ++tries) {
-        for (size_t ix = 0; ix < json_len(&directories); ++ix) {
-            JSONValue dir = MUST_OPTIONAL(JSONValue, json_at(&directories, ix));
-            assert(dir.type == JSON_TYPE_STRING);
-            d.length = 0;
-            sb_append_sv(&d, dir.string);
-            sb_replace_all(&d, SV("${HOME}", 7), sv_from(pw->pw_dir));
-            sb_replace_all(&d, SV("${EDDY_DATADIR}", 15), sv_from(EDDY_DATADIR));
-            StringView path = sv_printf("%.*s/%.*s", SV_ARG(d.view), SV_ARG(font.string));
+        for (size_t ix = 0; ix < font_dirs.size; ++ix) {
+            StringView path = sv_printf("%.*s/%.*s", SV_ARG(font_dirs.strings[ix]), SV_ARG(font.string));
             if (fs_file_exists(path) && !fs_is_directory(path)) {
                 trace(CAT_EDIT, "Found font file %.*s", SV_ARG(path));
-                char buf[path.length + 1];
-                eddy->font = LoadFontEx(sv_cstr(path, buf), json_int_value(font_size), NULL, 0);
-                sv_free(d.view);
+                app_set_font((App *) e, path, json_int_value(font_size));
                 sv_free(path);
                 return;
             }
-            info("Font file %.*s does not exist", SV_ARG(path));
             sv_free(path);
         }
         font = default_font;

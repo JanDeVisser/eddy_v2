@@ -15,9 +15,7 @@
 #include <app/editor.h>
 #include <app/listbox.h>
 #include <app/minibuffer.h>
-#include <lsp/lsp.h>
 #include <lsp/schema/SemanticTokens.h>
-#include <lsp/schema/SemanticTokensParams.h>
 
 DA_IMPL(BufferView);
 WIDGET_CLASS_DEF(Gutter, gutter);
@@ -1241,20 +1239,27 @@ void editor_process_input(Editor *editor)
         return;
     }
     float mouse_move = GetMouseWheelMove();
-    if (mouse_move < 0) {
-        editor_lines_down(editor, -mouse_move);
-    }
-    if (mouse_move > 0) {
-        editor_lines_up(editor, mouse_move);
+    if (mouse_move != 0.0) {
+        if (IsKeyDown(KEY_LEFT_SUPER) || IsKeyDown(KEY_RIGHT_SUPER)) {
+            eddy_inc_font_size(&eddy, (int) -mouse_move);
+        } else {
+            if (mouse_move < 0) {
+                editor_lines_down(editor, (int) -mouse_move);
+            }
+            if (mouse_move > 0) {
+                editor_lines_up(editor, (int) mouse_move);
+            }
+        }
+        return;
     }
     if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
         BufferView *view = editor->buffers.elements + editor->current_buffer;
         Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
-        int         line = imin((GetMouseY() - editor->viewport.y) / eddy.cell.y + view->top_line,
+        int         lineno = imin((GetMouseY() - editor->viewport.y) / eddy.cell.y + view->top_line,
                     buffer->lines.size - 1);
         int         col = imin((GetMouseX() - editor->viewport.x) / eddy.cell.x + view->left_column,
-                    buffer->lines.elements[line].line.length);
-        view->new_cursor = buffer->lines.elements[line].index_of + col;
+                    buffer->lines.elements[lineno].line.length);
+        view->new_cursor = buffer->lines.elements[lineno].index_of + col;
         view->cursor_col = -1;
         if (editor->num_clicks > 0 && (eddy.time - editor->clicks[editor->num_clicks - 1]) > 0.5) {
             editor->num_clicks = 0;
@@ -1270,7 +1275,7 @@ void editor_process_input(Editor *editor)
             view->new_cursor = buffer_word_boundary_right(buffer, view->new_cursor);
             break;
         case 3: {
-            size_t lineno = buffer_line_for_index(buffer, view->new_cursor);
+            lineno = buffer_line_for_index(buffer, view->new_cursor);
             Index *line = buffer->lines.elements + lineno;
             view->selection = line->index_of;
             view->new_cursor = line->index_of + line->line.length + 1;
