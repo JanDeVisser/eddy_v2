@@ -1,3 +1,5 @@
+find_package(Freetype)
+
 add_executable(
         eddy
         app.c
@@ -14,8 +16,8 @@ add_executable(
         widget.c
 )
 
-target_include_directories(eddy PRIVATE ${raylib_INCLUDE_DIRS})
-target_link_libraries(eddy PRIVATE lsp ${raylib_LIBRARIES})
+target_include_directories(eddy PRIVATE ${raylib_INCLUDE_DIRS} ${FREETYPE_INCLUDE_DIRS})
+target_link_libraries(eddy PRIVATE lsp ${raylib_LIBRARIES} ${FREETYPE_LIBRARIES})
 
 install(TARGETS eddy
         ARCHIVE DESTINATION lib

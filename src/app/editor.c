@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "raylib.h"
-#include "sv.h"
 #include <ctype.h>
 #include <math.h>
 
@@ -32,8 +30,9 @@ void gutter_init(Gutter *gutter)
     gutter->background = colour_to_color(eddy.theme.gutter.bg);
 }
 
-void gutter_resize(Gutter *)
+void gutter_resize(Gutter *gutter)
 {
+    gutter->background = colour_to_color(eddy.theme.gutter.bg);
 }
 
 void draw_diagnostic_float(Gutter *gutter)
@@ -839,7 +838,7 @@ void editor_cmd_redo(Editor *editor, JSONValue unused)
 
 void switch_buffer_submit(ListBox *listbox, ListBoxEntry selection)
 {
-    size_t buffer_ix = (size_t) selection.payload;
+    int buffer_ix = selection.int_value;
     editor_select_buffer(eddy.editor, buffer_ix);
 }
 
@@ -848,7 +847,7 @@ void editor_cmd_switch_buffer(Editor *editor, JSONValue unused)
     ListBox *listbox = widget_new(ListBox);
     listbox->submit = (ListBoxSubmit) switch_buffer_submit;
     listbox->prompt = sv_from("Select buffer");
-    for (size_t ix = 0; ix < eddy.buffers.size; ++ix) {
+    for (int ix = 0; ix < eddy.buffers.size; ++ix) {
         Buffer    *buffer = eddy.buffers.elements + ix;
         StringView text;
         if (buffer->saved_version < buffer->version) {
@@ -856,7 +855,7 @@ void editor_cmd_switch_buffer(Editor *editor, JSONValue unused)
         } else {
             text = buffer->name;
         }
-        da_append_ListBoxEntry(&listbox->entries, (ListBoxEntry) { text, (void *) ix });
+        da_append_ListBoxEntry(&listbox->entries, (ListBoxEntry) { .text = text, .int_value = ix });
     }
     listbox_show(listbox);
 }
@@ -1225,10 +1224,10 @@ void editor_draw(Editor *editor)
     }
     DrawLine(editor->viewport.x + 80 * eddy.cell.x, editor->viewport.y,
         editor->viewport.x + 80 * eddy.cell.x, editor->viewport.y + editor->viewport.height,
-        RAYWHITE);
+        colour_to_color(eddy.theme.editor.fg));
     DrawLine(editor->viewport.x + 120 * eddy.cell.x, editor->viewport.y,
         editor->viewport.x + 120 * eddy.cell.x, editor->viewport.y + editor->viewport.height,
-        RAYWHITE);
+        colour_to_color(eddy.theme.editor.fg));
     ++frame;
 }
 

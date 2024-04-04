@@ -280,20 +280,28 @@ void handle_initialize_response(Widget *app, JSONValue response_json)
         server_capabilities = result.capabilities;
         assert(server_capabilities.semanticTokensProvider.has_value);
         // trace(CAT_LSP, "#Token types: %zu", server_capabilties.semanticTokensProvider.value.legend.tokenTypes.size);
-        for (int i = 0; i < server_capabilities.semanticTokensProvider.value.legend.tokenTypes.size; ++i) {
-            StringView                 tokenType = server_capabilities.semanticTokensProvider.value.legend.tokenTypes.strings[i];
-            OptionalSemanticTokenTypes semantic_token_type_maybe = SemanticTokenTypes_parse(tokenType);
-            if (!semantic_token_type_maybe.has_value) {
-                trace(CAT_LSP, "SemanticTokenType %d = '%.*s' not recognized", i, SV_ARG(tokenType));
-                continue;
-            }
-            SemanticTokenTypes type = semantic_token_type_maybe.value;
-            theme_map_semantic_type(&eddy.theme, i, type);
-        }
+        lsp_initialize_theme();
     }
     MUST(Int, lsp_notification("initialized", OptionalJSONValue_create(json_object())));
     lsp_ready = true;
     condition_broadcast(init_condition);
+}
+
+void lsp_initialize_theme()
+{
+    if (!lsp_ready) {
+        return;
+    }
+    for (int i = 0; i < server_capabilities.semanticTokensProvider.value.legend.tokenTypes.size; ++i) {
+        StringView                 tokenType = server_capabilities.semanticTokensProvider.value.legend.tokenTypes.strings[i];
+        OptionalSemanticTokenTypes semantic_token_type_maybe = SemanticTokenTypes_parse(tokenType);
+        if (!semantic_token_type_maybe.has_value) {
+            trace(CAT_LSP, "SemanticTokenType %d = '%.*s' not recognized", i, SV_ARG(tokenType));
+            continue;
+        }
+        SemanticTokenTypes type = semantic_token_type_maybe.value;
+        theme_map_semantic_type(&eddy.theme, i, type);
+    }
 }
 
 void lsp_initialize()

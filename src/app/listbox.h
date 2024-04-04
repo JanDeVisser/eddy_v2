@@ -29,8 +29,13 @@ typedef enum : uint8_t {
 
 typedef struct {
     StringView text;
-    void      *payload;
     size_t     index;
+    union {
+        void      *payload;
+        StringView string;
+        int        int_value;
+        float      float_value;
+    };
 } ListBoxEntry;
 
 typedef struct listbox ListBox;

@@ -189,27 +189,32 @@ ErrorOrTokenColour token_colour_decode(JSONValue *json)
         ret.name = sv_copy(name.value.string);
     }
     OptionalJSONValue scope = json_get(json, "scope");
-    if (!scope.has_value) {
-        ERROR(TokenColour, IOError, 0, "'tokenColor' entry must specify a scope");
-    }
-    if (scope.value.type != JSON_TYPE_STRING && scope.value.type != JSON_TYPE_ARRAY) {
-        ERROR(TokenColour, IOError, 0, "'tokenColor' entry scope value must be a string");
+    if (scope.has_value) {
+        if (scope.value.type != JSON_TYPE_STRING && scope.value.type != JSON_TYPE_ARRAY) {
+            ERROR(TokenColour, IOError, 0, "'tokenColor' entry scope value must be a string");
+        }
+        if (sv_empty(ret.name)) {
+            if (scope.value.type == JSON_TYPE_STRING) {
+                ret.name = sv_copy(scope.value.string);
+            } else if (scope.value.type == JSON_TYPE_ARRAY && json_len(&scope.value) > 0) {
+                ret.name = sv_copy(json_at(&scope.value, 0).value.string);
+            }
+        }
+        if (scope.value.type == JSON_TYPE_STRING) {
+            ret.scope = sv_split(sv_copy(scope.value.string), SV(",", 1));
+            for (size_t ix = 0; ix < ret.scope.size; ++ix) {
+                ret.scope.strings[ix] = sv_strip(ret.scope.strings[ix]);
+            }
+        } else {
+            for (size_t ix = 0; ix < json_len(&scope.value); ++ix) {
+                JSONValue entry = MUST_OPTIONAL(JSONValue, json_at(&scope.value, ix));
+                assert(entry.type == JSON_TYPE_STRING);
+                sl_push(&ret.scope, sv_copy(entry.string));
+            }
+        }
     }
     if (sv_empty(ret.name)) {
-        assert(scope.value.type == JSON_TYPE_STRING);
-        ret.name = sv_copy(scope.value.string);
-    }
-    if (scope.value.type == JSON_TYPE_STRING) {
-        ret.scope = sv_split(sv_copy(scope.value.string), SV(",", 1));
-        for (size_t ix = 0; ix < ret.scope.size; ++ix) {
-            ret.scope.strings[ix] = sv_strip(ret.scope.strings[ix]);
-        }
-    } else {
-        for (size_t ix = 0; ix < json_len(&scope.value); ++ix) {
-            JSONValue entry = MUST_OPTIONAL(JSONValue, json_at(&scope.value, ix));
-            assert(entry.type == JSON_TYPE_STRING);
-            sl_push(&ret.scope, sv_copy(entry.string));
-        }
+        ret.name = sv_copy_cstr("(root)");
     }
     OptionalJSONValue settings = json_get(json, "settings");
     if (!settings.has_value) {
@@ -325,12 +330,12 @@ ErrorOrTheme theme_decode(Theme *theme, JSONValue *json)
         ERROR(Theme, ParserError, 0, "'semanticTokenColors' section of theme definition must be a JSON object");
     }
     for (size_t ix = 0; ix < json_len(&semantic_token_colors); ++ix) {
-        JSONValue                  pair = MUST_OPTIONAL(JSONValue, json_at(&semantic_token_colors, ix));
-        OptionalSemanticTokenTypes type = SemanticTokenTypes_decode(json_at(&pair, 0));
+        JSONNVPair                *pair = da_element_JSONNVPair(&semantic_token_colors.object, ix);
+        OptionalSemanticTokenTypes type = SemanticTokenTypes_decode(OptionalJSONValue_create(json_string(pair->name)));
         if (!type.has_value) {
             continue;
         }
-        OptionalJSONValue   settings = json_at(json, 1);
+        OptionalJSONValue   settings = OptionalJSONValue_create(pair->value);
         SemanticTokenColour semantic_token_colour = TRY_TO(SemanticTokenColour, Theme, semantic_token_colour_decode(type.value, settings));
         da_append_SemanticTokenColour(&theme->semantic_colours, semantic_token_colour);
     }
@@ -343,10 +348,12 @@ ErrorOrTheme theme_load(StringView name)
 {
     Theme          ret = { 0 };
     struct passwd *pw = getpwuid(getuid());
-    StringView     eddy_fname = sv_printf("%s/.eddy", pw->pw_dir);
-    TRY_TO(Int, Theme, fs_assert_dir(eddy_fname));
+    StringBuilder  eddy_fname = sb_createf("%s/.eddy", pw->pw_dir);
+    TRY_TO(Int, Theme, fs_assert_dir(eddy_fname.view));
+    sb_append_cstr(&eddy_fname, "/themes");
+    TRY_TO(Int, Theme, fs_assert_dir(eddy_fname.view));
     StringView theme_fname = sv_printf("%.*s/%.*s.json", SV_ARG(eddy_fname), SV_ARG(name));
-    sv_free(eddy_fname);
+    sv_free(eddy_fname.view);
     if (!fs_file_exists(theme_fname)) {
         sv_free(theme_fname);
         theme_fname = sv_printf(EDDY_DATADIR "/themes/%.*s.json", SV_ARG(name));
@@ -366,14 +373,17 @@ ErrorOrTheme theme_load(StringView name)
 OptionalInt theme_index_for_scope(Theme *theme, StringView scope)
 {
     int    tc_match = -1;
-    int    tc_scope_match = -1;
     size_t matchlen = 0;
     for (int tc_ix = 0; tc_ix < theme->token_colours.size; ++tc_ix) {
         TokenColour *tc = theme->token_colours.elements + tc_ix;
+        if (tc->scope.size == 0 && tc_match == -1) {
+            assert(matchlen == 0);
+            tc_match = tc_ix;
+            continue;
+        }
         for (size_t scope_ix = 0; scope_ix < tc->scope.size; ++scope_ix) {
             if (sv_startswith(scope, tc->scope.strings[scope_ix]) && tc->scope.strings[scope_ix].length > matchlen) {
                 tc_match = tc_ix;
-                tc_scope_match = scope_ix;
                 matchlen = tc->scope.strings[scope_ix].length;
             }
         }

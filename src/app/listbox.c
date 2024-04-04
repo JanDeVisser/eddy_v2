@@ -20,7 +20,6 @@ WIDGET_CLASS_DEF(InputBox, inputbox);
 bool listbox_character(ListBox *listbox, int ch)
 {
     if (!listbox->no_search) {
-        int len = listbox->search.view.length;
         sb_append_char(&listbox->search, ch);
         listbox_filter(listbox);
         return true;
@@ -112,20 +111,18 @@ void listbox_filter(ListBox *listbox)
         return;
     }
     listbox->matches.size = 0;
-    StringView s = listbox->search.view;
-    if (sv_empty(s)) {
+    if (sv_empty(listbox->search.view)) {
         for (size_t ix = 0; ix < listbox->entries.size; ++ix) {
             da_append_ListBoxEntry(&listbox->matches, listbox->entries.elements[ix]);
         }
         return;
     }
+    char search_buf[listbox->search.length + 1];
+    sv_cstr(listbox->search.view, search_buf);
     for (size_t ix = 0; ix < listbox->entries.size; ++ix) {
         StringView text = listbox->entries.elements[ix].text;
-        size_t     tix = 0;
-        while (tix < text.length && tix < s.length && toupper(s.ptr[tix]) == toupper(text.ptr[tix])) {
-            ++tix;
-        }
-        if (tix == s.length) {
+        char text_buf[text.length + 1];
+        if (strcasestr(sv_cstr(text, text_buf), search_buf) != NULL) {
             da_append_ListBoxEntry(&listbox->matches, listbox->entries.elements[ix]);
         }
     }
@@ -155,7 +152,7 @@ void listbox_init(ListBox *listbox)
     listbox->textsize = 1.0;
     listbox_sort(listbox);
     listbox_filter(listbox);
-    listbox->background = DARKGRAY;
+    listbox->background = colour_to_color(eddy.theme.editor.bg);
     listbox_resize(listbox);
 }
 
@@ -201,11 +198,13 @@ void listbox_draw_entries(ListBox *listbox, size_t y_offset)
 
 void listbox_draw(ListBox *listbox)
 {
-    widget_draw_rectangle(listbox, 0.0, 0.0, 0.0, 0.0, DARKGRAY);
-    widget_draw_outline(listbox, 2, 2, -2.0, -2.0, RAYWHITE);
-    widget_render_text(listbox, 8, 8, listbox->prompt, eddy.font, RAYWHITE);
-    widget_render_text(listbox, -8, 8, listbox->search.view, eddy.font, RAYWHITE);
-    widget_draw_line(listbox, 2, eddy.cell.y + 10, -2, eddy.cell.y + 10, RAYWHITE);
+    Color bg = colour_to_color(eddy.theme.editor.bg);
+    Color fg = colour_to_color(eddy.theme.editor.fg);
+    widget_draw_rectangle(listbox, 0.0f, 0.0f, 0.0f, 0.0, bg);
+    widget_draw_outline(listbox, 2, 2, -2.0f, -2.0f, fg);
+    widget_render_text(listbox, 8, 8, listbox->prompt, eddy.font, fg);
+    widget_render_text(listbox, -8, 8, listbox->search.view, eddy.font, fg);
+    widget_draw_line(listbox, 2, eddy.cell.y + 10, -2, eddy.cell.y + 10, fg);
     listbox_draw_entries(listbox, eddy.cell.y + 14);
 }
 
@@ -229,7 +228,7 @@ void listbox_free(ListBox *listbox)
 void query_submit(ListBox *query, ListBoxEntry selection)
 {
     QueryDef *def = query->memo;
-    def->handler(query, (QueryOption) (size_t) selection.payload);
+    def->handler(query, (QueryOption) selection.int_value);
     if (query->status != ModalStatusActive) {
         free(def);
     }
@@ -258,16 +257,16 @@ ListBox *listbox_create_query(StringView query, QueryResult handler, QueryOption
     def->handler = handler;
     def->options = options;
     if (options & QueryOptionYes) {
-        da_append_ListBoxEntry(&ret->entries, (ListBoxEntry) { sv_from("Yes"), (void *) (size_t) QueryOptionYes });
+        da_append_ListBoxEntry(&ret->entries, (ListBoxEntry) { .text = SV("Yes", 3), .int_value = QueryOptionYes });
     }
     if (options & QueryOptionNo) {
-        da_append_ListBoxEntry(&ret->entries, (ListBoxEntry) { sv_from("No"), (void *) (size_t) QueryOptionCancel });
+        da_append_ListBoxEntry(&ret->entries, (ListBoxEntry) { .text = SV("No", 2), .int_value = QueryOptionCancel });
     }
     if (options & QueryOptionCancel) {
-        da_append_ListBoxEntry(&ret->entries, (ListBoxEntry) { sv_from("Cancel"), (void *) (size_t) QueryOptionCancel });
+        da_append_ListBoxEntry(&ret->entries, (ListBoxEntry) { .text = SV("Cancel", 6), .int_value = QueryOptionCancel });
     }
     if (options & QueryOptionOK) {
-        da_append_ListBoxEntry(&ret->entries, (ListBoxEntry) { sv_from("OK"), (void *) (size_t) QueryOptionOK });
+        da_append_ListBoxEntry(&ret->entries, (ListBoxEntry) { .text = SV("OK", 2), .int_value = QueryOptionOK });
     }
     return ret;
 }
@@ -304,7 +303,7 @@ void file_selector_populate(ListBox *listbox, StringView directory)
     listbox->entries.size = 0;
     for (size_t ix = 0; ix < status->dir.entries.size; ++ix) {
         DirEntry *e = da_element_DirEntry(&status->dir.entries, ix);
-        da_append_ListBoxEntry(&listbox->entries, (ListBoxEntry) { e->name, e });
+        da_append_ListBoxEntry(&listbox->entries, (ListBoxEntry) { .text = e->name, .payload = e });
     }
     listbox_refresh(listbox);
 }
@@ -471,7 +470,7 @@ void inputbox_show(InputBox *inputbox)
 void inputbox_init(InputBox *inputbox)
 {
     inputbox->handlers.character = (WidgetHandleCharacter) inputbox_character;
-    inputbox->background = DARKGRAY;
+    inputbox->background = colour_to_color(eddy.theme.editor.bg);
     inputbox_resize(inputbox);
 }
 
