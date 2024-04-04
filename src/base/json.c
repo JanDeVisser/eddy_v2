@@ -572,13 +572,12 @@ StringView json_encode(JSONValue value)
 
 typedef struct {
     StringScanner ss;
-    StringBuilder sb;
 } JSONDecoder;
 
 ErrorOrStringView json_decode_string(JSONDecoder *decoder)
 {
     assert(ss_peek(&decoder->ss) == '\"');
-    size_t offset = decoder->sb.view.length;
+    StringBuilder sb = {0};
     ss_skip_one(&decoder->ss);
     ss_reset(&decoder->ss);
     while (true) {
@@ -590,30 +589,30 @@ ErrorOrStringView json_decode_string(JSONDecoder *decoder)
             case 0:
                 ERROR(StringView, JSONError, decoder->ss.point.line, "Bad escape");
             case 'n':
-                sb_append_char(&decoder->sb, '\n');
+                sb_append_char(&sb, '\n');
                 break;
             case 'r':
-                sb_append_char(&decoder->sb, '\r');
+                sb_append_char(&sb, '\r');
                 break;
             case 't':
-                sb_append_char(&decoder->sb, '\t');
+                sb_append_char(&sb, '\t');
                 break;
             case '\"':
-                sb_append_char(&decoder->sb, '\"');
+                sb_append_char(&sb, '\"');
                 break;
             default:
-                sb_append_char(&decoder->sb, ch);
+                sb_append_char(&sb, ch);
                 break;
             }
             ss_skip_one(&decoder->ss);
         } else if (ch == '"') {
             ss_skip_one(&decoder->ss);
-            StringView ret = (StringView) { .ptr = decoder->sb.view.ptr + offset, .length = decoder->sb.view.length - offset };
+            StringView ret = sb.view;
             RETURN(StringView, ret);
         } else if (ch == 0) {
             ERROR(StringView, JSONError, 0, "Unterminated string");
         } else {
-            sb_append_char(&decoder->sb, ch);
+            sb_append_char(&sb, ch);
             ss_skip_one(&decoder->ss);
         }
     }
@@ -621,7 +620,6 @@ ErrorOrStringView json_decode_string(JSONDecoder *decoder)
 
 ErrorOrJSONValue json_decode_value(JSONDecoder *decoder)
 {
-    size_t offset = decoder->sb.view.length;
     ss_skip_whitespace(&decoder->ss);
     switch (ss_peek(&decoder->ss)) {
     case 0:
@@ -635,7 +633,6 @@ ErrorOrJSONValue json_decode_value(JSONDecoder *decoder)
                 ERROR(JSONValue, JSONError, 0, "At position %zu: Expected '\"', got '%c'", decoder->ss.point, ss_peek(&decoder->ss));
             }
             StringView name = TRY_TO(StringView, JSONValue, json_decode_string(decoder));
-            name = sv_copy(name);
             trace(CAT_JSON, "Name: %.*s", SV_ARG(name));
             ss_skip_whitespace(&decoder->ss);
             if (!ss_expect(&decoder->ss, ':')) {
@@ -716,9 +713,8 @@ ErrorOrJSONValue json_decode_value(JSONDecoder *decoder)
 
 ErrorOrJSONValue json_decode(StringView json)
 {
-    JSONDecoder      decoder = { .sb = sb_create(), .ss = ss_create(json) };
+    JSONDecoder      decoder = { .ss = ss_create(json) };
     ErrorOrJSONValue ret = json_decode_value(&decoder);
-    sv_free(decoder.sb.view);
     return ret;
 }
 
