@@ -20,6 +20,12 @@ WIDGET_CLASS_DEF(Gutter, gutter);
 WIDGET_CLASS_DEF(Editor, editor);
 SIMPLE_WIDGET_CLASS_DEF(BufferView, view);
 
+#define OPEN_BRACES "({["
+#define CLOSE_BRACES ")}]"
+#define BRACES OPEN_BRACES CLOSE_BRACES
+
+int get_closing_brace_code(int brace);
+
 // -- Gutter -----------------------------------------------------------------
 
 void gutter_init(Gutter *gutter)
@@ -457,12 +463,43 @@ void editor_delete_current_char(Editor *editor)
     }
 }
 
+int get_closing_brace_code(int brace)
+{
+    for (size_t ix = 0; ix < 3; ++ix) {
+        if (OPEN_BRACES[ix] == brace) {
+            return CLOSE_BRACES[ix];
+        }
+    }
+    return -1;
+}
+
 bool editor_character(Editor *editor, int ch)
 {
     BufferView *view = editor->buffers.elements + editor->current_buffer;
-    int         at = view->new_cursor;
+    size_t         at = view->new_cursor;
     if (view->selection != -1) {
-        at = view->new_cursor = editor_delete_selection(editor);
+        switch (ch) {
+        case '(':
+        case '[':
+        case '{': {
+            int close = get_closing_brace_code(ch);
+            int selection_start = imin((int) view->selection, (int) view->new_cursor);
+            int selection_end = imax((int) view->selection, (int) view->new_cursor);
+            editor_insert(editor, (StringView) { (char const *) &ch, 1 }, selection_start);
+            editor_insert(editor, (StringView) { (char const *) &close, 1 }, selection_end + 1);
+            if (view->cursor == selection_end) {
+                view->new_cursor = selection_end + 1;
+                view->selection = selection_start + 1;
+            } else {
+                view->new_cursor = selection_start + 1;
+                view->selection = selection_end + 1;
+            }
+            view->cursor_col = -1;
+            return true;
+        }
+        default:
+            at = view->new_cursor = (size_t) editor_delete_selection(editor);
+        }
     }
     editor_insert(editor, (StringView) { (char const *) &ch, 1 }, at);
     view->new_cursor = at + 1;
@@ -655,23 +692,13 @@ void editor_cmd_merge_lines(Editor *editor, JSONValue unused)
     view->cursor_col = -1;
 }
 
-#define OPEN_BRACES "({["
-#define CLOSE_BRACES ")}]"
-#define BRACES OPEN_BRACES CLOSE_BRACES
-
 void _find_closing_brace(Editor *editor, size_t index, bool selection)
 {
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
     int         brace = buffer->text.view.ptr[index];
-    int         matching = 0;
-    for (size_t ix = 0; ix < 3; ++ix) {
-        if (OPEN_BRACES[ix] == brace) {
-            matching = CLOSE_BRACES[ix];
-            break;
-        }
-    }
-    assert(matching);
+    int         matching = get_closing_brace_code(brace);
+    assert(matching > 0);
     if (selection) {
         view->selection = index;
     }
@@ -1162,7 +1189,7 @@ void editor_draw(Editor *editor)
                 widget_draw_rectangle(editor,
                     eddy.cell.x * selection_offset, eddy.cell.y * row,
                     width * eddy.cell.x, eddy.cell.y + 5,
-                    colour_to_color(eddy.theme.selection.fg));
+                    colour_to_color(eddy.theme.selection.bg));
             }
         }
         if (line.num_tokens == 0) {
