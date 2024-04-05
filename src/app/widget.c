@@ -324,7 +324,7 @@ void widget_command_execute(void *w, StringView command, JSONValue args)
     Widget *widget = (Widget *) w;
     for (size_t ix = 0; ix < widget->commands.size; ++ix) {
         if (sv_eq(command, widget->commands.elements[ix].command)) {
-            trace(CAT_EDIT, "Executing command '%.*s' on class '%s'", SV_ARG(command), widget->classname);
+            trace(EDIT, "Executing command '%.*s' on class '%s'", SV_ARG(command), widget->classname);
             widget->commands.elements[ix].handler(widget, args);
             return;
         }

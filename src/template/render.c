@@ -92,13 +92,13 @@ ErrorOrJSONValue evaluate_binary_expression(TemplateRenderContext *ctx, Template
 {
     ErrorOrJSONValue ret = { 0 };
     JSONValue        lhs = TRY(JSONValue, evaluate_expression(ctx, expr->binary.lhs));
-    trace(CAT_TEMPLATE, "Rendering binary expression %s", TplOperator_name(expr->binary.op));
+    trace(TEMPLATE, "Rendering binary expression %s", TplOperator_name(expr->binary.op));
     if (expr->binary.op == BTOSubscript) {
         if (lhs.type != JSON_TYPE_OBJECT) {
             json_free(lhs);
             ERROR(JSONValue, TemplateError, 0, "Only objects can be subscripted");
         }
-        trace(CAT_TEMPLATE, "lhs: %.*s", SV_ARG(json_to_string(lhs)));
+        trace(TEMPLATE, "lhs: %.*s", SV_ARG(json_to_string(lhs)));
         JSONValue rhs = { 0 };
         if (expr->binary.rhs->type != TETIdentifier) {
             rhs = TRY(JSONValue, evaluate_expression(ctx, expr->binary.rhs));
@@ -117,7 +117,7 @@ ErrorOrJSONValue evaluate_binary_expression(TemplateRenderContext *ctx, Template
             ERROR(JSONValue, TemplateError, 0, "Property '%.*s' not there", SV_ARG(rhs.string));
         }
         JSONValue property = json_copy(property_maybe.value);
-        trace(CAT_TEMPLATE, ".[%.*s] = '%.*s'", SV_ARG(rhs.string), SV_ARG(json_to_string(property)));
+        trace(TEMPLATE, ".[%.*s] = '%.*s'", SV_ARG(rhs.string), SV_ARG(json_to_string(property)));
         json_free(rhs);
         json_free(lhs);
         RETURN(JSONValue, property);
@@ -361,7 +361,7 @@ ErrorOrInt render_expr_node(TemplateRenderContext *ctx, TemplateNode *node)
 {
     JSONValue  value = TRY_TO(JSONValue, Int, evaluate_expression(ctx, node->expr));
     StringView sv = json_to_string(value);
-    trace(CAT_TEMPLATE, "Rendering expression node '%.*s'", SV_ARG(sv));
+    trace(TEMPLATE, "Rendering expression node '%.*s'", SV_ARG(sv));
     sb_append_sv(&ctx->output, sv);
     sv_free(sv);
     json_free(value);
@@ -370,7 +370,7 @@ ErrorOrInt render_expr_node(TemplateRenderContext *ctx, TemplateNode *node)
 
 ErrorOrInt render_for_loop(TemplateRenderContext *ctx, TemplateNode *node)
 {
-    trace(CAT_TEMPLATE, "Rendering for loop");
+    trace(TEMPLATE, "Rendering for loop");
     JSONValue value = TRY_TO(JSONValue, Int, evaluate_expression(ctx, node->for_statement.range));
     if (node->for_statement.variable2.length == 0 && value.type != JSON_TYPE_ARRAY) {
         ERROR(Int, TemplateError, 0, "Can only iterate over arrays");
@@ -423,7 +423,7 @@ ErrorOrInt render_for_loop(TemplateRenderContext *ctx, TemplateNode *node)
 
 ErrorOrInt render_if_statement(TemplateRenderContext *ctx, TemplateNode *node)
 {
-    trace(CAT_TEMPLATE, "Rendering if statement");
+    trace(TEMPLATE, "Rendering if statement");
     JSONValue condition = TRY_TO(JSONValue, Int, evaluate_expression(ctx, node->if_statement.condition));
     if (condition.type != JSON_TYPE_BOOLEAN) {
         ERROR(Int, TemplateError, 0, "if condition must be boolean");
@@ -440,7 +440,7 @@ ErrorOrInt render_if_statement(TemplateRenderContext *ctx, TemplateNode *node)
 
 ErrorOrInt render_switch_statement(TemplateRenderContext *ctx, TemplateNode *node)
 {
-    trace(CAT_TEMPLATE, "Rendering switch statement");
+    trace(TEMPLATE, "Rendering switch statement");
     for (TemplateNode *case_node = node->switch_statement.cases; case_node; case_node = case_node->next) {
         // 0: skipped, 1: executed:
         int executed = TRY(Int, render_macro(ctx, case_node));
@@ -457,7 +457,7 @@ ErrorOrInt render_node(TemplateRenderContext *ctx, TemplateNode *node)
         switch (node->kind) {
         case TNKText: {
             StringView s = sv(&ctx->sb, node->text);
-            trace(CAT_TEMPLATE, "Rendering text node '%.*s'", SV_ARG(s));
+            trace(TEMPLATE, "Rendering text node '%.*s'", SV_ARG(s));
             sb_append_sv(&ctx->output, s);
         } break;
         case TNKExpr:
@@ -481,7 +481,7 @@ ErrorOrInt render_node(TemplateRenderContext *ctx, TemplateNode *node)
                 scope = &ctx->scope->scope;
             }
             json_set_sv(scope, node->set_statement.variable, value);
-            trace(CAT_TEMPLATE, "Setting variable '%.*s' to '%.*s'", SV_ARG(node->for_statement.variable), SV_ARG(json_to_string(value)));
+            trace(TEMPLATE, "Setting variable '%.*s' to '%.*s'", SV_ARG(node->for_statement.variable), SV_ARG(json_to_string(value)));
         } break;
         case TNKSwitchStatement:
             TRY(Int, render_switch_statement(ctx, node));

@@ -102,10 +102,10 @@ StringView template_expression_to_string(Template tpl, TemplateExpression *expr)
  */
 ErrorOrTemplateExpression template_ctx_parse_expression(TemplateParserContext *ctx)
 {
-    trace(CAT_TEMPLATE, "template_ctx_parse_expression");
+    trace(TEMPLATE, "template_ctx_parse_expression");
     TemplateExpression *primary = TRY(TemplateExpression, parse_primary_expression(ctx));
     if (primary == NULL) {
-        trace(CAT_TEMPLATE, "No primary expression");
+        trace(TEMPLATE, "No primary expression");
         RETURN(TemplateExpression, NULL);
     }
     return parse_expression_1(ctx, primary, 0);
@@ -113,12 +113,12 @@ ErrorOrTemplateExpression template_ctx_parse_expression(TemplateParserContext *c
 
 ErrorOrTemplateExpression parse_expression_1(TemplateParserContext *ctx, TemplateExpression *lhs, int min_precedence)
 {
-    trace(CAT_TEMPLATE, "parse_expression_1");
+    trace(TEMPLATE, "parse_expression_1");
     OptionalTplOperatorMapping op_maybe = TRY_TO(OptionalTplOperatorMapping, TemplateExpression,
         template_lexer_operator(ctx));
     while (op_maybe.has_value && op_maybe.value.binary_precedence >= min_precedence) {
         TplOperatorMapping op = op_maybe.value;
-        trace(CAT_TEMPLATE, "parse_expression_1: binary operator %s prec %d >= %d", TplOperator_name(op.binary_op),
+        trace(TEMPLATE, "parse_expression_1: binary operator %s prec %d >= %d", TplOperator_name(op.binary_op),
             op.binary_precedence, min_precedence);
         TemplateExpression *rhs = NULL;
         int                 prec = op.binary_precedence;
@@ -143,7 +143,7 @@ ErrorOrTemplateExpression parse_expression_1(TemplateParserContext *ctx, Templat
         rhs = TRY(TemplateExpression, parse_primary_expression(ctx));
         op_maybe = TRY_TO(OptionalTplOperatorMapping, TemplateExpression, template_lexer_operator(ctx));
         while (op_maybe.has_value && op_maybe.value.binary_precedence > prec) {
-            trace(CAT_TEMPLATE, "parse_expression_1: binary operator %s prec %d > %d - recursing",
+            trace(TEMPLATE, "parse_expression_1: binary operator %s prec %d > %d - recursing",
                 TplOperator_name(op_maybe.value.binary_op), op_maybe.value.binary_precedence, prec);
             rhs = TRY(TemplateExpression, parse_expression_1(ctx, rhs, prec + 1));
             op_maybe = TRY_TO(OptionalTplOperatorMapping, TemplateExpression, template_lexer_operator(ctx));
@@ -156,7 +156,7 @@ ErrorOrTemplateExpression parse_expression_1(TemplateParserContext *ctx, Templat
         lhs = expr;
     }
     StringView s = template_expression_to_string(ctx->template, lhs);
-    trace(CAT_TEMPLATE, "parse_expression_1: returning %.*s", SV_ARG(s));
+    trace(TEMPLATE, "parse_expression_1: returning %.*s", SV_ARG(s));
     sv_free(s);
     RETURN(TemplateExpression, lhs);
 }
@@ -216,11 +216,11 @@ ErrorOrTemplateExpression parse_primary_expression(TemplateParserContext *ctx)
         }
     } break;
     default:
-        trace(CAT_TEMPLATE, "parse_primary_expression: not a primary expression");
+        trace(TEMPLATE, "parse_primary_expression: not a primary expression");
         RETURN(TemplateExpression, NULL);
     }
     StringView s = template_expression_to_string(ctx->template, ret);
-    trace(CAT_TEMPLATE, "parse_primary_expression: returning %.*s", SV_ARG(s));
+    trace(TEMPLATE, "parse_primary_expression: returning %.*s", SV_ARG(s));
     sv_free(s);
     RETURN(TemplateExpression, ret);
 }
@@ -260,7 +260,7 @@ ErrorOrInt parse_call(TemplateParserContext *ctx, TemplateExpression *expr)
 {
     StringView name = TRY_TO(StringView, Int, template_lexer_require_identifier(ctx));
 
-    trace(CAT_TEMPLATE, "Parsing call to '%.*s'", SV_ARG(name));
+    trace(TEMPLATE, "Parsing call to '%.*s'", SV_ARG(name));
     TemplateNode *node = MALLOC(TemplateNode);
     node->kind = TNKMacroCall;
     node->macro_call.condition = expr;
@@ -270,7 +270,7 @@ ErrorOrInt parse_call(TemplateParserContext *ctx, TemplateExpression *expr)
         da_append_TemplateExpression(&node->macro_call.arguments, arg);
     }
     TRY(Int, close_statement(ctx, node, true));
-    trace(CAT_TEMPLATE, "Created call node");
+    trace(TEMPLATE, "Created call node");
     RETURN(Int, 0);
 }
 
@@ -303,7 +303,7 @@ ErrorOrInt parse_for(TemplateParserContext *ctx)
     node->for_statement.condition = condition;
     node->for_statement.macro = macro_name;
     close_statement(ctx, node, true);
-    trace(CAT_TEMPLATE, "Created for node");
+    trace(TEMPLATE, "Created for node");
     RETURN(Int, 0);
 }
 
@@ -340,7 +340,7 @@ ErrorOrInt parse_if(TemplateParserContext *ctx)
     }
     }
     ctx->current = &node->next;
-    trace(CAT_TEMPLATE, "Created if node");
+    trace(TEMPLATE, "Created if node");
     RETURN(Int, 0);
 }
 
@@ -381,7 +381,7 @@ ErrorOrInt parse_macro(TemplateParserContext *ctx)
     Macro macro = { node->macro_def.name, node };
     da_append_Macro(&ctx->template.macros, macro);
     close_statement(ctx, node, true);
-    trace(CAT_TEMPLATE, "Created macro definition");
+    trace(TEMPLATE, "Created macro definition");
     RETURN(Int, 0);
 }
 
@@ -412,7 +412,7 @@ ErrorOrInt parse_set(TemplateParserContext *ctx)
     }
     }
     ctx->current = &node->next;
-    trace(CAT_TEMPLATE, "Created set node");
+    trace(TEMPLATE, "Created set node");
     RETURN(Int, 0);
 }
 
@@ -445,7 +445,7 @@ ErrorOrInt parse_switch(TemplateParserContext *ctx)
             case TKWClose: {
                 template_lexer_consume(ctx);
                 ctx->current = &node->next;
-                trace(CAT_TEMPLATE, "Created switch node");
+                trace(TEMPLATE, "Created switch node");
                 RETURN(Int, 0);
             }
             case TKWCase:
@@ -500,7 +500,7 @@ ErrorOrInt build_text_node(TemplateParserContext *ctx, StringView text, bool tri
     node->kind = TNKText;
     node->text = sb_append_sv(&ctx->sb, trimmed);
     sv_free(text);
-    trace(CAT_TEMPLATE, "Created text node");
+    trace(TEMPLATE, "Created text node");
     *(ctx->current) = node;
     ctx->current = &node->next;
     RETURN(Int, 0);
@@ -584,7 +584,7 @@ ErrorOrTplKeyword template_ctx_parse_nodes(TemplateParserContext *ctx, ...)
                 TemplateNode *node = MALLOC(TemplateNode);
                 node->kind = TNKExpr;
                 node->expr = expr;
-                trace(CAT_TEMPLATE, "Created expression node");
+                trace(TEMPLATE, "Created expression node");
                 *(ctx->current) = node;
                 ctx->current = &(*ctx->current)->next;
             } break;

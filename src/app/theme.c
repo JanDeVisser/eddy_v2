@@ -247,11 +247,11 @@ void theme_get_mapping(Theme *theme, TokenKind kind, char const *scope)
 {
     OptionalInt index = theme_index_for_scope(theme, sv_from(scope));
     if (index.has_value) {
-        trace(CAT_EDIT, "Mapping token kind %s to scope '%s', color %.*s", TokenKind_name(kind), scope, SV_ARG(colour_to_rgb(theme->token_colours.elements[index.value].colours.fg)));
+        trace(EDIT, "Mapping token kind %s to scope '%s', color %.*s", TokenKind_name(kind), scope, SV_ARG(colour_to_rgb(theme->token_colours.elements[index.value].colours.fg)));
         da_append_TokenThemeMapping(&theme->token_mappings, (TokenThemeMapping) { .kind = kind, .code = -1, .theme_index = index.value });
         return;
     }
-    trace(CAT_EDIT, "Mapping token kind %s to scope '%s' which is not found", TokenKind_name(kind), scope);
+    trace(EDIT, "Mapping token kind %s to scope '%s' which is not found", TokenKind_name(kind), scope);
 }
 
 void theme_build_theme_index_mappings(Theme *theme)
@@ -449,7 +449,7 @@ void theme_map_semantic_type(Theme *theme, int semantic_index, SemanticTokenType
     for (size_t ix = 0; ix < theme->semantic_colours.size; ++ix) {
         SemanticTokenColour *colour = theme->semantic_colours.elements + ix;
         if (colour->token_type == type) {
-            trace(CAT_LSP, "Mapping SemanticTokenType %d = '%.*s' to theme semantic index %zu", semantic_index, SV_ARG(SemanticTokenTypes_to_string(type)), ix);
+            trace(LSP, "Mapping SemanticTokenType %d = '%.*s' to theme semantic index %zu", semantic_index, SV_ARG(SemanticTokenTypes_to_string(type)), ix);
             da_append_SemanticMapping(&theme->semantic_mappings, (SemanticMapping) { .semantic_index = semantic_index, .semantic_theme_index = ix, .token_theme_index = -1 });
             return;
         }
@@ -461,10 +461,10 @@ void theme_map_semantic_type(Theme *theme, int semantic_index, SemanticTokenType
             if (theme_ix_maybe.has_value) {
                 theme_ix = theme_ix_maybe.value;
             }
-            trace(CAT_LSP, "Mapping SemanticTokenType %d = '%.*s' to scope '%s'", semantic_index, SV_ARG(SemanticTokenTypes_to_string(type)), semantic_scope_mapping[ix].scope);
+            trace(LSP, "Mapping SemanticTokenType %d = '%.*s' to scope '%s'", semantic_index, SV_ARG(SemanticTokenTypes_to_string(type)), semantic_scope_mapping[ix].scope);
             da_append_SemanticMapping(&theme->semantic_mappings, (SemanticMapping) { .semantic_index = semantic_index, .semantic_theme_index = -1, .token_theme_index = theme_ix });
             return;
         }
     }
-    trace(CAT_LSP, "SemanticTokenType %d = '%.*s' not mapped", semantic_index, SV_ARG(SemanticTokenTypes_to_string(type)));
+    trace(LSP, "SemanticTokenType %d = '%.*s' not mapped", semantic_index, SV_ARG(SemanticTokenTypes_to_string(type)));
 }

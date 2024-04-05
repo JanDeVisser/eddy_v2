@@ -3,7 +3,7 @@ AlignConsecutiveDeclarations: Consecutive
 Language: Cpp
 BasedOnStyle: WebKit
 SpaceAfterTemplateKeyword: false
-AlignEscapedNewlines: true
+AlignEscapedNewlines: Left
 AlignTrailingComments: true
 BreakBeforeInheritanceComma: true
 BreakConstructorInitializers: BeforeComma

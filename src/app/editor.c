@@ -1194,12 +1194,12 @@ void editor_draw(Editor *editor)
         }
         if (line.num_tokens == 0) {
             if (frame == 0) {
-                trace(CAT_EDIT, "%5d:%5zu:[          ]", row, lineno);
+                trace(EDIT, "%5d:%5zu:[          ]", row, lineno);
             }
             continue;
         }
         if (frame == 0) {
-            trace_nonl(CAT_EDIT, "%5d:%5zu:[%4zu..%4zu]", row, lineno, line.first_token, line.first_token + line.num_tokens - 1);
+            trace_nonl(EDIT, "%5d:%5zu:[%4zu..%4zu]", row, lineno, line.first_token, line.first_token + line.num_tokens - 1);
         }
         for (size_t ix = line.first_token; ix < line.first_token + line.num_tokens; ++ix) {
             DisplayToken *token = buffer->tokens.elements + ix;
@@ -1229,13 +1229,13 @@ void editor_draw(Editor *editor)
 
             StringView text = (StringView) { line.line.ptr + start_col, length };
             if (frame == 0) {
-                trace_nonl(CAT_EDIT, "[%zu %.*s]", ix, SV_ARG(text));
+                trace_nonl(EDIT, "[%zu %.*s]", ix, SV_ARG(text));
             }
             widget_render_text(editor, eddy.cell.x * (start_col - view->left_column), eddy.cell.y * row,
                 text, eddy.font, token->color);
         }
         if (frame == 0) {
-            trace_nl(CAT_EDIT);
+            trace_nl(EDIT);
         }
     }
 

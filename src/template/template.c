@@ -23,7 +23,7 @@ TemplateNode *template_find_macro(Template template, StringView name)
 ErrorOrStringView render_template(StringView template_text, JSONValue context)
 {
     Template template = TRY_TO(Template, StringView, template_parse(template_text));
-    if (log_category_on(CAT_TEMPLATE)) {
+    if (log_category_on(TEMPLATE)) {
         StringView ast = json_encode(template_node_serialize(template, template.node));
         printf("AST:\n%.*s\n\n", SV_ARG(ast));
     }

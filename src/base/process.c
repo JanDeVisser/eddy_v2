@@ -202,9 +202,9 @@ ErrorOrSize write_pipe_write_chars(WritePipe *pipe, char const *buf, size_t num)
 
 static void process_dump(Process *p)
 {
-    trace(CAT_LIB, "Command: '%.*s' #arguments: %zu", SV_ARG(p->command), p->arguments.size);
+    trace(LIB, "Command: '%.*s' #arguments: %zu", SV_ARG(p->command), p->arguments.size);
     for (size_t ix = 0; ix < p->arguments.size; ++ix) {
-        trace(CAT_LIB, "Arg #%zu: '%.*s'", ix, SV_ARG(p->arguments.strings[ix]));
+        trace(LIB, "Arg #%zu: '%.*s'", ix, SV_ARG(p->arguments.strings[ix]));
     }
 }
 
@@ -236,7 +236,7 @@ Process *_process_create(StringView cmd, ...)
 
 void sigchld(int)
 {
-    trace(CAT_PROCESS, "SIGCHLD caught");
+    trace(PROCESS, "SIGCHLD caught");
 }
 
 ErrorOrInt process_start(Process *p)
@@ -257,7 +257,7 @@ ErrorOrInt process_start(Process *p)
     }
     argv[sz + 1] = NULL;
     StringView args = sl_join(&p->arguments, sv_from(" "));
-    trace(CAT_PROCESS, "[CMD] %.*s %.*s", SV_ARG(p->command), SV_ARG(args));
+    trace(PROCESS, "[CMD] %.*s %.*s", SV_ARG(p->command), SV_ARG(args));
     sv_free(args);
 
     // signal(SIGCHLD, SIG_IGN);

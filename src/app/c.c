@@ -15,6 +15,7 @@
 #include <lsp/schema/CompletionList.h>
 #include <lsp/schema/CompletionParams.h>
 #include <lsp/schema/DocumentFormattingParams.h>
+#include <lsp/schema/DocumentRangeFormattingParams.h>
 #include <lsp/schema/TextEdit.h>
 
 // -- C Mode ----------------------------------------------------------------
@@ -385,6 +386,44 @@ void c_mode_cmd_format_source(CMode *mode, JSONValue unused)
     MUST(Int, lsp_message(mode, "textDocument/formatting", params_json));
 }
 
+void c_mode_cmd_format_selection(CMode *mode, JSONValue unused)
+{
+    Editor     *editor = (Editor *) mode->parent->parent;
+    BufferView *view = (BufferView *) mode->parent;
+    Buffer     *buffer = (Buffer *) eddy.buffers.elements + view->buffer_num;
+    lsp_initialize();
+
+    if (sv_empty(buffer->name)) {
+        return;
+    }
+
+    Range r = {0};
+    if (view->selection == -1) {
+        r.start.line = buffer_line_for_index(buffer, (int) view->new_cursor);
+        r.end.line = r.start.line + 1;
+    } else {
+        int selection_start = imin((int) view->selection, (int) view->new_cursor);
+        int selection_end = imax((int) view->selection, (int) view->new_cursor);
+        r.start.line = buffer_line_for_index(buffer, selection_start);
+        r.start.character = selection_start - buffer->lines.elements[r.start.line].index_of;
+        r.end.line = buffer_line_for_index(buffer, selection_end);
+        r.end.character = selection_end - buffer->lines.elements[r.end.line].index_of;
+    }
+
+    DocumentRangeFormattingParams params = { 0 };
+
+    params.textDocument.uri = buffer_uri(buffer);
+    params.range = r;
+    params.options.insertSpaces = true;
+    params.options.tabSize = 4;
+    params.options.trimTrailingWhitespace = (OptionalBool) { .has_value = true, .value = true };
+    params.options.insertFinalNewline = (OptionalBool) { .has_value = true, .value = true };
+    params.options.trimFinalNewlines = (OptionalBool) { .has_value = true, .value = true };
+
+    OptionalJSONValue params_json = DocumentRangeFormattingParams_encode(params);
+    MUST(Int, lsp_message(mode, "textDocument/rangeFormatting", params_json));
+}
+
 void c_mode_init(CMode *mode)
 {
     widget_add_command(mode, "c-format-source", (WidgetCommandHandler) c_mode_cmd_format_source,
@@ -393,11 +432,12 @@ void c_mode_init(CMode *mode)
         (KeyCombo) { KEY_SPACE, KMOD_CONTROL });
     widget_add_command(mode, "c-split-line", (WidgetCommandHandler) c_mode_cmd_split_line,
         (KeyCombo) { KEY_ENTER, KMOD_NONE }, (KeyCombo) { KEY_KP_ENTER, KMOD_NONE });
-    widget_add_command(mode, "c-indent", (WidgetCommandHandler) c_mode_cmd_indent,
+    widget_add_command(mode, "c-indent", (WidgetCommandHandler) c_mode_cmd_format_selection,
         (KeyCombo) { KEY_TAB, KMOD_NONE });
     widget_add_command(mode, "c-unindent", (WidgetCommandHandler) c_mode_cmd_unindent,
         (KeyCombo) { KEY_TAB, KMOD_SHIFT });
     widget_register(mode, "lsp-textDocument/formatting", (WidgetCommandHandler) c_mode_formatting_response);
+    widget_register(mode, "lsp-textDocument/rangeFormatting", (WidgetCommandHandler) c_mode_formatting_response);
     // mode->handlers.on_draw = (WidgetOnDraw) c_mode_on_draw;
     BufferView *view = (BufferView *) mode->parent;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;

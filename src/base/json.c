@@ -633,14 +633,14 @@ ErrorOrJSONValue json_decode_value(JSONDecoder *decoder)
                 ERROR(JSONValue, JSONError, 0, "At position %zu: Expected '\"', got '%c'", decoder->ss.point, ss_peek(&decoder->ss));
             }
             StringView name = TRY_TO(StringView, JSONValue, json_decode_string(decoder));
-            trace(CAT_JSON, "Name: %.*s", SV_ARG(name));
+            trace(JSON, "Name: %.*s", SV_ARG(name));
             ss_skip_whitespace(&decoder->ss);
             if (!ss_expect(&decoder->ss, ':')) {
                 ERROR(JSONValue, JSONError, 0, "Expected ':'");
             }
             ss_skip_whitespace(&decoder->ss);
             JSONValue value = TRY(JSONValue, json_decode_value(decoder));
-            trace(CAT_JSON, "NVP: %.*s: %.*s", SV_ARG(name), SV_ARG(json_encode(value)));
+            trace(JSON, "NVP: %.*s: %.*s", SV_ARG(name), SV_ARG(json_encode(value)));
             json_set_sv(&result, name, value);
             sv_free(name);
             ss_skip_whitespace(&decoder->ss);
@@ -656,7 +656,7 @@ ErrorOrJSONValue json_decode_value(JSONDecoder *decoder)
         ss_skip_whitespace(&decoder->ss);
         while (ss_peek(&decoder->ss) != ']') {
             JSONValue value = TRY(JSONValue, json_decode_value(decoder));
-            trace(CAT_JSON, "Array elem: %.*s", SV_ARG(json_encode(value)));
+            trace(JSON, "Array elem: %.*s", SV_ARG(json_encode(value)));
             ss_skip_whitespace(&decoder->ss);
             json_append(&result, value);
             if (ss_peek(&decoder->ss) == ',') {

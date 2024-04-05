@@ -108,7 +108,7 @@ ErrorOrTplToken template_lexer_peek(TemplateParserContext *ctx)
 {
     if (ctx->token.type != TTTUnknown) {
         StringView token_string = template_token_to_string(ctx, ctx->token);
-        trace(CAT_TEMPLATE, "template_lexer_peek: %.*s (pending)", SV_ARG(token_string));
+        trace(TEMPLATE, "template_lexer_peek: %.*s (pending)", SV_ARG(token_string));
         RETURN(TplToken, ctx->token);
     }
 
@@ -238,7 +238,7 @@ ErrorOrTplToken template_lexer_peek(TemplateParserContext *ctx)
 
     {
         StringView token_string = template_token_to_string(ctx, token);
-        trace(CAT_TEMPLATE, "template_lexer_peek: %zu:%zu %.*s", token.position.line, token.position.column, SV_ARG(token_string));
+        trace(TEMPLATE, "template_lexer_peek: %zu:%zu %.*s", token.position.line, token.position.column, SV_ARG(token_string));
     }
     RETURN(TplToken, token);
 }
@@ -262,11 +262,11 @@ ErrorOrOptionalTplToken template_lexer_allow_type(TemplateParserContext *ctx, TP
     TplToken   token = TRY_TO(TplToken, OptionalTplToken, template_lexer_next(ctx));
     StringView t = template_token_to_string(ctx, token);
     if (token.type != type) {
-        trace(CAT_TEMPLATE, "Looking for token type '%s', got '%.*s'", TplTokenType_name(type), SV_ARG(t));
+        trace(TEMPLATE, "Looking for token type '%s', got '%.*s'", TplTokenType_name(type), SV_ARG(t));
         RETURN(OptionalTplToken, OptionalTplToken_empty());
     }
     template_lexer_consume(ctx);
-    trace(CAT_TEMPLATE, "Lexed token '%.*s'", SV_ARG(t));
+    trace(TEMPLATE, "Lexed token '%.*s'", SV_ARG(t));
     RETURN(OptionalTplToken, OptionalTplToken_create(token));
 }
 
@@ -284,11 +284,11 @@ ErrorOrOptionalStringView template_lexer_allow_identifier(TemplateParserContext 
     TplToken token = TRY_TO(TplToken, OptionalStringView, template_lexer_next(ctx));
     if (token.type != TTTIdentifier) {
         StringView t = template_token_to_string(ctx, token);
-        trace(CAT_TEMPLATE, "Looking for identifier, got '%.*s'", SV_ARG(t));
+        trace(TEMPLATE, "Looking for identifier, got '%.*s'", SV_ARG(t));
         RETURN(OptionalStringView, OptionalStringView_empty());
     }
     template_lexer_consume(ctx);
-    trace(CAT_TEMPLATE, "Lexed identifier '%.*s'", SV_ARG(token.raw_text));
+    trace(TEMPLATE, "Lexed identifier '%.*s'", SV_ARG(token.raw_text));
     RETURN(OptionalStringView, OptionalStringView_create(token.raw_text));
 }
 
@@ -297,15 +297,15 @@ ErrorOrBool template_lexer_allow_sv(TemplateParserContext *ctx, StringView strin
     TplToken token = TRY_TO(TplToken, Bool, template_lexer_next(ctx));
     if (token.type != TTTIdentifier) {
         StringView t = template_token_to_string(ctx, token);
-        trace(CAT_TEMPLATE, "Looking for '%.*s', got '%.*s'", SV_ARG(string), SV_ARG(t));
+        trace(TEMPLATE, "Looking for '%.*s', got '%.*s'", SV_ARG(string), SV_ARG(t));
         RETURN(Bool, false);
     }
     if (!sv_eq(token.raw_text, string)) {
-        trace(CAT_TEMPLATE, "Looking for '%.*s', got '%.*s'", SV_ARG(string), SV_ARG(token.raw_text));
+        trace(TEMPLATE, "Looking for '%.*s', got '%.*s'", SV_ARG(string), SV_ARG(token.raw_text));
         RETURN(Bool, false);
     }
     template_lexer_consume(ctx);
-    trace(CAT_TEMPLATE, "Lexed identifier '%.*s'", SV_ARG(token.raw_text));
+    trace(TEMPLATE, "Lexed identifier '%.*s'", SV_ARG(token.raw_text));
     RETURN(Bool, true);
 }
 
@@ -322,11 +322,11 @@ ErrorOrBool template_lexer_allow_symbol(TemplateParserContext *ctx, int symbol)
 {
     TplToken token = TRY_TO(TplToken, Bool, template_lexer_next(ctx));
     if (token.type != TTTSymbol || token.ch != symbol) {
-        trace(CAT_TEMPLATE, "Looking for symbol '%c', got %s", symbol, TplTokenType_name(token.type));
+        trace(TEMPLATE, "Looking for symbol '%c', got %s", symbol, TplTokenType_name(token.type));
         RETURN(Bool, false);
     }
     template_lexer_consume(ctx);
-    trace(CAT_TEMPLATE, "Lexed symbol '%c'", symbol);
+    trace(TEMPLATE, "Lexed symbol '%c'", symbol);
     RETURN(Bool, true);
 }
 
@@ -352,12 +352,12 @@ ErrorOrBool template_lexer_allow_keyword(TemplateParserContext *ctx, TplKeyword 
 {
     TplToken token = TRY_TO(TplToken, Bool, template_lexer_next(ctx));
     if (token.type != TTTKeyword || token.keyword != keyword) {
-        trace(CAT_TEMPLATE, "Looking for keyword '%s', got %s",
+        trace(TEMPLATE, "Looking for keyword '%s', got %s",
             TplKeyword_name(keyword), TplTokenType_name(token.type));
         RETURN(Bool, false);
     }
     template_lexer_consume(ctx);
-    trace(CAT_TEMPLATE, "Lexed keyword '%s'", TplKeyword_name(keyword));
+    trace(TEMPLATE, "Lexed keyword '%s'", TplKeyword_name(keyword));
     RETURN(Bool, true);
 }
 
@@ -375,10 +375,10 @@ ErrorOrOptionalTplOperatorMapping template_lexer_operator(TemplateParserContext 
     TplToken lookahead = TRY_TO(TplToken, OptionalTplOperatorMapping, template_lexer_next(ctx));
     switch (lookahead.type) {
     case TTTOperator:
-        trace(CAT_TEMPLATE, "template_lexer_operator: %s", TplOpToken_name(lookahead.op));
+        trace(TEMPLATE, "template_lexer_operator: %s", TplOpToken_name(lookahead.op));
         RETURN(OptionalTplOperatorMapping, template_operator_mapping(lookahead.op));
     default:
-        trace(CAT_TEMPLATE, "template_lexer_operator: empty");
+        trace(TEMPLATE, "template_lexer_operator: empty");
         RETURN(OptionalTplOperatorMapping,
             OptionalTplOperatorMapping_empty());
     }

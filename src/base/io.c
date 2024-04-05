@@ -260,7 +260,7 @@ ErrorOrStringView socket_readln(socket_t socket)
             case '\n':
                 s->start = (s->start + 1) % BUF_SZ;
                 --s->num;
-                trace(CAT_IPC, "socket_readln: '%.*s'", SB_ARG(out));
+                trace(IPC, "socket_readln: '%.*s'", SB_ARG(out));
                 RETURN(StringView, out.view);
             default:
                 sb_append_char(&out, ch);

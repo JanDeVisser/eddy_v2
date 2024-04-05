@@ -724,7 +724,7 @@ void eddy_load_font(Eddy *e)
         for (size_t ix = 0; ix < font_dirs.size; ++ix) {
             StringView path = sv_printf("%.*s/%.*s", SV_ARG(font_dirs.strings[ix]), SV_ARG(font.string));
             if (fs_file_exists(path) && !fs_is_directory(path)) {
-                trace(CAT_EDIT, "Found font file %.*s", SV_ARG(path));
+                trace(EDIT, "Found font file %.*s", SV_ARG(path));
                 app_set_font((App *) e, path, json_int_value(font_size));
                 sv_free(path);
                 return;
