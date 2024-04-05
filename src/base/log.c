@@ -64,7 +64,7 @@ void vemit_log_message(LogLevel level, char const *file_name, int line, TraceCat
         }
         char buf[32];
         snprintf(buf, 32, "%s:%d", file_name, line);
-        fprintf(stderr, "%-*.*s:[%05d:%08llx]:%c:%7.7s: ", 15, 15, buf, getpid(), (uint64_t) pthread_self(), *cat.ptr, cat.ptr);
+        fprintf(stderr, "%-*.*s:[%05d:%08llx]:%c:%7.7s:", 15, 15, buf, getpid(), (uint64_t) pthread_self(), *cat.ptr, cat.ptr);
     }
     linelen += vfprintf(stderr, msg, args);
 }
