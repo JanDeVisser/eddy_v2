@@ -53,8 +53,8 @@ extern void          eddy_on_draw(Eddy *eddy);
 extern void          eddy_on_start(Eddy *eddy);
 extern void          eddy_on_terminate(Eddy *eddy);
 extern void          eddy_open_dir(Eddy *eddy, StringView dir);
-extern ErrorOrBuffer eddy_open_buffer(Eddy *eddy, StringView file);
-extern Buffer       *eddy_new_buffer(Eddy *eddy);
+extern ErrorOrBuffer eddy_open_buffer(Eddy *e, StringView file);
+extern Buffer       *eddy_new_buffer(Eddy *e);
 extern void          eddy_close_buffer(Eddy *eddy, int buffer_num);
 extern void          eddy_set_message(Eddy *eddy, char const *fmt, ...);
 extern void          eddy_clear_message(Eddy *eddy);
@@ -62,7 +62,7 @@ extern void          eddy_load_font(Eddy *eddy);
 void                 eddy_inc_font_size(Eddy *e, int increment);
 extern Eddy         *eddy_create();
 
-extern AppState state;
+extern AppState app_state;
 extern Eddy     eddy;
 
 #include <widget.h>

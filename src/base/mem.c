@@ -25,7 +25,7 @@ void *malloc_fatal(size_t size, char const *where, ...)
             va_start(args, where);
             vsnprintf(strbuf, 255, where, args);
             strbuf[255] = 0;
-            vfatal("Out of memory: %s", strbuf);
+            fatal("Out of memory: %s", strbuf);
             va_end(args);
         }
         fatal("Out of memory");

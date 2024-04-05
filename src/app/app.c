@@ -100,7 +100,7 @@ void app_initialize(AppCreate create, int argc, char **argv)
     app->commands_mutex = mutex_create();
     app->handlers.init((Widget *) app);
 
-    if (!log_category_on(CAT_RAYLIB)) {
+    if (!log_category_on(RAYLIB)) {
         SetTraceLogLevel(LOG_FATAL);
     }
     InitWindow(app->viewport.width, app->viewport.height, app->classname);
@@ -194,7 +194,7 @@ void handle_characters(App *app, Widget *w)
 void app_submit(App *app, void *target, StringView command, JSONValue args)
 {
     mutex_lock(app->commands_mutex);
-    trace(CAT_EDIT, "app_submit: Pushing command '%.*s' for widget of class '%s'", SV_ARG(command), ((Widget *) target)->classname);
+    trace(EDIT, "app_submit: Pushing command '%.*s' for widget of class '%s'", SV_ARG(command), ((Widget *) target)->classname);
     da_append_PendingCommand(
         &app->pending_commands,
         (PendingCommand) {
@@ -211,7 +211,7 @@ void app_process_input(App *app)
         mutex_lock(app->commands_mutex);
         PendingCommand pending = da_pop_front_PendingCommand(&app->pending_commands);
         mutex_unlock(app->commands_mutex);
-        trace(CAT_EDIT, "app_process_input: Popped command '%.*s' for widget of class '%s'", SV_ARG(pending.command), pending.target->classname);
+        trace(EDIT, "app_process_input: Popped command '%.*s' for widget of class '%s'", SV_ARG(pending.command), pending.target->classname);
         widget_command_execute(pending.target, pending.command, pending.arguments);
         sv_free(pending.command);
         json_free(pending.arguments);

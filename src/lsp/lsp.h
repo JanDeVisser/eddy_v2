@@ -43,6 +43,7 @@ extern bool         response_error(Response *response);
 extern Response     response_decode(JSONValue *json);
 extern void         response_free(Response *response);
 extern void         lsp_initialize();
+extern void         lsp_initialize_theme();
 extern ErrorOrInt   lsp_message(void *sender, char const *method, OptionalJSONValue params);
 extern ErrorOrInt   lsp_notification(char const *method, OptionalJSONValue params);
 

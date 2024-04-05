@@ -320,6 +320,12 @@ interface DocumentFormattingParams extends WorkDoneProgressParams {
 	options: FormattingOptions;
 }
 
+interface DocumentRangeFormattingParams extends WorkDoneProgressParams {
+	textDocument: TextDocumentIdentifier;
+	range: Range;
+	options: FormattingOptions;
+}
+
 export type CompletionTriggerKind = integer;
 export namespace CompletionTriggerKind {
 	export const Invoked: CompletionTriggerKind = 1;

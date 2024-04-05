@@ -147,10 +147,10 @@ StringView xml_debug(XMLNode node)
 }
 
 #define TRACE(node, msg, ...)                                        \
-    if (log_category_on(CAT_XML)) {                                  \
+    if (log_category_on(XML)) {                                  \
         StringView _debug = xml_debug(node);                         \
         StringView _msg = sv_printf(msg __VA_OPT__(, ) __VA_ARGS__); \
-        trace(CAT_XML, "%.*s: %.*s", SV_ARG(_debug), SV_ARG(_msg));  \
+        trace(XML, "%.*s: %.*s", SV_ARG(_debug), SV_ARG(_msg));  \
         sv_free(_msg);                                               \
         sv_free(_debug);                                             \
     }
@@ -555,7 +555,7 @@ ErrorOrStringView deserialize_tag(XMLDeserializer *deserializer)
     if (sv_empty(ret)) {
         ERROR(StringView, XMLError, deserializer->ss.point.line, "Expected tag name");
     }
-    trace(CAT_XML, "deserialize_tag(): %.*s", SV_ARG(ret));
+    trace(XML, "deserialize_tag(): %.*s", SV_ARG(ret));
     RETURN(StringView, ret);
 }
 
@@ -572,13 +572,13 @@ ErrorOrStringView deserialize_attr_value(XMLDeserializer *deserializer)
     if (!ret_maybe.has_value) {
         ERROR(StringView, XMLError, deserializer->ss.point.line, "No attribute value");
     }
-    trace(CAT_XML, "deserialize_attr_value(): %.*s", SV_ARG(ret_maybe.value));
+    trace(XML, "deserialize_attr_value(): %.*s", SV_ARG(ret_maybe.value));
     RETURN(StringView, ret_maybe.value);
 }
 
 ErrorOrOptionalXMLNode deserialize_processing_instruction(XMLDeserializer *deserializer, XMLNode parent)
 {
-    trace(CAT_XML, "Decoding pi");
+    trace(XML, "Decoding pi");
     ss_skip_whitespace(&deserializer->ss);
     StringView tag = TRY_TO(StringView, OptionalXMLNode, deserialize_tag(deserializer));
     XMLNode    result = xml_processing_instruction(parent, tag);
@@ -599,13 +599,13 @@ ErrorOrOptionalXMLNode deserialize_processing_instruction(XMLDeserializer *deser
     if (!ss_expect(&deserializer->ss, '>')) {
         ERROR(OptionalXMLNode, XMLError, deserializer->ss.point.line, "Processing instruction not closed by '?>'");
     }
-    trace(CAT_XML, "PI '%.*s' deserialized", SV_ARG(tag));
+    trace(XML, "PI '%.*s' deserialized", SV_ARG(tag));
     RETURN(OptionalXMLNode, OptionalXMLNode_create(result));
 }
 
 ErrorOrOptionalXMLNode deserialize_element(XMLDeserializer *deserializer, XMLNode parent)
 {
-    trace(CAT_XML, "Decoding element");
+    trace(XML, "Decoding element");
     StringScanner *ss = &deserializer->ss;
     ss_skip_whitespace(ss);
     StringView tag = TRY_TO(StringView, OptionalXMLNode, deserialize_tag(deserializer));
@@ -638,7 +638,7 @@ ErrorOrOptionalXMLNode deserialize_element(XMLDeserializer *deserializer, XMLNod
         ERROR(OptionalXMLNode, XMLError, deserializer->ss.point.line, "Expected >");
     }
     ss_skip_whitespace(&deserializer->ss);
-    trace(CAT_XML, "Element '%.*s' [%zu] [%zu] deserialized", SV_ARG(tag), xml_attribute_count(result), xml_child_count(result));
+    trace(XML, "Element '%.*s' [%zu] [%zu] deserialized", SV_ARG(tag), xml_attribute_count(result), xml_child_count(result));
     RETURN(OptionalXMLNode, OptionalXMLNode_create(result));
 }
 
@@ -648,20 +648,20 @@ ErrorOrOptionalXMLNode deserialize_node(XMLDeserializer *deserializer, XMLNode p
 
     if (xml_node_type(parent) == XML_TYPE_ELEMENT) {
         StringView debug = xml_debug(parent);
-        trace(CAT_XML, "deserialize_node(%zu, %.*s)", deserializer->ss.point.line, SV_ARG(debug));
+        trace(XML, "deserialize_node(%zu, %.*s)", deserializer->ss.point.line, SV_ARG(debug));
         sv_free(debug);
     } else {
-        trace(CAT_XML, "deserialize_node(%zu, [%zu] %.*s)", deserializer->ss.point.line, parent.index, SV_ARG(xml_to_string(parent)));
+        trace(XML, "deserialize_node(%zu, [%zu] %.*s)", deserializer->ss.point.line, parent.index, SV_ARG(xml_to_string(parent)));
     }
     // ss_skip_whitespace(&deserializer->ss);
     switch (ss_peek(&deserializer->ss)) {
     case 0:
         ERROR(OptionalXMLNode, XMLError, deserializer->ss.point.line, "Expected node");
     case '<': {
-        trace(CAT_XML, "Found '<'");
+        trace(XML, "Found '<'");
         ss_skip_one(&deserializer->ss);
         if (ss_peek(&deserializer->ss) == '?') {
-            trace(CAT_XML, "Found '<?'");
+            trace(XML, "Found '<?'");
             ss_skip_one(&deserializer->ss);
             ret = TRY(OptionalXMLNode, deserialize_processing_instruction(deserializer, parent));
             break;
@@ -670,14 +670,14 @@ ErrorOrOptionalXMLNode deserialize_node(XMLDeserializer *deserializer, XMLNode p
         break;
     }
     default: {
-        trace(CAT_XML, "Decoding text");
+        trace(XML, "Decoding text");
         OptionalStringView txt_maybe = TRY_TO(OptionalStringView, OptionalXMLNode, deserialize_text(deserializer, sv_from("</")));
         if (txt_maybe.has_value) {
             ss_pushback(&deserializer->ss);
             ss_pushback(&deserializer->ss);
             ret = OptionalXMLNode_create(xml_text(parent, txt_maybe.value));
         } else {
-            trace(CAT_XML, "Whitespace preceding element");
+            trace(XML, "Whitespace preceding element");
         }
         break;
     }
@@ -694,10 +694,10 @@ ErrorOrXMLNode xml_deserialize(StringView xml)
     while (ss_peek(&deserializer.ss)) {
         OptionalXMLNode node = TRY_TO(OptionalXMLNode, XMLNode, deserialize_node(&deserializer, doc));
         if (!node.has_value) {
-            trace(CAT_XML, "Deserialized NULL");
+            trace(XML, "Deserialized NULL");
             continue;
         }
-        trace(CAT_XML, "Deserialized node '%.*s'", SV_ARG(xml_to_string(node.value)));
+        trace(XML, "Deserialized node '%.*s'", SV_ARG(xml_to_string(node.value)));
     }
     sv_free(deserializer.sb.view);
     RETURN(XMLNode, doc);

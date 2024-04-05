@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "raylib.h"
-#include "sv.h"
 #include <ctype.h>
 #include <math.h>
 
@@ -22,6 +20,12 @@ WIDGET_CLASS_DEF(Gutter, gutter);
 WIDGET_CLASS_DEF(Editor, editor);
 SIMPLE_WIDGET_CLASS_DEF(BufferView, view);
 
+#define OPEN_BRACES "({["
+#define CLOSE_BRACES ")}]"
+#define BRACES OPEN_BRACES CLOSE_BRACES
+
+int get_closing_brace_code(int brace);
+
 // -- Gutter -----------------------------------------------------------------
 
 void gutter_init(Gutter *gutter)
@@ -32,8 +36,9 @@ void gutter_init(Gutter *gutter)
     gutter->background = colour_to_color(eddy.theme.gutter.bg);
 }
 
-void gutter_resize(Gutter *)
+void gutter_resize(Gutter *gutter)
 {
+    gutter->background = colour_to_color(eddy.theme.gutter.bg);
 }
 
 void draw_diagnostic_float(Gutter *gutter)
@@ -458,12 +463,43 @@ void editor_delete_current_char(Editor *editor)
     }
 }
 
+int get_closing_brace_code(int brace)
+{
+    for (size_t ix = 0; ix < 3; ++ix) {
+        if (OPEN_BRACES[ix] == brace) {
+            return CLOSE_BRACES[ix];
+        }
+    }
+    return -1;
+}
+
 bool editor_character(Editor *editor, int ch)
 {
     BufferView *view = editor->buffers.elements + editor->current_buffer;
-    int         at = view->new_cursor;
+    size_t         at = view->new_cursor;
     if (view->selection != -1) {
-        at = view->new_cursor = editor_delete_selection(editor);
+        switch (ch) {
+        case '(':
+        case '[':
+        case '{': {
+            int close = get_closing_brace_code(ch);
+            int selection_start = imin((int) view->selection, (int) view->new_cursor);
+            int selection_end = imax((int) view->selection, (int) view->new_cursor);
+            editor_insert(editor, (StringView) { (char const *) &ch, 1 }, selection_start);
+            editor_insert(editor, (StringView) { (char const *) &close, 1 }, selection_end + 1);
+            if (view->cursor == selection_end) {
+                view->new_cursor = selection_end + 1;
+                view->selection = selection_start + 1;
+            } else {
+                view->new_cursor = selection_start + 1;
+                view->selection = selection_end + 1;
+            }
+            view->cursor_col = -1;
+            return true;
+        }
+        default:
+            at = view->new_cursor = (size_t) editor_delete_selection(editor);
+        }
     }
     editor_insert(editor, (StringView) { (char const *) &ch, 1 }, at);
     view->new_cursor = at + 1;
@@ -656,23 +692,13 @@ void editor_cmd_merge_lines(Editor *editor, JSONValue unused)
     view->cursor_col = -1;
 }
 
-#define OPEN_BRACES "({["
-#define CLOSE_BRACES ")}]"
-#define BRACES OPEN_BRACES CLOSE_BRACES
-
 void _find_closing_brace(Editor *editor, size_t index, bool selection)
 {
     BufferView *view = editor->buffers.elements + editor->current_buffer;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
     int         brace = buffer->text.view.ptr[index];
-    int         matching = 0;
-    for (size_t ix = 0; ix < 3; ++ix) {
-        if (OPEN_BRACES[ix] == brace) {
-            matching = CLOSE_BRACES[ix];
-            break;
-        }
-    }
-    assert(matching);
+    int         matching = get_closing_brace_code(brace);
+    assert(matching > 0);
     if (selection) {
         view->selection = index;
     }
@@ -839,7 +865,7 @@ void editor_cmd_redo(Editor *editor, JSONValue unused)
 
 void switch_buffer_submit(ListBox *listbox, ListBoxEntry selection)
 {
-    size_t buffer_ix = (size_t) selection.payload;
+    int buffer_ix = selection.int_value;
     editor_select_buffer(eddy.editor, buffer_ix);
 }
 
@@ -848,7 +874,7 @@ void editor_cmd_switch_buffer(Editor *editor, JSONValue unused)
     ListBox *listbox = widget_new(ListBox);
     listbox->submit = (ListBoxSubmit) switch_buffer_submit;
     listbox->prompt = sv_from("Select buffer");
-    for (size_t ix = 0; ix < eddy.buffers.size; ++ix) {
+    for (int ix = 0; ix < eddy.buffers.size; ++ix) {
         Buffer    *buffer = eddy.buffers.elements + ix;
         StringView text;
         if (buffer->saved_version < buffer->version) {
@@ -856,7 +882,7 @@ void editor_cmd_switch_buffer(Editor *editor, JSONValue unused)
         } else {
             text = buffer->name;
         }
-        da_append_ListBoxEntry(&listbox->entries, (ListBoxEntry) { text, (void *) ix });
+        da_append_ListBoxEntry(&listbox->entries, (ListBoxEntry) { .text = text, .int_value = ix });
     }
     listbox_show(listbox);
 }
@@ -1163,17 +1189,17 @@ void editor_draw(Editor *editor)
                 widget_draw_rectangle(editor,
                     eddy.cell.x * selection_offset, eddy.cell.y * row,
                     width * eddy.cell.x, eddy.cell.y + 5,
-                    colour_to_color(eddy.theme.selection.fg));
+                    colour_to_color(eddy.theme.selection.bg));
             }
         }
         if (line.num_tokens == 0) {
             if (frame == 0) {
-                trace(CAT_EDIT, "%5d:%5zu:[          ]", row, lineno);
+                trace(EDIT, "%5d:%5zu:[          ]", row, lineno);
             }
             continue;
         }
         if (frame == 0) {
-            trace_nonl(CAT_EDIT, "%5d:%5zu:[%4zu..%4zu]", row, lineno, line.first_token, line.first_token + line.num_tokens - 1);
+            trace_nonl(EDIT, "%5d:%5zu:[%4zu..%4zu]", row, lineno, line.first_token, line.first_token + line.num_tokens - 1);
         }
         for (size_t ix = line.first_token; ix < line.first_token + line.num_tokens; ++ix) {
             DisplayToken *token = buffer->tokens.elements + ix;
@@ -1203,13 +1229,13 @@ void editor_draw(Editor *editor)
 
             StringView text = (StringView) { line.line.ptr + start_col, length };
             if (frame == 0) {
-                trace_nonl(CAT_EDIT, "[%zu %.*s]", ix, SV_ARG(text));
+                trace_nonl(EDIT, "[%zu %.*s]", ix, SV_ARG(text));
             }
             widget_render_text(editor, eddy.cell.x * (start_col - view->left_column), eddy.cell.y * row,
                 text, eddy.font, token->color);
         }
         if (frame == 0) {
-            trace_nl(CAT_EDIT);
+            trace_nl(EDIT);
         }
     }
 
@@ -1225,10 +1251,10 @@ void editor_draw(Editor *editor)
     }
     DrawLine(editor->viewport.x + 80 * eddy.cell.x, editor->viewport.y,
         editor->viewport.x + 80 * eddy.cell.x, editor->viewport.y + editor->viewport.height,
-        RAYWHITE);
+        colour_to_color(eddy.theme.editor.fg));
     DrawLine(editor->viewport.x + 120 * eddy.cell.x, editor->viewport.y,
         editor->viewport.x + 120 * eddy.cell.x, editor->viewport.y + editor->viewport.height,
-        RAYWHITE);
+        colour_to_color(eddy.theme.editor.fg));
     ++frame;
 }
 

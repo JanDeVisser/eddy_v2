@@ -65,7 +65,7 @@ ErrorOrDLResult _resolve_result_create(void *result)
     if (!result) {
 #ifdef HAVE_DLFCN_H
         error = dlerror();
-        trace(CAT_LIB, "dlerror(): %s", error);
+        trace(LIB, "dlerror(): %s", error);
         if (error && !strstr(error, "undefined symbol")) {
             error = strdup(error);
             errorcode = -1;
@@ -183,10 +183,10 @@ LibHandle *_resolve_handle_try_open(LibHandle *handle, StringView dir)
             path = _resolve_handle_get_platform_image(handle);
         }
         assert(*(path.ptr + path.length) == 0);
-        trace(CAT_LIB, "Attempting to open library '%.*s'", SV_ARG(path));
+        trace(LIB, "Attempting to open library '%.*s'", SV_ARG(path));
     } else {
         path = sv_null();
-        trace(CAT_LIB, "Attempting to open main program module");
+        trace(LIB, "Attempting to open main program module");
     }
 #ifdef HAVE_DLFCN_H
     dlerror();
@@ -203,7 +203,7 @@ LibHandle *_resolve_handle_try_open(LibHandle *handle, StringView dir)
         if ((sv_empty(path))) {
             path = sv_from("main program module");
         }
-        trace(CAT_LIB, "Successfully opened '%.*s'", SV_ARG(path));
+        trace(LIB, "Successfully opened '%.*s'", SV_ARG(path));
     }
     return handle;
 }
@@ -217,9 +217,9 @@ LibHandle *_resolve_handle_open(LibHandle *handle)
 
     image = _resolve_handle_get_platform_image(handle);
     if (sv_not_empty(image)) {
-        trace(CAT_LIB, "resolve_open('%.*s') ~ '%.*s'", SV_ARG(handle->image), SV_ARG(image));
+        trace(LIB, "resolve_open('%.*s') ~ '%.*s'", SV_ARG(handle->image), SV_ARG(image));
     } else {
-        trace(CAT_LIB, "resolve_open('Main Program Image')");
+        trace(LIB, "resolve_open('Main Program Image')");
     }
     handle->handle = NULL;
     if (sv_not_empty(image)) {
@@ -261,13 +261,13 @@ LibHandle *_resolve_handle_open(LibHandle *handle)
         if (sv_not_empty(image)) {
             result = _resolve_handle_get_function(handle, sv_from(SCRIBBLE_INIT));
             if (ErrorOrDLResult_has_value(result)) {
-                trace(CAT_LIB, "resolve_open('%.*s'): Executing initializer", SV_ARG(handle->platform_image));
+                trace(LIB, "resolve_open('%.*s'): Executing initializer", SV_ARG(handle->platform_image));
                 ((void_t) result.value)();
             } else {
-                trace(CAT_LIB, "resolve_open('%.*s'): No initializer", SV_ARG(handle->platform_image));
+                trace(LIB, "resolve_open('%.*s'): No initializer", SV_ARG(handle->platform_image));
             }
         }
-        trace(CAT_LIB, "Library '%.*s' opened successfully", SV_ARG(handle->platform_image));
+        trace(LIB, "Library '%.*s' opened successfully", SV_ARG(handle->platform_image));
     } else {
         fatal("resolve_open('%.*s') FAILED", SV_ARG(handle->platform_image));
     }
@@ -278,7 +278,7 @@ ErrorOrDLResult _resolve_handle_get_function(LibHandle *handle, StringView funct
 {
     void_t function;
 
-    trace(CAT_LIB, "dlsym('%.*s', '%.*s')", SV_ARG(_resolve_handle_get_platform_image(handle)), SV_ARG(function_name));
+    trace(LIB, "dlsym('%.*s', '%.*s')", SV_ARG(_resolve_handle_get_platform_image(handle)), SV_ARG(function_name));
 #ifdef HAVE_DLFCN_H
     dlerror();
     assert(*(function_name.ptr + function_name.length) == 0);
@@ -311,7 +311,7 @@ void resolve_free(void)
 {
     LibHandle *image;
     if (_singleton) {
-        trace(CAT_LIB, "resolve_free");
+        trace(LIB, "resolve_free");
         while (_singleton->images) {
             image = _singleton->images;
             _singleton->images = image->next;
@@ -332,7 +332,7 @@ LibHandle *_resolve_open(Resolve *resolve, StringView image)
     mutex_lock(_resolve_mutex);
     for (LibHandle *resolve_handle = resolve->images; resolve_handle; resolve_handle = resolve_handle->next) {
         if (sv_eq(image, resolve_handle->image)) {
-            trace(CAT_LIB, "Image '%.*s' was cached", SV_ARG(image));
+            trace(LIB, "Image '%.*s' was cached", SV_ARG(image));
             handle = resolve_handle;
             break;
         }
@@ -366,7 +366,7 @@ void_t resolve_resolve(Resolve *resolve, StringView lib_name, StringView func_na
         if (sv_eq(lib_name, lib->image)) {
             for (FunctionHandle *func_handle = lib->functions; func_handle; func_handle = func_handle->next) {
                 if (sv_eq(func_name, func_handle->name)) {
-                    trace(CAT_LIB, "Function '%.*s' was cached", SV_ARG(func_name));
+                    trace(LIB, "Function '%.*s' was cached", SV_ARG(func_name));
                     return func_handle->function;
                 }
             }
@@ -378,7 +378,7 @@ void_t resolve_resolve(Resolve *resolve, StringView lib_name, StringView func_na
         my_lib = _resolve_open(resolve, lib_name);
         assert(my_lib);
     }
-    trace(CAT_LIB, "dlsym('%.*s')", SV_ARG(func_name));
+    trace(LIB, "dlsym('%.*s')", SV_ARG(func_name));
     void_t ret = MUST(DLResult, _resolve_handle_get_function(my_lib, func_name));
     if (ret) {
         FunctionHandle *fnc_handle = allocate_new(FunctionHandle);

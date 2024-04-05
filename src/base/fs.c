@@ -220,17 +220,17 @@ ErrorOrDirListing fs_directory(StringView name, uint8_t options)
     while ((dp = readdir(dir)) != NULL) {
         FileType type = 0;
         if (dp->d_type == DT_DIR) {
-            if (!(options | DirOptionDirectories)) {
+            if (!(options & DirOptionDirectories)) {
                 continue;
             }
             type = FileTypeDirectory;
         } else if (dp->d_type == DT_REG) {
-            if (!(options | DirOptionFiles)) {
+            if (!(options & DirOptionFiles)) {
                 continue;
             }
             type = FileTypeRegularFile;
         } else if (dp->d_type == DT_LNK) {
-            if (!(options | DirOptionFiles)) {
+            if (!(options & DirOptionFiles)) {
                 continue;
             }
             type = FileTypeSymlink;

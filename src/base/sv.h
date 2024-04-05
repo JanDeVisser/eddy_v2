@@ -17,10 +17,11 @@
 #include <mem.h>
 #include <optional.h>
 
-typedef struct string_view {
+struct string_view {
     char const *ptr;
     size_t      length;
-} StringView;
+};
+typedef struct string_view StringView;
 
 OPTIONAL(StringView)
 ERROR_OR(StringView);

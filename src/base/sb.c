@@ -30,7 +30,7 @@ char *allocate_for_length(size_t length, size_t *capacity)
     ret += 2 * sizeof(size_t);
     blockptr[1] = SENTINEL;
     blockptr[0] = cap | (length << 32);
-    trace(CAT_SV, "SALOC:0x%08llx:%5zu", (uint64_t) ret, cap);
+    trace(SV, "SALOC:0x%08llx:%5zu", (uint64_t) ret, cap);
     if (capacity) {
         *capacity = cap;
     }
@@ -124,7 +124,7 @@ StringBuilder sb_copy_chars(char const *ptr, size_t len)
     memcpy((char *) sb.view.ptr, ptr, len);
     sb.view.length = len;
     ((char *) sb.ptr)[len] = 0;
-    trace(CAT_SV, "SBCPC:0x%08llx:%5zu:%.60s", (uint64_t) sb.view.ptr, buffer_capacity(sb.view.ptr), sb.view.ptr);
+    trace(SV, "SBCPC:0x%08llx:%5zu:%.60s", (uint64_t) sb.view.ptr, buffer_capacity(sb.view.ptr), sb.view.ptr);
     return sb;
 }
 
@@ -155,7 +155,7 @@ StringRef sb_append_chars(StringBuilder *sb, char const *ptr, size_t len)
     size_t index = sb->view.length;
     sb->view.length += len;
     p[sb->view.length] = '\0';
-    trace(CAT_SV, "SBAPC:0x%08llx:%5zu:%.60s", (uint64_t) sb->view.ptr, buffer_capacity(sb->view.ptr), sb->view.ptr);
+    trace(SV, "SBAPC:0x%08llx:%5zu:%.60s", (uint64_t) sb->view.ptr, buffer_capacity(sb->view.ptr), sb->view.ptr);
     return (StringRef) { index, len };
 }
 
@@ -228,7 +228,7 @@ StringRef sb_vprintf(StringBuilder *sb, char const *fmt, va_list args)
     size_t index = sb->view.length;
     vsnprintf((char *) sb->view.ptr + sb->view.length, len + 1, fmt, args);
     sb->view.length += len;
-    trace(CAT_SV, "SBVPF:0x%08llx:%5zu:%.60s", (uint64_t) sb->view.ptr, buffer_capacity(sb->view.ptr), sb->view.ptr);
+    trace(SV, "SBVPF:0x%08llx:%5zu:%.60s", (uint64_t) sb->view.ptr, buffer_capacity(sb->view.ptr), sb->view.ptr);
     return (StringRef) { index, len };
 }
 
@@ -260,7 +260,7 @@ StringRef sb_insert_chars(StringBuilder *sb, char const *ptr, size_t len, size_t
     memcpy(p + at, ptr, len);
     sb->view.length += len;
     p[sb->view.length] = '\0';
-    trace(CAT_SV, "SBAPC:0x%08llx:%5zu:%.60s", (uint64_t) sb->view.ptr, buffer_capacity(sb->view.ptr), sb->view.ptr);
+    trace(SV, "SBAPC:0x%08llx:%5zu:%.60s", (uint64_t) sb->view.ptr, buffer_capacity(sb->view.ptr), sb->view.ptr);
     return (StringRef) { at, len };
 }
 

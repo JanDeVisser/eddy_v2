@@ -61,6 +61,7 @@ TextDocumentContentChangeEvent.c
 DidChangeTextDocumentParams.c
 FormattingOptions.c
 DocumentFormattingParams.c
+DocumentRangeFormattingParams.c
 CompletionTriggerKind.c
 CompletionContext.c
 CompletionParams.c
@@ -72,6 +73,7 @@ CompletionItemLabelDetails.c
 CompletionItemKind.c
 CompletionItem.c
 CompletionList.c
+PublishDiagnosticsClientCapabilities.c
 Diagnostic.c
 DiagnosticSeverity.c
 DiagnosticTag.c
