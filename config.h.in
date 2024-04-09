@@ -13,6 +13,8 @@
 #define EDDY_VERSION                       "@eddy_VERSION_MAJOR@.@eddy_VERSION_MINOR@"
 #define EDDY_DIR                           "@eddy_DIR@"
 #define EDDY_DATADIR                       "@eddy_DATADIR@"
+#define SCRIBBLE_DIR                       "@scribble_DIR@"
+#define SCRIBBLE_DATADIR                   "@scribble_DATADIR@"
 
 #cmakedefine HAVE_DIRENT_D_NAMLEN              1
 #cmakedefine HAVE_C23_ATTRIBUTE_NORETURN       1
