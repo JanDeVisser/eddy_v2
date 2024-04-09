@@ -1,0 +1,35 @@
+{% macro value(v) -%} {{ name }}{{ v.capitalized }}, {% endmacro -%}
+{% macro include(i) %}#include <lsp/schema/{{ i }}.h>
+{% endmacro -%}
+/**
+ * Copyright (c) 2024, Jan de Visser <jan@finiandarcy.com>
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * THIS IS GENERATED CODE. DO NOT MODIFY.
+ */
+
+#ifndef __LSP_{{ name|upper }}_H__
+#define __LSP_{{ name|upper }}_H__
+
+#include <lsp/schema/lsp_base.h>
+{% for i in dependencies %}{{ include(i) }}{% endfor %}
+
+typedef enum {
+{% for v in enumeration["values"] -%}{{ value(v) }}{%- endfor -%}
+} {{ name }};
+
+OPTIONAL({{ name }});
+DA_WITH_NAME({{ name }}, {{ name }}s);
+OPTIONAL({{ name }}s);
+
+extern OptionalJSONValue {{name}}_encode({{name}} value);
+extern Optional{{name}} {{name}}_decode(OptionalJSONValue json);
+extern OptionalJSONValue {{name}}s_encode({{name}}s value);
+extern Optional{{name}}s {{name}}s_decode(OptionalJSONValue json);
+{% if enumeration.type is eq("string") -%}
+extern StringView {{ name }}_to_string({{ name }} value);
+extern Optional{{ name }} {{ name }}_parse(StringView s);
+{%- endif -%}
+
+#endif /* __LSP_{{ name|upper }}_H__ */

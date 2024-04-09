@@ -1,0 +1,14 @@
+{
+    "appearance": {
+        "font_directories": [
+            "/System/Library/Fonts",
+            "/System/Library/Fonts/Supplemental",
+            "${HOME}/fonts",
+            "${HOME}/.fonts",
+            "${EDDY_DATADIR}/fonts"
+        ],
+        "font": "VictorMono-Regular.ttf",
+        "font_size": 20,
+        "theme": "darcula"
+    }
+}

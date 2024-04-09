@@ -1,0 +1,19 @@
+{
+  "ctx": {
+    "message": "Hello, World!",
+    "range": [1, 2, 3, 4, 5],
+    "obj": {
+      "First": "Value",
+      "Second": "Thing"
+    },
+    "v1": 42,
+    "v2": 112,
+    "ref": "v2"
+  },
+  "template": [
+    "@set total 0 @",
+    "@for x in $.range @;@if x % 2 == 0 @;@set total total + x @;@;@",
+    " -- @= total @ -- "
+  ],
+  "expected": "\n -- 6 -- "
+}

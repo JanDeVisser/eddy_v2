@@ -1,0 +1,15 @@
+{
+  "ctx": {
+    "message": "Hello, World!",
+    "range": [1, 2, 3, 4, 5],
+    "obj": {
+      "First": "Value",
+      "Second": "Thing"
+    },
+    "v1": 42,
+    "v2": 112,
+    "ref": "v2"
+  },
+  "template": "-- @= toupper($.message) @ --",
+  "expected": "-- HELLO, WORLD! --"
+}
