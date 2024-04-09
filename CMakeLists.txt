@@ -3,6 +3,20 @@ project(eddy C)
 
 set(CMAKE_C_STANDARD 23)
 
+set(CMAKE_INSTALL_PREFIX ${PROJECT_BINARY_DIR} CACHE PATH "..." FORCE)
+
+set(eddy_NAME Eddy)
+set(eddy_VERSION_MAJOR 1)
+set(eddy_VERSION_MINOR 0)
+set(eddy_DIR ${CMAKE_INSTALL_PREFIX})
+set(eddy_DATADIR ${CMAKE_INSTALL_PREFIX}/share)
+
+set(scribble_NAME Scribble)
+set(scribble_VERSION_MAJOR 1)
+set(scribble_VERSION_MINOR 0)
+set(scribble_DIR ${CMAKE_INSTALL_PREFIX})
+set(scribble_DATADIR ${CMAKE_INSTALL_PREFIX}/share)
+
 if(DEFINED RAYLIB)
   set(raylib_INCLUDE_DIRS "${PROJECT_SOURCE_DIR}/${RAYLIB}")
   set(raylib_LIBRARIES "-framework IOKit -framework Cocoa -framework OpenGL -L${PROJECT_SOURCE_DIR}/${RAYLIB} -lraylib -lSDL2 -lglfw3")
@@ -10,17 +24,6 @@ else()
   set(raylib_VERBOSE ON)
   include(cmake/raylib-config.cmake)
 endif()
-
-set(eddy_NAME Eddy)
-set(eddy_VERSION_MAJOR 1)
-set(eddy_VERSION_MINOR 0)
-
-set(CMAKE_INSTALL_PREFIX ${PROJECT_BINARY_DIR} CACHE PATH "..." FORCE)
-
-set(eddy_DIR ${CMAKE_INSTALL_PREFIX})
-set(eddy_DATADIR ${CMAKE_INSTALL_PREFIX}/share)
-
-include_directories("src" "src/base" "src/app" "${PROJECT_BINARY_DIR}")
 
 include(CheckCSourceCompiles)
 
@@ -62,13 +65,12 @@ include(CheckStructHasMember)
 check_struct_has_member("struct dirent" d_namlen dirent.h HAVE_DIRENT_D_NAMLEN LANGUAGE C)
 
 configure_file(
-  "${PROJECT_SOURCE_DIR}/config.h.in"
-  "${PROJECT_BINARY_DIR}/config.h"
+  "config.h.in"
+  "config.h"
 )
 
-add_subdirectory(src/base)
-add_subdirectory(src/template)
-add_subdirectory(src/lsp)
-add_subdirectory(src/app)
+include_directories("${PROJECT_BINARY_DIR}" .)
 
-install(DIRECTORY share DESTINATION .)
+add_subdirectory(base)
+add_subdirectory(eddy)
+add_subdirectory(scribble)
