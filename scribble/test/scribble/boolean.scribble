@@ -1,0 +1,8 @@
+func main() : i32
+{
+    var x = true;
+    if (x == true) {
+        putln("true");
+    }
+    return 0;
+}

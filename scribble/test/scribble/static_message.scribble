@@ -1,0 +1,4 @@
+func main() : int {
+    static_message("Hello, world!");
+    return 0;
+}

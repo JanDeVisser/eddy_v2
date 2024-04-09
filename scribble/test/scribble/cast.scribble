@@ -1,0 +1,5 @@
+func main() : i32
+{
+   var i: i16 = -42i16;
+   return i as i32;
+}
