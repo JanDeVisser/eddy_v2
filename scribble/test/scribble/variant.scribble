@@ -1,0 +1,13 @@
+variant V {
+    A(int),
+    B(int),
+};
+
+func main() : i32 {
+    var v: V;
+    v.B = 42;
+    puti(v.B); endln();
+    puti(#v); endln();
+    v.A = 12;
+    return v.A;
+}

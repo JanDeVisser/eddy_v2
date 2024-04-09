@@ -1,0 +1,10 @@
+b = "second"
+a = "first" + " " + b;
+print(a)
+
+/* EXPECTED
+--exit-- 0
+--stdout--
+first second
+--
+EXPECTED */
