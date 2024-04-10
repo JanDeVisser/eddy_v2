@@ -8,8 +8,8 @@
 #define __SYNTAXNODE_H__
 
 #include <base/json.h>
+#include <base/token.h>
 #include <model/op.h>
-#include <model/token.h>
 
 #define SYNTAXNODETYPES(S) \
     S(ASSIGNMENT)          \

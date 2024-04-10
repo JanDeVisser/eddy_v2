@@ -8,7 +8,7 @@
 #define __MODEL_ERROR_H__
 
 #include <base/json.h>
-#include <model/token.h>
+#include <base/token.h>
 
 #define ERRORKINDS(S) \
     S(SYNTAX)         \

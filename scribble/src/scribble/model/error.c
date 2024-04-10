@@ -49,7 +49,7 @@ ScribbleError scribble_error_from_json(JSONValue error)
     return (ScribbleError) {
         .kind = ErrorKind_from_string(json_get_string(&error, "kind", sv_from("SYNTAX"))),
         .message = json_get_string(&error, "message", sv_null()),
-        .token = token_from_json(MUST_OPTIONAL(JSONValue, json_get(&error, "token"))),
+        .token = MUST(Token, token_from_json(MUST_OPTIONAL(JSONValue, json_get(&error, "token")))),
         .notes = scribble_errors_from_json(MUST_OPTIONAL(JSONValue, json_get(&error, "notes"))),
     };
 }

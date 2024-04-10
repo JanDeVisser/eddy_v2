@@ -91,7 +91,7 @@ SyntaxNode *node_from_facade(JSONValue *json)
     SyntaxNode *node = allocate_new(SyntaxNode);
     node->type = SyntaxNodeType_from_string(json_get_string(json, "type", sv_null()));
     node->name = json_get_string(json, "name", sv_null());
-    node->token = token_from_json(MUST_OPTIONAL(JSONValue, json_get(json, "token")));
+    node->token = MUST(Token, token_from_json(MUST_OPTIONAL(JSONValue, json_get(json, "token"))));
     node->index = json_get_int(json, "index", 0);
     return node;
 }
@@ -560,7 +560,7 @@ SyntaxNode syntax_node_from_json(JSONValue json)
     node.type = SyntaxNodeType_from_string(json_get_string(&json, "type", sv_null()));
     node.name = json_get_string(&json, "name", sv_null());
     node.index = json_get_int(&json, "index", 0);
-    node.token = token_from_json(MUST_OPTIONAL(JSONValue, json_get(&json, "token")));
+    node.token = MUST(Token, token_from_json(MUST_OPTIONAL(JSONValue, json_get(&json, "token"))));
     switch (node.type) {
 #undef SYNTAXNODETYPE
 #define SYNTAXNODETYPE(type)            \

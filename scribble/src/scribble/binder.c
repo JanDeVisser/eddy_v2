@@ -6,8 +6,8 @@
 
 #define STATIC_ALLOCATOR
 #include <base/allocate.h>
-#include <base/options.h>
 #include <base/http.h>
+#include <base/options.h>
 #include <base/sv.h>
 #include <binder.h>
 #include <execute.h>
@@ -15,8 +15,8 @@
 #include <native.h>
 #include <type.h>
 
-static void       vwarning(BindContext *ctx, Location loc, char const *fmt, va_list args);
-static void       warning(BindContext *ctx, Location loc, char const *fmt, ...);
+static void       vwarning(BindContext *ctx, TokenLocation loc, char const *fmt, va_list args);
+static void       warning(BindContext *ctx, TokenLocation loc, char const *fmt, ...);
 static BoundNode *verror(BoundNode *parent, SyntaxNode *stmt, BindContext *ctx, char const *fmt, va_list args);
 static BoundNode *error(BoundNode *parent, SyntaxNode *stmt, BindContext *ctx, char const *fmt, ...);
 static BoundNode *bound_node_make(BoundNodeType type, BoundNode *parent);
@@ -35,7 +35,7 @@ static void       rebind_nodes(BoundNode *parent, BoundNode **first, BindContext
 SYNTAXNODETYPES(SYNTAXNODETYPE_ENUM)
 #undef SYNTAXNODETYPE_ENUM
 
-static Location loc_dummy = { (StringView) { "dummy", 5 }, 0, 0 };
+static TokenLocation loc_dummy = { (StringView) { "dummy", 5 }, 0, 0 };
 
 char const *BoundNodeType_name(BoundNodeType type)
 {
@@ -77,11 +77,7 @@ void binder_debug_syntaxnode(BindContext *ctx, SyntaxNode *node)
     JSONValue n = json_object();
     json_set_string(&n, "name", node->name);
     json_set_cstr(&n, "nodetype", SyntaxNodeType_name(node->type));
-    JSONValue loc = json_object();
-    json_set_string(&loc, "filename", node->token.loc.file);
-    json_set_int(&loc, "line", node->token.loc.line);
-    json_set_int(&loc, "column", node->token.loc.column);
-    json_set(&n, "location", loc);
+    json_set(&n, "location", location_to_json(node->token.location));
     HTTP_POST_MUST(ctx->frontend, "/bind/syntaxnode", n);
 }
 
@@ -145,20 +141,20 @@ void context_increment_unbound(BindContext *ctx)
         context_increment_unbound(ctx->parent);
 }
 
-void vwarning(BindContext *ctx, Location loc, char const *fmt, va_list args)
+void vwarning(BindContext *ctx, TokenLocation loc, char const *fmt, va_list args)
 {
     ++ctx->warnings;
     if (ctx->parent) {
         vwarning(ctx->parent, loc, fmt, args);
         return;
     }
-    fprintf(stderr, LOC_SPEC, LOC_ARG(loc));
+    fprintf(stderr, "%.*s:%zu:%zu ", SV_ARG(loc.file), loc.line, loc.column);
     fprintf(stderr, "Warning: ");
     vfprintf(stderr, fmt, args);
     fprintf(stderr, "\n");
 }
 
-void warning(BindContext *ctx, Location loc, char const *fmt, ...)
+void warning(BindContext *ctx, TokenLocation loc, char const *fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
@@ -172,7 +168,8 @@ BoundNode *verror(BoundNode *parent, SyntaxNode *stmt, BindContext *ctx, char co
     if (ctx->parent) {
         return verror(parent, stmt, ctx->parent, fmt, args);
     }
-    fprintf(stderr, LOC_SPEC, SN_LOC_ARG(stmt));
+    TokenLocation loc = stmt->token.location;
+    fprintf(stderr, "%.*s:%zu:%zu ", SV_ARG(loc.file), loc.line, loc.column);
     fprintf(stderr, "Error: ");
     vfprintf(stderr, fmt, args);
     fprintf(stderr, "\n");
@@ -1472,7 +1469,7 @@ __attribute__((unused)) BoundNode *bind_VARIABLE_DECL(BoundNode *parent, SyntaxN
     }
     BoundNode *shadows = bound_node_find(parent, BNT_VARIABLE_DECL, stmt->name);
     if (shadows != NULL) {
-        warning(ctx, stmt->token.loc, "Variable '%.*s' shadows a previously declared variable", SV_ARG(stmt->name));
+        warning(ctx, stmt->token.location, "Variable '%.*s' shadows a previously declared variable", SV_ARG(stmt->name));
     }
 
     TypeSpec var_type = { VOID_ID, false };

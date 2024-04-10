@@ -10,56 +10,6 @@
 #include <base/json.h>
 #include <base/sv.h>
 
-/* THIS IS HERE FOR SAFEKEEPING */
-// clang-format off
-#define XX_KEYWORDS(S)             \
-    S(AS, as, 0)                   \
-    S(BREAK, break, 1)             \
-    S(CONST, const, 2)             \
-    S(CONTINUE, continue, 3)       \
-    S(ELIF, elif, 4)               \
-    S(ELSE, else, 5)               \
-    S(ENUM, enum, 6)               \
-    S(ERROR, error, 7)             \
-    S(FOR, for, 8)                 \
-    S(FUNC, func, 9)               \
-    S(IF, if, 10)                  \
-    S(IMPORT, import, 11)          \
-    S(IN, in, 12)                  \
-    S(LOOP, loop, 13)              \
-    S(MATCH, match, 14)            \
-    S(RETURN, return, 15)          \
-    S(STRUCT, struct, 16)          \
-    S(VAR, var, 17)                \
-    S(VARIANT, variant, 18)        \
-    S(WHILE, while, 19)            \
-    S(TRUE, true, 20)              \
-    S(FALSE, false, 21)            \
-    S(ASSIGN_BITWISE_AND, &=, 22)  \
-    S(ASSIGN_BITWISE_OR, |=, 23)   \
-    S(ASSIGN_BITWISE_XOR, ^=, 24)  \
-    S(ASSIGN_SHIFT_LEFT, <<=, 25)  \
-    S(ASSIGN_SHIFT_RIGHT, >>=, 26) \
-    S(BINARY_DECREMENT, -=, 27)    \
-    S(BINARY_INCREMENT, +=, 28)    \
-    S(ASSIGN_MULTIPLY, *=, 29)     \
-    S(ASSIGN_DIVIDE, /=, 30)       \
-    S(ASSIGN_MODULO, %=, 31)       \
-    S(BIT_SHIFT_LEFT, <<, 32)      \
-    S(BIT_SHIFT_RIGHT, >>, 33)     \
-    S(EQUALS, ==, 34)              \
-    S(GREATER_EQUALS, >=, 35)      \
-    S(LESS_EQUALS, <=, 36)         \
-    S(LOGICAL_AND, &&, 37)         \
-    S(LOGICAL_OR, ||, 38)          \
-    S(NOT_EQUALS, !=, 39)          \
-    S(RANGE, .., 40)               \
-    S(FUNC_BINDING, ->, 41)        \
-    S(MACRO_BINDING, =>, 42)       \
-    S(UNARY_DECREMENT, --, 43)     \
-    S(UNARY_INCREMENT, ++, 44)
-// clang-format on
-
 #define TOKENKINDS(S) \
     S(UNKNOWN)        \
     S(END_OF_FILE)    \
@@ -186,5 +136,6 @@ extern ErrorOrToken         token_from_json(JSONValue token);
 #define token_matches_kind(t, k) ((t).kind == k)
 #define token_matches_symbol(t, s) (token_matches_kind((t), TK_SYMBOL) && (t).symbol == (s))
 #define token_matches_keyword(t, c) (token_matches_kind((t), TK_KEYWORD) && (t).keyword_code == (c))
+#define token_matches_identifier(t) (token_matches_kind((t), TK_IDENTIFIER))
 
 #endif /* BASE_TOKEN_H */
