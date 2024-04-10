@@ -400,8 +400,40 @@ ErrorOrToken lexer_expect(Lexer *lexer, TokenKind kind, char const *msg, ...)
     RETURN(Token, lexer_lex(lexer));
 }
 
+ErrorOrToken lexer_expect_symbol(Lexer *lexer, int symbol, char const *msg, ...)
+{
+    Token ret = lexer_next(lexer);
+    if (ret.kind != TK_SYMBOL || ret.symbol != symbol) {
+        va_list args;
+        va_start(args, msg);
+        StringView formatted = sv_vprintf(msg, args);
+        va_end(args);
+        ERROR(Token, LexerError, 0, "%05zu:%.*s", lexer->sources->location, SV_ARG(formatted));
+    }
+    RETURN(Token, lexer_lex(lexer));
+}
+
+ErrorOrToken lexer_expect_identifier(Lexer *lexer, char const *msg, ...)
+{
+    Token ret = lexer_next(lexer);
+    if (ret.kind != TK_IDENTIFIER) {
+        va_list args;
+        va_start(args, msg);
+        StringView formatted = sv_vprintf(msg, args);
+        va_end(args);
+        ERROR(Token, LexerError, 0, "%05zu:%.*s", lexer->sources->location, SV_ARG(formatted));
+    }
+    RETURN(Token, lexer_lex(lexer));
+}
+
 bool lexer_next_matches(Lexer *lexer, TokenKind kind)
 {
     Token next = lexer_next(lexer);
     return token_matches_kind(next, kind);
+}
+
+bool lexer_next_matches_symbol(Lexer *lexer, int symbol)
+{
+    Token next = lexer_next(lexer);
+    return next.kind == TK_SYMBOL && next.symbol == symbol;
 }

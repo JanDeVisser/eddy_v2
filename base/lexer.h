@@ -55,7 +55,10 @@ extern Token        lexer_peek(Lexer *lexer);
 extern Token        lexer_next(Lexer *lexer);
 extern Token        lexer_lex(Lexer *lexer);
 extern ErrorOrToken lexer_expect(Lexer *lexer, TokenKind kind, char const *msg, ...);
+extern ErrorOrToken lexer_expect_symbol(Lexer *lexer, int symbol, char const *msg, ...);
+extern ErrorOrToken lexer_expect_identifier(Lexer *lexer, char const *msg, ...);
 extern bool         lexer_next_matches(Lexer *lexer, TokenKind kind);
+extern bool         lexer_next_matches_symbol(Lexer *lexer, int symbol);
 extern StringView   lexer_keyword(Lexer *lexer, int code);
 
 #define LEXER_LOC_ARG(lexer) LOC_ARG(lexer->sources->loc)

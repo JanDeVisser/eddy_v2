@@ -54,7 +54,7 @@
     S(MEMBER_ACCESS, false, 14, TK_SYMBOL, '.', 0)
 
 #define UNARY_OPERATORS(S)                             \
-    S(INVALID_UNARY, TK_UNKNOWN, TC_NONE)              \
+    S(INVALID_UNARY, TK_UNKNOWN, 0)                    \
     S(IDENTITY, TK_SYMBOL, '+')                        \
     S(NEGATE, TK_SYMBOL, '-')                          \
     S(CARDINALITY, TK_SYMBOL, '#')                     \

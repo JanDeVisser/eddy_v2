@@ -24,7 +24,7 @@ Type parse_type(Lexer *lexer)
         Type  type = { 0 };
         switch (t.kind) {
         case TK_SYMBOL: {
-            switch (t.code) {
+            switch (t.keyword_code) {
             case '{': {
                 type.kind = TypeKindAnonymousStruct;
                 type.anon_struct = MALLOC(Properties);
@@ -42,7 +42,7 @@ Type parse_type(Lexer *lexer)
         } break;
         case TK_KEYWORD: {
             type.kind = TypeKindBasic;
-            switch (t.code) {
+            switch (t.keyword_code) {
             case TSKeywordLSPAny:
                 type.basic_type = BasicTypeAny;
                 break;
@@ -82,17 +82,17 @@ Type parse_type(Lexer *lexer)
             fatal("Expected type specification, but got '%.*s", SV_ARG(t.text));
         }
         t = lexer_next(lexer);
-        if (t.kind == TK_SYMBOL && t.code == '[') {
+        if (t.kind == TK_SYMBOL && t.symbol == '[') {
             lexer_lex(lexer);
-            MUST(Token, lexer_expect(lexer, TK_SYMBOL, ']', "Expected ']' to close '["));
+            MUST(Token, lexer_expect_symbol(lexer, ']', "Expected ']' to close '["));
             type.array = true;
         }
         t = lexer_next(lexer);
-        if (t.kind != TK_SYMBOL || (t.code != '|' && t.code != ';')) {
+        if (t.kind != TK_SYMBOL || (t.symbol != '|' && t.symbol != ';')) {
             fatal("Expected '|' or ';', got '%.*s'", SV_ARG(t.text));
         }
         lexer_lex(lexer);
-        switch (t.code) {
+        switch (t.symbol) {
         case '|': {
             if (ret.kind == TypeKindNone) {
                 ret.kind = TypeKindAnonymousVariant;
@@ -140,20 +140,20 @@ void get_dependencies(Type *type, StringList *dependencies)
 void parse_struct(Lexer *lexer, Properties *s)
 {
     Token token = { 0 };
-    for (token = lexer_next(lexer); token.kind != TK_END_OF_FILE && !token_matches(token, TK_SYMBOL, '}'); token = lexer_next(lexer)) {
-        if (!token_matches(token, TK_IDENTIFIER, TC_IDENTIFIER)) {
+    for (token = lexer_next(lexer); token.kind != TK_END_OF_FILE && (token.kind != TK_SYMBOL || token.symbol != '}'); token = lexer_next(lexer)) {
+        if (token.kind != TK_IDENTIFIER) {
             fatal("Expected property name, got '%.*s'", SV_ARG(token.text));
         }
         Property *prop = da_append_Property(s, (Property) { token.text });
         lexer_lex(lexer);
-        if (lexer_next_matches(lexer, TK_SYMBOL, '?')) {
+        if (lexer_next_matches_symbol(lexer, '?')) {
             prop->optional = true;
             lexer_lex(lexer);
         }
-        MUST(Token, lexer_expect(lexer, TK_SYMBOL, ':', "Expected ':' after property name"));
+        MUST(Token, lexer_expect_symbol(lexer, ':', "Expected ':' after property name"));
         prop->type = parse_type(lexer);
     }
-    if (!token_matches(token, TK_SYMBOL, '}')) {
+    if (token.kind != TK_SYMBOL || token.symbol != '}') {
         fatal("Expected '}', got '%.*s'", SV_ARG(token.text));
     }
     lexer_lex(lexer);
@@ -162,24 +162,24 @@ void parse_struct(Lexer *lexer, Properties *s)
 void parse_interface(Lexer *lexer)
 {
     lexer_lex(lexer);
-    Token   name = MUST(Token, lexer_expect(lexer, TK_IDENTIFIER, TC_IDENTIFIER, "Expected interface name"));
+    Token   name = MUST(Token, lexer_expect_identifier(lexer, "Expected interface name"));
     TypeDef type_def = { TypeDefKindInterface, name.text };
     Token   extends_maybe = lexer_next(lexer);
-    if (token_matches(extends_maybe, TK_KEYWORD, TSKeywordExtends)) {
+    if (extends_maybe.kind == TK_KEYWORD && extends_maybe.keyword_code == TSKeywordExtends) {
         lexer_lex(lexer);
         Token comma;
         do {
-            Token base_interface = MUST(Token, lexer_expect(lexer, TK_IDENTIFIER, TC_IDENTIFIER, "Expected base interface name"));
+            Token base_interface = MUST(Token, lexer_expect_identifier(lexer, "Expected base interface name"));
             sl_push(&type_def.interface.extends, base_interface.text);
             if (!sl_has(&type_def.dependencies, base_interface.text)) {
                 sl_push(&type_def.dependencies, base_interface.text);
             }
             comma = lexer_lex(lexer);
             assert(comma.kind == TK_SYMBOL);
-            assert(comma.code == ',' || comma.code == '{');
-        } while (token_matches(comma, TK_SYMBOL, ','));
+            assert(comma.symbol == ',' || comma.symbol == '{');
+        } while (token_matches_symbol(comma, ','));
     } else {
-        MUST(Token, lexer_expect(lexer, TK_SYMBOL, '{', "Expected 'extends' or '{"));
+        MUST(Token, lexer_expect_symbol(lexer, '{', "Expected 'extends' or '{"));
     }
     parse_struct(lexer, &type_def.interface.properties);
     for (size_t ix = 0; ix < type_def.interface.properties.size; ++ix) {
@@ -193,26 +193,26 @@ void parse_interface(Lexer *lexer)
 void parse_namespace(Lexer *lexer)
 {
     lexer_lex(lexer);
-    Token       name = MUST(Token, lexer_expect(lexer, TK_IDENTIFIER, TC_IDENTIFIER, "Expected namespace name"));
+    Token       name = MUST(Token, lexer_expect_identifier(lexer, "Expected namespace name"));
     Enumeration enumeration = { name.text };
-    MUST(Token, lexer_expect(lexer, TK_SYMBOL, '{', "Expected '{"));
+    MUST(Token, lexer_expect_symbol(lexer, '{', "Expected '{"));
     Token token;
-    for (token = lexer_next(lexer); token.kind != TK_END_OF_FILE && !token_matches(token, TK_SYMBOL, '}'); token = lexer_next(lexer)) {
-        if (token_matches(token, TK_KEYWORD, TSKeywordExport) || token_matches(token, TK_KEYWORD, TSKeywordConst)) {
+    for (token = lexer_next(lexer); token.kind != TK_END_OF_FILE && !token_matches_symbol(token, '}'); token = lexer_next(lexer)) {
+        if (token_matches_keyword(token, TSKeywordExport) || token_matches_keyword(token, TSKeywordConst)) {
             lexer_lex(lexer);
             continue;
         }
-        if (!token_matches(token, TK_IDENTIFIER, TC_IDENTIFIER)) {
+        if (!token_matches_identifier(token)) {
             fatal("Expected value name, got '%.*s'", SV_ARG(token.text));
         }
         EnumerationValue *value = da_append_EnumerationValue(&enumeration.values, (EnumerationValue) { token.text });
         lexer_lex(lexer);
-        MUST(Token, lexer_expect(lexer, TK_SYMBOL, ':', "Expected ':'"));
+        MUST(Token, lexer_expect_symbol(lexer, ':', "Expected ':'"));
         token = lexer_lex(lexer);
         BasicType value_type;
         switch (token.kind) {
         case TK_KEYWORD: {
-            switch (token.code) {
+            switch (token.keyword_code) {
             case TSKeywordInteger:
                 value_type = BasicTypeInt;
                 break;
@@ -251,7 +251,7 @@ void parse_namespace(Lexer *lexer)
             fatal("Value type mismatch in enumeration '%.*s'", SV_ARG(enumeration.name));
         }
 
-        MUST(Token, lexer_expect(lexer, TK_SYMBOL, '=', "Expected '='"));
+        MUST(Token, lexer_expect_symbol(lexer, '=', "Expected '='"));
 
         token = lexer_lex(lexer);
         switch (token.kind) {
@@ -275,9 +275,9 @@ void parse_namespace(Lexer *lexer)
         if (enumeration.value_type == BasicTypeNone) {
             enumeration.value_type = value_type;
         }
-        MUST(Token, lexer_expect(lexer, TK_SYMBOL, ';', "Expected ';'"));
+        MUST(Token, lexer_expect_symbol(lexer, ';', "Expected ';'"));
     }
-    if (!token_matches(token, TK_SYMBOL, '}')) {
+    if (!token_matches_symbol(token, '}')) {
         fatal("Expected '}', got '%.*s'", SV_ARG(token.text));
     }
     lexer_lex(lexer);
@@ -312,18 +312,18 @@ void parse_namespace(Lexer *lexer)
 void parse_enum(Lexer *lexer)
 {
     lexer_lex(lexer);
-    Token       name = MUST(Token, lexer_expect(lexer, TK_IDENTIFIER, TC_IDENTIFIER, "Expected enum name"));
+    Token       name = MUST(Token, lexer_expect_identifier(lexer, "Expected enum name"));
     Enumeration enumeration = { name.text };
-    MUST(Token, lexer_expect(lexer, TK_SYMBOL, '{', "Expected '{"));
+    MUST(Token, lexer_expect_symbol(lexer, '{', "Expected '{"));
     Token token = { 0 };
     while (true) {
         token = lexer_next(lexer);
-        if (!token_matches(token, TK_IDENTIFIER, TC_IDENTIFIER) && token.kind != TK_KEYWORD) {
+        if (!token_matches_identifier(token) && token.kind != TK_KEYWORD) {
             fatal("Expected enum value name, got '%.*s'", SV_ARG(token.text));
         }
         EnumerationValue *value = da_append_EnumerationValue(&enumeration.values, (EnumerationValue) { token.text });
         lexer_lex(lexer);
-        MUST(Token, lexer_expect(lexer, TK_SYMBOL, '=', "Expected '='"));
+        MUST(Token, lexer_expect_symbol(lexer, '=', "Expected '='"));
 
         BasicType value_type;
         token = lexer_lex(lexer);
@@ -349,19 +349,19 @@ void parse_enum(Lexer *lexer)
             enumeration.value_type = value_type;
         }
         token = lexer_lex(lexer);
-        if (token_matches(token, TK_SYMBOL, '}') || token.kind == TK_END_OF_FILE) {
+        if (token_matches_symbol(token, '}') || token.kind == TK_END_OF_FILE) {
             break;
         }
-        if (!token_matches(token, TK_SYMBOL, ',')) {
+        if (!token_matches_symbol(token, ',')) {
             fatal("Expected ',', '}', or eof. Got '%.*s'", SV_ARG(token.text));
         }
         token = lexer_next(lexer);
-        if (token_matches(token, TK_SYMBOL, '}')) {
+        if (token_matches_symbol(token, '}')) {
             lexer_lex(lexer);
             break;
         }
     }
-    if (!token_matches(token, TK_SYMBOL, '}')) {
+    if (!token_matches_symbol(token, '}')) {
         fatal("Expected '}', got '%.*s'", SV_ARG(token.text));
     }
     lexer_lex(lexer);
@@ -383,7 +383,7 @@ void parse_typedef(Lexer *lexer)
     case TK_IDENTIFIER:
         break;
     case TK_KEYWORD: {
-        switch (name.code) {
+        switch (name.keyword_code) {
         case TSKeywordInteger:
         case TSKeywordUInteger:
         case TSKeywordDecimal:
@@ -396,8 +396,7 @@ void parse_typedef(Lexer *lexer)
     default:
         fatal("Expected type definition name, got '%.*s'", SV_ARG(name.text));
     }
-    MUST(Token, lexer_expect(lexer, TK_SYMBOL, '=', "Expected '=' in definition of type '%.*s'", SV_ARG(name.text)));
-    StringList dependencies = { 0 };
+    MUST(Token, lexer_expect_symbol(lexer, '=', "Expected '=' in definition of type '%.*s'", SV_ARG(name.text)));
     Type       t = parse_type(lexer);
 
     TypeDef *td = get_typedef(name.text);
@@ -440,13 +439,13 @@ Module ts_parse(StringView fname)
     da_append_Module(&modules, module);
 
     for (Token token = lexer_next(&lexer); token.kind != TK_END_OF_FILE; token = lexer_next(&lexer)) {
-        if (token_matches(token, TK_KEYWORD, TSKeywordInterface)) {
+        if (token_matches_keyword(token, TSKeywordInterface)) {
             parse_interface(&lexer);
-        } else if (token_matches(token, TK_KEYWORD, TSKeywordNamespace)) {
+        } else if (token_matches_keyword(token, TSKeywordNamespace)) {
             parse_namespace(&lexer);
-        } else if (token_matches(token, TK_KEYWORD, TSKeywordEnum)) {
+        } else if (token_matches_keyword(token, TSKeywordEnum)) {
             parse_enum(&lexer);
-        } else if (token_matches(token, TK_KEYWORD, TSKeywordType)) {
+        } else if (token_matches_keyword(token, TSKeywordType)) {
             parse_typedef(&lexer);
         } else {
             lexer_lex(&lexer);

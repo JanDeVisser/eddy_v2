@@ -19,7 +19,7 @@ typedef struct operator_mapping {
     Operator  operator;
     bool      binary;
     TokenKind token_kind;
-    TokenCode token_code;
+    int       token_code;
     char      closed_by;
     int       precedence;
 } OperatorMapping;
@@ -36,7 +36,5 @@ typedef struct parser_context {
 extern size_t        next_index();
 extern SyntaxNode   *syntax_node_make(ParserContext *ctx, SyntaxNodeType type, StringView name, Token token);
 extern ParserContext parse(BackendConnection *conn, JSONValue config);
-
-#define SN_LOC_ARG(node) LOC_ARG(node->token.loc)
 
 #endif /* __PARSER_H__ */

@@ -21,14 +21,14 @@
     do {                                                                \
         if ((obj)->size == obj->cap) {                                  \
             if ((obj)->cap == 0) {                                      \
-                (obj)->E = array_allocate(sizeof(T), 4);                \
+                (obj)->E = MALLOC_ARR(T, 4);                            \
                 (obj)->cap = 4;                                         \
             } else {                                                    \
                 size_t new_cap = (obj)->cap;                            \
                 do {                                                    \
                     new_cap *= 2;                                       \
                 } while (new_cap < (obj)->size);                        \
-                T *new_elements = array_allocate(sizeof(T), new_cap);   \
+                T *new_elements = MALLOC_ARR(T, new_cap);               \
                 memcpy(new_elements, (obj)->E, (obj)->cap * sizeof(T)); \
                 (obj)->E = new_elements;                                \
                 (obj)->cap = new_cap;                                   \
