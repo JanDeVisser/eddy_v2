@@ -77,8 +77,7 @@ void buffer_build_indices(Buffer *buffer)
     }
     if (lexer.language == NULL) {
         trace(EDIT, "buffer_build_indices('%.*s'): no view found", SV_ARG(buffer->name));
-        buffer->indexed_version = buffer->version;
-        return;
+        lexer = lexer_create();
     }
     lexer.whitespace_significant = true;
     lexer.include_comments = true;
