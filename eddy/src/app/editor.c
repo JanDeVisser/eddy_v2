@@ -150,8 +150,7 @@ void editor_select_view(Editor *editor, int view_ix)
     if (view->mode) {
         app->focus = view->mode;
     }
-    char name[buffer->name.length + 1];
-    SetWindowTitle(sv_cstr(buffer->name, name));
+    SetWindowTitle(sv_cstr(buffer->name, NULL));
 }
 
 void editor_select_buffer(Editor *editor, int buffer_num)
@@ -181,8 +180,10 @@ void editor_select_buffer(Editor *editor, int buffer_num)
     in_place_widget(BufferView, view, editor);
     if (sv_endswith(buffer->name, sv_from(".c")) || sv_endswith(buffer->name, sv_from(".h"))) {
         view->mode = (Widget *) widget_new_with_parent(CMode, view);
+        ++buffer->version;
     } else if (sv_endswith(buffer->name, sv_from(".scribble"))) {
         view->mode = (Widget *) widget_new_with_parent(ScribbleMode, view);
+        ++buffer->version;
     }
     editor_select_view(editor, view_ix);
 }

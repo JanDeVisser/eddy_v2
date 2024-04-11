@@ -468,7 +468,6 @@ static int handle_include_directive(Lexer *lexer)
             lexer_set_current(lexer, (Token) { .kind = TK_WHITESPACE, .text = { buffer, ix } });
             return CDirectiveInclude;
         }
-        lexer->language_data = (void *) CDirectiveStateIncludeQuote;
     } // Fall through
     case CDirectiveStateIncludeQuote: {
         if (buffer[0] != '<' && buffer[0] != '"') {
@@ -480,7 +479,10 @@ static int handle_include_directive(Lexer *lexer)
         while (buffer[ix] && buffer[ix] != end && buffer[ix] != '\n') {
             ++ix;
         }
-        lexer_set_current(lexer, (Token) { .kind = TK_DIRECTIVE_ARG, .text = { buffer, ix + 1 } });
+        if (buffer[ix] == end) {
+            ++ix;
+        }
+        lexer_set_current(lexer, (Token) { .kind = TK_DIRECTIVE_ARG, .text = { buffer, ix } });
     } break;
     default:
         UNREACHABLE();

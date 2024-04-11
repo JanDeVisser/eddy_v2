@@ -1,7 +1,7 @@
 *.dot
 *.dot.svg
 cmake-*/
-build/
+build
 .idea/
 scribble/test/not_yet_working/
 scribble/test/scribble/.compiled

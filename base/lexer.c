@@ -10,6 +10,9 @@
 #include <base/io.h>
 #include <base/lexer.h>
 
+static int   isbdigit(int ch);
+static Token scan_number(char const *buffer);
+
 int isbdigit(int ch)
 {
     return ch == '0' || ch == '1';
@@ -18,7 +21,7 @@ int isbdigit(int ch)
 Token scan_number(char const *buffer)
 {
     NumberType type = NTInteger;
-    int       ix = 0;
+    int        ix = 0;
     int (*predicate)(int) = isdigit;
     if (buffer[1] && buffer[0] == '0') {
         if (buffer[1] == 'x' || buffer[1] == 'X') {
@@ -114,7 +117,7 @@ void lexer_push_source(Lexer *lexer, StringView source, StringView name)
     entry->location.file = name;
     entry->prev = lexer->sources;
     lexer->sources = entry;
-    lexer->current = (Token) {0};
+    lexer->current = (Token) { 0 };
 }
 
 void lexer_pop_source(Lexer *lexer)
@@ -122,7 +125,7 @@ void lexer_pop_source(Lexer *lexer)
     if (lexer->sources) {
         lexer->sources = lexer->sources->prev;
     }
-    lexer->current = (Token) {0};
+    lexer->current = (Token) { 0 };
 }
 
 Token directive_handle(Lexer *lexer, Token trigger)
@@ -160,13 +163,6 @@ Token lexer_set_current(Lexer *lexer, Token token)
 {
     if (lexer->sources) {
         token.location = lexer->sources->location;
-        lexer->sources->location.index += token.text.length;
-        if (token.kind == TK_END_OF_LINE) {
-            ++lexer->sources->location.line;
-            lexer->sources->location.column = 0;
-        } else {
-            lexer->sources->location.column += token.text.length;
-        }
     }
     lexer->current = token;
     return lexer->current;
@@ -238,6 +234,12 @@ Token lexer_peek_next(Lexer *lexer)
         };
     }
     if (lexer->in_comment) {
+        if (buffer[0] == '\n') {
+            return (Token) {
+                .kind = TK_END_OF_LINE,
+                .text = { buffer, 1 },
+            };
+        }
         return block_comment(lexer, buffer, 0);
     }
     switch (buffer[0]) {
@@ -298,7 +300,7 @@ Token lexer_peek_next(Lexer *lexer)
             ;
         return (Token) {
             .kind = TK_WHITESPACE,
-            .text = { buffer, ix + 1 },
+            .text = { buffer, ix },
         };
     }
     if (isdigit(buffer[0])) {
@@ -350,9 +352,7 @@ Token lexer_peek_next(Lexer *lexer)
         .symbol = (int) buffer[0],
         .text = { buffer, 1 },
     };
-    if (lexer->language &&
-        lexer->language->preprocessor_trigger.symbol &&
-        !lexer->current_directive && lexer->language->preprocessor_trigger.symbol == ret.symbol) {
+    if (lexer->language && lexer->language->preprocessor_trigger.symbol && !lexer->current_directive && lexer->language->preprocessor_trigger.symbol == ret.symbol) {
         return directive_handle(lexer, ret);
     }
     return ret;
@@ -379,11 +379,25 @@ Token lexer_next(Lexer *lexer)
 
 Token lexer_lex(Lexer *lexer)
 {
-    if (lexer->current.kind == TK_UNKNOWN) {
-        lexer_next(lexer);
-    }
     Token ret = lexer->current;
-    lexer->current = (Token) {0};
+    if (ret.kind == TK_UNKNOWN) {
+        ret = lexer_next(lexer);
+    }
+    if (lexer->sources) {
+        Source *src = lexer->sources;
+        lexer->sources->location.index += ret.text.length;
+        lexer->sources->source = sv_lchop(lexer->sources->source, ret.text.length);
+        if (ret.kind == TK_END_OF_LINE) {
+            ++lexer->sources->location.line;
+            lexer->sources->location.column = 0;
+        } else {
+            lexer->sources->location.column += ret.text.length;
+        }
+        if (!src->source.length) {
+            src->source.ptr = NULL;
+        }
+    }
+    lexer->current = (Token) { 0 };
     return ret;
 }
 
