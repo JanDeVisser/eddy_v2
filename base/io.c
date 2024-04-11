@@ -293,8 +293,7 @@ ErrorOrSize socket_writeln(socket_t socket, StringView sv)
 
 ErrorOrStringView read_file_by_name(StringView file_name)
 {
-    char buf[file_name.length + 1];
-    int  fd = open(sv_cstr(file_name, buf), O_RDONLY);
+    int  fd = open(sv_cstr(file_name, NULL), O_RDONLY);
     if (fd < 0) {
         ERROR(StringView, IOError, errno, "Could not open file");
     }

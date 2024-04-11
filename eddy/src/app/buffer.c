@@ -59,7 +59,10 @@ void buffer_close(Buffer *buffer)
 void buffer_build_indices(Buffer *buffer)
 {
     assert(buffer->indexed_version <= buffer->version);
+    trace(EDIT, "buffer_build_indices('%.*s')", SV_ARG(buffer->name));
     if (buffer->indexed_version == buffer->version && buffer->lines.size > 0) {
+        trace(EDIT, "buffer_build_indices('%.*s'): clean. indexed_version = %zu version = %zu lines = %zu",
+            SV_ARG(buffer->name), buffer->indexed_version, buffer->version, buffer->lines.size);
         return;
     }
     buffer->lines.size = 0;
@@ -73,6 +76,7 @@ void buffer_build_indices(Buffer *buffer)
         }
     }
     if (lexer.language == NULL) {
+        trace(EDIT, "buffer_build_indices('%.*s'): no view found", SV_ARG(buffer->name));
         buffer->indexed_version = buffer->version;
         return;
     }
@@ -94,8 +98,7 @@ void buffer_build_indices(Buffer *buffer)
         }
     }
     while (true) {
-        Token t = lexer_next(&lexer);
-        lexer_lex(&lexer);
+        Token t = lexer_lex(&lexer);
         if (token_matches_kind(t, TK_END_OF_LINE) || token_matches_kind(t, TK_END_OF_FILE)) {
             if (current->num_tokens == 0) {
                 trace(EDIT, "[EOL]");

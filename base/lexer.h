@@ -49,7 +49,6 @@ extern StringView   lexer_source(Lexer *lexer);
 extern Token        lexer_set_current(Lexer *lexer, Token token);
 extern void         lexer_push_source(Lexer *lexer, StringView source, StringView name);
 extern void         lexer_pop_source(Lexer *lexer);
-extern void         lexer_advance_source(Lexer *lexer, size_t num);
 extern Token        lexer_peek_next(Lexer *lexer);
 extern Token        lexer_peek(Lexer *lexer);
 extern Token        lexer_next(Lexer *lexer);
