@@ -19,9 +19,10 @@ add_library(
         log.c
         mem.c
         mutex.c
-        resolve.c
-        process.c
         options.c
+        pipe.c
+        process.c
+        resolve.c
         sb.c
         sl.c
         ss.c
