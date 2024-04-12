@@ -458,7 +458,7 @@ void generate_code(ARM64Function *arm_function)
 {
     IRFunction *function = arm_function->function;
     assert(function->kind == FK_SCRIBBLE);
-    trace(CAT_COMPILE, "Generating code for %.*s", SV_ARG(function->name));
+    trace(COMPILE, "Generating code for %.*s", SV_ARG(function->name));
 
     ARM64Context *ctx = arm_function->assembly->ctx;
     if (ctx->debug) {
@@ -490,7 +490,7 @@ void generate_code(ARM64Function *arm_function)
             }
         }
         StringView op_str = ir_operation_to_string(op);
-        trace(CAT_COMPILE, "%.*s", SV_ARG(op_str));
+        trace(COMPILE, "%.*s", SV_ARG(op_str));
         arm64function_add_comment(arm_function, "%.*s", SV_ARG(op_str));
         switch (op->operation) {
 #undef IR_OPERATION_TYPE

@@ -1224,7 +1224,7 @@ SyntaxNode *parse_module(ParserContext *ctx, StringView buffer, StringView name)
             case KW_FUNC: {
                 statement = parse_function(ctx);
                 if (statement) {
-                    trace(CAT_PARSE, "Function '%.*s' parsed", SV_ARG(statement->name));
+                    trace(PARSE, "Function '%.*s' parsed", SV_ARG(statement->name));
                 }
             } break;
             case KW_ENUM:

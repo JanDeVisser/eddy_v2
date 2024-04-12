@@ -4,12 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-#ifndef __ENGINE_H__
-#define __ENGINE_H__
+#ifndef SCRIBBLE_ENGINE_H
+#define SCRIBBLE_ENGINE_H
 
+#include <base/http.h>
 #include <base/io.h>
 #include <base/json.h>
-#include <type.h>
+#include <scribble/type.h>
 
 typedef enum execution_mode {
     EM_RUN = 0x00,
@@ -70,4 +71,4 @@ typedef bool (*EngineStageExecutor)(BackendConnection *, ExecutionMessage);
 
 extern ErrorOrSocket start_backend_thread();
 
-#endif /* __ENGINE_H__ */
+#endif /* SCRIBBLE_ENGINE_H */

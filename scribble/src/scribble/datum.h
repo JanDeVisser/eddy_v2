@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include <parser.h>
-#include <type.h>
-
 #ifndef __DATUM_H__
 #define __DATUM_H__
+
+#include <scribble/parser.h>
+#include <scribble/type.h>
 
 typedef struct error_info {
     char const *exception;

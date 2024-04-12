@@ -207,7 +207,7 @@ ValueLocation arm64_apply_array_op(ARM64Function *function, type_id lhs_type, Op
     }
     ValueLocation lhs = MUST_OPTIONAL(ValueLocation, arm64function_pop_location(function));
     if (rhs_type != VOID_ID) {
-        trace(CAT_COMPILE, "%.*s %s %.*s",
+        trace(COMPILE, "%.*s %s %.*s",
             SV_ARG(value_location_to_string(lhs)),
             Operator_name(op),
             SV_ARG(value_location_to_string(rhs)));
@@ -216,7 +216,7 @@ ValueLocation arm64_apply_array_op(ARM64Function *function, type_id lhs_type, Op
             Operator_name(op),
             SV_ARG(value_location_to_string(rhs)));
     } else {
-        trace(CAT_COMPILE, "%s %.*s",
+        trace(COMPILE, "%s %.*s",
             Operator_name(op),
             SV_ARG(value_location_to_string(lhs)));
         arm64function_add_comment(function, "%s %.*s",
@@ -353,12 +353,12 @@ char const *conditional_for_op_by_type(Operator op, type_id type)
 OptionalValueLocation arm64operator_apply(ARM64Function *function, type_id lhs_type, Operator op, type_id rhs_type, ValueLocation *result)
 {
     if (rhs_type != VOID_ID) {
-        trace(CAT_COMPILE, "Generating code for %.*s %s %.*s",
+        trace(COMPILE, "Generating code for %.*s %s %.*s",
             SV_ARG(typeid_name(lhs_type)), Operator_name(op), SV_ARG(typeid_name(rhs_type)));
         arm64function_add_comment(function, "Generating code for %.*s %s %.*s",
             SV_ARG(typeid_name(lhs_type)), Operator_name(op), SV_ARG(typeid_name(rhs_type)));
     } else {
-        trace(CAT_COMPILE, "Generating code for %s %.*s",
+        trace(COMPILE, "Generating code for %s %.*s",
             Operator_name(op), SV_ARG(typeid_name(lhs_type)));
         arm64function_add_comment(function, "Generating code for %s %.*s",
             Operator_name(op), SV_ARG(typeid_name(lhs_type)));
@@ -401,7 +401,7 @@ ValueLocation arm64operator_apply_binary(ARM64Function *function, type_id lhs_ty
         arm64function_copy(function, rhs, immediate);
     }
 
-    trace(CAT_COMPILE, "%.*s %s %.*s",
+    trace(COMPILE, "%.*s %s %.*s",
         SV_ARG(value_location_to_string(lhs)),
         Operator_name(op),
         SV_ARG(value_location_to_string(rhs)));
@@ -603,7 +603,7 @@ ValueLocation arm64operator_apply_binary(ARM64Function *function, type_id lhs_ty
 ValueLocation arm64operator_apply_unary(ARM64Function *function, Operator op, type_id operand_type)
 {
     ValueLocation operand = MUST_OPTIONAL(ValueLocation, arm64function_pop_location(function));
-    trace(CAT_COMPILE, "%s %.*s",
+    trace(COMPILE, "%s %.*s",
         Operator_name(op),
         SV_ARG(value_location_to_string(operand)));
     arm64function_add_comment(function, "%s %.*s",

@@ -10,9 +10,9 @@
 #include <stdlib.h>
 
 #include <base/json.h>
-#include <model/op.h>
-#include <type.h>
-#include <model/op.h>
+#include <scribble/model/op.h>
+#include <scribble/type.h>
+#include <scribble/model/op.h>
 
 #define IR_OPERATION_TYPES(S) \
     S(ASSERT)                 \

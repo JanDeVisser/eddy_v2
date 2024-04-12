@@ -8,9 +8,9 @@
 #define __EXECUTE_H__
 
 #include <base/sv.h>
-#include <datum.h>
-#include <engine.h>
-#include <intermediate.h>
+#include <scribble/datum.h>
+#include <scribble/engine.h>
+#include <scribble/intermediate.h>
 
 typedef struct var_list {
     StringView       name;

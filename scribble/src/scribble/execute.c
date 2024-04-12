@@ -406,7 +406,7 @@ __attribute__((unused)) NextInstructionPointer execute_CALL(ExecutionContext *ct
         break;
     case FK_NATIVE: {
         Datum **args = allocate_array(Datum *, function->num_parameters);
-        trace(CAT_EXECUTE, "Preparing native call of '%.*s'", SV_ARG(function->native_name));
+        trace(EXECUTE, "Preparing native call of '%.*s'", SV_ARG(function->native_name));
         for (size_t ix = 0; ix < function->num_parameters; ++ix) {
             args[ix] = datum_stack_pop(&ctx->stack);
         }

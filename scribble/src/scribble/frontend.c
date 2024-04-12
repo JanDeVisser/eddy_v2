@@ -7,13 +7,9 @@
 #include <unistd.h>
 
 #include <base/http.h>
-#include <base/json.h>
 #include <base/options.h>
 #include <base/process.h>
-#include <base/sv.h>
-#include <engine.h>
-
-extern ErrorOrSocket start_backend_thread();
+#include <scribble/engine.h>
 
 ErrorOrSocket start_backend_process()
 {

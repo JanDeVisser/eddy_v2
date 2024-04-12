@@ -216,7 +216,7 @@ extern Register arm64function_allocate_register(ARM64Function *function)
     for (Register ix = REG_X9; ix < REG_X16; ++ix) {
         if (!function->scribble.registers[ix]) {
             function->scribble.registers[ix] = true;
-            trace(CAT_COMPILE, "Allocated register %s", reg(ix));
+            trace(COMPILE, "Allocated register %s", reg(ix));
             return ix;
         }
     }
@@ -242,7 +242,7 @@ extern RegisterRange arm64function_allocate_register_range(ARM64Function *functi
         for (size_t jx = 0; jx < num; ++jx) {
             function->scribble.registers[ix + jx] = true;
         }
-        trace(CAT_COMPILE, "Allocated register range %s-%s", reg(ix), reg(ix + num));
+        trace(COMPILE, "Allocated register range %s-%s", reg(ix), reg(ix + num));
         return (RegisterRange) { .start = ix, .end = ix + num };
     next_1:;
     }
@@ -257,7 +257,7 @@ extern RegisterRange arm64function_allocate_register_range(ARM64Function *functi
             function->scribble.registers[ix + jx] = true;
             function->scribble.callee_saved[ix + jx - REG_X19] = true;
         }
-        trace(CAT_COMPILE, "Allocated register range %s-%s", reg(ix), reg(ix + num));
+        trace(COMPILE, "Allocated register range %s-%s", reg(ix), reg(ix + num));
         return (RegisterRange) { .start = ix, .end = ix + num };
     next_2:;
     }
@@ -267,7 +267,7 @@ extern RegisterRange arm64function_allocate_register_range(ARM64Function *functi
 void arm64function_release_register(ARM64Function *function, Register reg)
 {
     if ((reg >= REG_X9 && reg < REG_X16) || (reg >= REG_X19 && reg < REG_FP)) {
-        trace(CAT_COMPILE, "Released register %s", x_reg(reg));
+        trace(COMPILE, "Released register %s", x_reg(reg));
         function->scribble.registers[reg] = false;
     }
 }
@@ -290,7 +290,7 @@ OptionalValueLocation arm64function_pop_location(ARM64Function *function)
         for (ValueLocation *l = scope->expression_stack; l; l = l->next) {
             ++depth;
         }
-        trace(CAT_COMPILE, "[%zu] -> %.*s", depth, SV_ARG(value_location_to_string(ret.value)));
+        trace(COMPILE, "[%zu] -> %.*s", depth, SV_ARG(value_location_to_string(ret.value)));
     }
     return ret;
 }
@@ -322,7 +322,7 @@ void arm64function_push_location(ARM64Function *function, ValueLocation entry)
     for (ValueLocation *l = scope->expression_stack; l; l = l->next) {
         ++depth;
     }
-    trace(CAT_COMPILE, "[%zu] <- %.*s", depth, SV_ARG(value_location_to_string(entry)));
+    trace(COMPILE, "[%zu] <- %.*s", depth, SV_ARG(value_location_to_string(entry)));
 }
 
 void arm64function_push_register(ARM64Function *function, type_id type, Register reg)
