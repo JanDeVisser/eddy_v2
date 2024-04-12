@@ -19,6 +19,7 @@ ERROR_OR_ALIAS(SockAddrIn, struct sockaddr_in);
 
 ErrorOrSockAddrIn tcpip_address_resolve(StringView ip_address);
 ErrorOrInt        fd_make_nonblocking(int fd);
+ErrorOrInt        socket_fd(socket_t socket);
 ErrorOrSocket     unix_socket_listen(StringView socket_name);
 ErrorOrSocket     tcpip_socket_listen(StringView ip_address, int port);
 ErrorOrSocket     socket_accept(socket_t socket);
