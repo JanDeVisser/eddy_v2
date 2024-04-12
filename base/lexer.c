@@ -364,9 +364,9 @@ Token lexer_next(Lexer *lexer)
     while (lexer->sources) {
         for (token = lexer_peek(lexer); token.kind != TK_END_OF_FILE; token = lexer_peek(lexer)) {
             // clang-format off
-            if ((lexer->whitespace_significant && token.kind == TK_WHITESPACE) ||
+            if ((lexer->whitespace_significant && (token.kind == TK_WHITESPACE || token.kind == TK_END_OF_LINE)) ||
                 (lexer->include_comments && token.kind == TK_COMMENT) ||
-                (token.kind != TK_WHITESPACE && token.kind != TK_COMMENT)) {
+                (token.kind != TK_WHITESPACE && token.kind != TK_COMMENT && token.kind != TK_END_OF_LINE)) {
                 return token;
             }
             // clang-format on
