@@ -4,34 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-#ifndef __PROCESS_H__
-#define __PROCESS_H__
+#ifndef BASE_PROCESS_H
+#define BASE_PROCESS_H
 
 #include <base/error_or.h>
 #include <base/mutex.h>
+#include <base/pipe.h>
 #include <base/sv.h>
-
-typedef struct _read_pipe ReadPipe;
-typedef void (*OnPipeRead)(ReadPipe *);
-
-struct _read_pipe {
-    int           pipe[2];
-    int           fd;
-    StringBuilder buffer;
-    StringView    current;
-    Condition     condition;
-    OnPipeRead    on_read;
-    bool          debug;
-};
-
-ERROR_OR_ALIAS(ReadPipe, ReadPipe *);
-
-typedef struct {
-    int pipe[2];
-    int fd;
-} WritePipe;
-
-ERROR_OR_ALIAS(WritePipe, WritePipe *);
 
 typedef struct process {
     pid_t      pid;
@@ -44,21 +23,6 @@ typedef struct process {
     StringView stderr_file;
 } Process;
 
-extern ErrorOrReadPipe   read_pipe_init(ReadPipe *pipe);
-extern void              read_pipe_destroy(ReadPipe *pipe);
-extern void              read_pipe_connect_parent(ReadPipe *pipe);
-extern void              read_pipe_connect_child(ReadPipe *pipe, int fd);
-extern void              read_pipe_close(ReadPipe *pipe);
-extern void              read_pipe_read(ReadPipe *p);
-extern bool              read_pipe_expect(ReadPipe *pipe);
-extern StringView        read_pipe_current(ReadPipe *pipe);
-extern ErrorOrWritePipe  write_pipe_init(WritePipe *p);
-extern void              write_pipe_destroy(WritePipe *pipe);
-extern void              write_pipe_connect_parent(WritePipe *pipe);
-extern void              write_pipe_connect_child(WritePipe *pipe, int fd);
-extern void              write_pipe_close(WritePipe *pipe);
-extern ErrorOrSize       write_pipe_write(WritePipe *pipe, StringView sv);
-extern ErrorOrSize       write_pipe_write_chars(WritePipe *pipe, char const *buf, size_t num);
 extern Process          *process_create_sl(StringView cmd, StringList *args);
 extern Process          *process_vcreate(StringView cmd, va_list args);
 extern Process          *_process_create(StringView cmd, ...);
@@ -74,4 +38,4 @@ extern ErrorOrStringView _execute_pipe(StringView input, StringView cmd, ...);
 #define execute(cmd, ...) _execute(cmd __VA_OPT__(, ) __VA_ARGS__, NULL)
 #define execute_pipe(input, cmd, ...) _execute_pipe(input, cmd __VA_OPT__(, ) __VA_ARGS__, NULL)
 
-#endif /* __PROCESS_H__ */
+#endif /* BASE_PROCESS_H */
