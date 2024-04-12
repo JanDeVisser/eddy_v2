@@ -9,7 +9,7 @@
 
 #include <base/json.h>
 #include <base/token.h>
-#include <model/op.h>
+#include <scribble/model/op.h>
 
 #define SYNTAXNODETYPES(S) \
     S(ASSIGNMENT)          \

@@ -9,9 +9,9 @@
 
 #include <base/json.h>
 #include <base/sv.h>
-#include <engine.h>
-#include <parser.h>
-#include <type.h>
+#include <scribble/engine.h>
+#include <scribble/parser.h>
+#include <scribble/type.h>
 
 #define BOUNDNODETYPES(S) \
     S(ASSIGNMENT)         \

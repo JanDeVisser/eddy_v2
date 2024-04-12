@@ -7,8 +7,8 @@
 #ifndef __INTERMEDIATE_H__
 #define __INTERMEDIATE_H__
 
-#include <binder.h>
-#include <ir.h>
+#include <scribble/binder.h>
+#include <scribble/ir.h>
 
 extern IRProgram   generate(BackendConnection *conn, BoundNode *program);
 extern IRFunction  evaluate(BoundNode *expr);

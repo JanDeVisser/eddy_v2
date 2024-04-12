@@ -340,7 +340,7 @@ __attribute__((unused)) Datum *datum_ADD(Datum *d1, Datum *d2)
 
 __attribute__((unused)) Datum *datum_SUBTRACT(Datum *d1, Datum *d2)
 {
-    trace(CAT_EXECUTE, "Subtract %.*s from %.*s", SV_ARG(typeid_name(d1->type)), SV_ARG(typeid_name(d2->type)));
+    trace(EXECUTE, "Subtract %.*s from %.*s", SV_ARG(typeid_name(d1->type)), SV_ARG(typeid_name(d2->type)));
     assert(d1->type == d2->type);
     assert(datum_is_builtin(d1));
     Datum *ret = datum_allocate(d1->type);

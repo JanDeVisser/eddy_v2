@@ -7,7 +7,8 @@
 #include <stdlib.h>
 
 #include <base/options.h>
-#include <type.h>
+#include <scribble/engine.h>
+#include <scribble/type.h>
 
 extern int backend_main(StringView path);
 

@@ -340,7 +340,7 @@ void code_load_immediate(Code *code, Register reg, ValueLocation loc)
 
 void code_copy(Code *code, ValueLocation to_location, ValueLocation from_location)
 {
-    trace(CAT_COMPILE, "copy %.*s to %.*s",
+    trace(COMPILE, "copy %.*s to %.*s",
         SV_ARG(value_location_to_string(from_location)),
         SV_ARG(value_location_to_string(to_location)));
     assert(to_location.type == 0 || typeid_underlying_type_id(to_location.type) == typeid_underlying_type_id(from_location.type));

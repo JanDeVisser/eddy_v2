@@ -11,9 +11,9 @@
 #include <base/lexer.h>
 #include <base/sv.h>
 #include <base/token.h>
-#include <engine.h>
-#include <model/error.h>
-#include <model/syntaxnode.h>
+#include <scribble/engine.h>
+#include <scribble/model/error.h>
+#include <scribble/model/syntaxnode.h>
 
 typedef struct operator_mapping {
     Operator  operator;

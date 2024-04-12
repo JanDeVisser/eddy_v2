@@ -1646,7 +1646,7 @@ BoundNode *bind_node(BoundNode *parent, SyntaxNode *stmt, BindContext *ctx)
     }
 
     binder_debug_syntaxnode(ctx, stmt);
-    trace(CAT_BIND, "Binding %s node '%.*s'", SyntaxNodeType_name(stmt->type), SV_ARG(stmt->name));
+    trace(BIND, "Binding %s node '%.*s'", SyntaxNodeType_name(stmt->type), SV_ARG(stmt->name));
     BoundNode *ret = NULL;
     switch (stmt->type) {
 #define SYNTAXNODETYPE_ENUM(type)             \
@@ -1660,10 +1660,10 @@ BoundNode *bind_node(BoundNode *parent, SyntaxNode *stmt, BindContext *ctx)
     }
     if (ret != NULL) {
         binder_debug_boundnode(ctx, ret);
-        trace(CAT_BIND, "Binding %s node '%.*s' => %s",
+        trace(BIND, "Binding %s node '%.*s' => %s",
             SyntaxNodeType_name(stmt->type), SV_ARG(stmt->name), BoundNodeType_name(ret->type));
     } else {
-        trace(CAT_BIND, "Binding %s node '%.*s' => (null)", SyntaxNodeType_name(stmt->type), SV_ARG(stmt->name));
+        trace(BIND, "Binding %s node '%.*s' => (null)", SyntaxNodeType_name(stmt->type), SV_ARG(stmt->name));
     }
     return ret;
 }
