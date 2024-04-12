@@ -9,10 +9,10 @@
 
 #include <base/sv.h>
 
-typedef struct _option_list {
+typedef struct option_list {
     StringView           option;
     StringView           value;
-    struct _option_list *next;
+    struct option_list *next;
 } OptionList;
 
 extern void       set_option(StringView option, StringView value);
