@@ -59,7 +59,8 @@ void compile_program(BackendConnection *conn)
         if (sv_eq_cstr(name, "parse")) {
             ParserContext parse_result = parse(conn, stage);
             if (parse_result.errors.size > 0) {
-                HTTP_POST_MUST(conn->fd, "/parser/errors", scribble_errors_to_json(&parse_result.errors));
+                JSONValue errors = scribble_errors_to_json(&parse_result.errors);
+                HTTP_POST_MUST(conn->fd, "/parser/errors", errors);
                 exit_backend(conn, sv_from("Parse errors found"));
             }
             if (json_get_bool(&stage, "graph", false)) {
@@ -81,11 +82,11 @@ void compile_program(BackendConnection *conn)
             assert(ast != NULL);
             bool debug = json_get_bool(&stage, "debug", false);
             if (debug) {
-                HTTP_GET_MUST(conn->fd, "/ir/start", sl_create());
+                HTTP_GET_MUST(conn->fd, "/intermediate/start", sl_create());
             }
             ir = generate(conn, ast);
             if (debug) {
-                HTTP_GET_MUST(conn->fd, "/ir/done", sl_create());
+                HTTP_GET_MUST(conn->fd, "/intermediate/done", sl_create());
             }
             continue;
         }
@@ -113,9 +114,10 @@ void compile_program(BackendConnection *conn)
             }
         }
     }
+    exit_backend(conn, SV("0"));
 }
 
-extern int backend_main(StringView path)
+int backend(StringView path)
 {
     socket_t          conn_fd = MUST(Socket, unix_socket_connect(path));
     BackendConnection conn = { 0 };
@@ -137,7 +139,7 @@ extern int backend_main(StringView path)
 
 void *backend_main_wrapper(void *path)
 {
-    backend_main((StringView) { (char const *) path, strlen(path) });
+    backend((StringView) { (char const *) path, strlen(path) });
     return NULL;
 }
 
@@ -151,6 +153,6 @@ ErrorOrSocket start_backend_thread()
     if ((ret = pthread_create(&thread, NULL, backend_main_wrapper, (void *) path.ptr)) != 0) {
         fatal("Could not start backend thread: %s", strerror(ret));
     }
-    trace(CAT_IPC, "Started client thread");
+    trace(IPC, "Started client thread");
     return socket_accept(listen_fd);
 }

@@ -35,12 +35,17 @@ ScribbleErrorKind ErrorKind_from_string(StringView kind)
 
 JSONValue scribble_error_to_json(ScribbleError *error)
 {
-    JSONValue e = json_object();
-    json_set(&e, "kind", json_string(sv_from(ErrorKind_name(error->kind))));
-    json_set(&e, "message", json_string(error->message));
-    json_set(&e, "token", token_to_json(error->token));
-    json_set(&e, "notes", scribble_errors_to_json(&error->notes));
-    return e;
+//    JSONValue e = json_object();
+//    json_set(&e, "kind", json_string(sv_from(ErrorKind_name(error->kind))));
+//    json_set(&e, "message", json_string(error->message));
+//    json_set(&e, "token", token_to_json(error->token));
+//    json_set(&e, "notes", scribble_errors_to_json(&error->notes));
+//    return e;
+    StringView s = sv_printf("%.*s:%zu:%zu %.*s",
+        SV_ARG(error->token.location.file), error->token.location.line + 1, error->token.location.column + 1,
+        SV_ARG(error->message)
+    );
+    return json_string(s);
 }
 
 ScribbleError scribble_error_from_json(JSONValue error)

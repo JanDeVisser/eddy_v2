@@ -1245,19 +1245,8 @@ SyntaxNode *parse_module(ParserContext *ctx, StringView buffer, StringView name)
             case KW_VAR:
                 statement = parse_variable_declaration(ctx, false);
                 break;
-            default: {
-                parser_context_add_error(ctx, token, "Only 'import', 'func', 'var', 'const', and 'struct' are allowed on the top level of files, '%.*s' is not", SV_ARG(token.text));
-                while (true) {
-                    lexer_lex(&lexer);
-                    token = lexer_next(&lexer);
-                    if (token.kind == TK_KEYWORD && (token.keyword_code == KW_IMPORT || token.keyword_code == KW_FUNC || token.keyword_code == KW_STRUCT || token.keyword_code == KW_VAR || token.keyword_code == KW_CONST)) {
-                        break;
-                    }
-                    if (token.kind == TK_END_OF_FILE) {
-                        return module;
-                    }
-                }
-            } break;
+            default:
+                break;
             }
         } break;
         case TK_END_OF_FILE:
@@ -1272,7 +1261,20 @@ SyntaxNode *parse_module(ParserContext *ctx, StringView buffer, StringView name)
                 last_statement->next = statement;
             }
             last_statement = statement;
+        } else {
+            parser_context_add_error(ctx, token, "Only 'import', 'func', 'var', 'const', and 'struct' are allowed on the top level of files, '%.*s' is not", SV_ARG(token.text));
+            while (true) {
+                lexer_lex(&lexer);
+                token = lexer_next(&lexer);
+                if (token.kind == TK_KEYWORD && (token.keyword_code == KW_IMPORT || token.keyword_code == KW_FUNC || token.keyword_code == KW_STRUCT || token.keyword_code == KW_VAR || token.keyword_code == KW_CONST)) {
+                    break;
+                }
+                if (token.kind == TK_END_OF_FILE) {
+                    return module;
+                }
+            }
         }
+    next:
     }
     return module;
 }

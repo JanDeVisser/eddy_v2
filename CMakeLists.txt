@@ -3,6 +3,19 @@ project(eddy C)
 
 set(CMAKE_C_STANDARD 23)
 
+message("System: ${CMAKE_SYSTEM_NAME} Processor: ${CMAKE_SYSTEM_PROCESSOR} Version: ${CMAKE_SYSTEM_VERSION}")
+
+if(APPLE)
+  set(IS_APPLE TRUE)
+  set(OS macos)
+elseif(WIN32)
+  set(IS_WINDOWS TRUE)
+  set(OS windows)
+else()
+  set(IS_LINUX TRUE)
+  set(OS linux)
+endif()
+
 set(CMAKE_INSTALL_PREFIX ${PROJECT_BINARY_DIR} CACHE PATH "..." FORCE)
 
 set(eddy_NAME Eddy)
@@ -69,7 +82,7 @@ configure_file(
   "config.h"
 )
 
-include_directories("${PROJECT_BINARY_DIR}" .)
+include_directories("${PROJECT_BINARY_DIR}" . base eddy/src scribble/src)
 
 add_subdirectory(base)
 add_subdirectory(eddy)
