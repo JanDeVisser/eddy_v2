@@ -29,6 +29,7 @@ ErrorOrInt http_request_send(socket_t socket, HttpRequest *request)
 
     sb_printf(&sb, "%s ", http_method_to_string(request->method));
     sb_append_sv(&sb, request->url);
+    trace(HTTP, "http_request_send('%.*s')", SV_ARG(sb.view));
     if (request->params.size > 0) {
         sb_append_char(&sb, '?');
         StringView param_sv = sl_join(&request->params, sv_from("&"));

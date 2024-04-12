@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include <arpa/inet.h>
 #include <errno.h>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -13,62 +12,51 @@
 #include <sys/fcntl.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
-#include <sys/types.h>
 #include <sys/un.h>
 #include <unistd.h>
 
-#define STATIC_ALLOCATOR
-#include <allocate.h>
-#include <io.h>
-#include <mem.h>
+#include <base/errorcode.h>
+#include <base/io.h>
 
-#define BUF_SZ 4096
-#define NO_SOCKET ((socket_t) -1)
+#define BUF_SZ 65536
+#define NO_SOCKET ((socket_t) - 1)
 
 typedef struct {
-    int    fd;
-    char   buffer[BUF_SZ];
-    size_t start;
-    size_t num;
+    int           fd;
+    StringBuilder buffer;
 } Socket;
 
-FREE_LIST(Socket, socket);
-FREE_LIST_IMPL(Socket, socket);
+DA_WITH_NAME(Socket, Sockets);
+DA_IMPL(Socket);
 
-static Socket **s_sockets = NULL;
-static size_t   s_num_sockets = 0;
-static size_t   s_cap_sockets = 0;
+Sockets s_sockets = { 0 };
+
+ErrorOrInt socket_fd(socket_t socket)
+{
+    if (socket < s_sockets.size && s_sockets.elements[socket].fd >= 0) {
+        RETURN(Int, s_sockets.elements[socket].fd);
+    }
+    ERROR(Int, IOError, 0, "socket cannot be mapped to file descriptor");
+}
 
 socket_t socket_allocate(int fd)
 {
-    if (s_sockets == NULL) {
-        s_num_sockets = 0;
-        s_cap_sockets = 4;
-        s_sockets = allocate_array(Socket *, s_cap_sockets);
-    }
-    for (size_t ix = 0; ix < s_num_sockets; ++ix) {
-        if (s_sockets[ix]->fd == -1) {
-            s_sockets[ix]->fd = fd;
-            s_sockets[ix]->num = 0;
-            s_sockets[ix]->start = 0;
+    for (size_t ix = 0; ix < s_sockets.size; ++ix) {
+        if (s_sockets.elements[ix].fd == -1) {
+            Socket *s = s_sockets.elements + ix;
+            s->fd = fd;
+            s->buffer.length = 0;
             return ix;
         }
     }
-    if (s_num_sockets + 1 >= s_cap_sockets) {
-        s_cap_sockets *= 2;
-        Socket **new_sockets = allocate_array(Socket *, s_cap_sockets);
-        memmove(new_sockets, s_sockets, s_num_sockets * sizeof(Socket *));
-    }
-    socket_t ret = s_num_sockets++;
-    s_sockets[ret] = allocate_new(Socket);
-    s_sockets[ret]->fd = fd;
-    return ret;
+    da_append_Socket(&s_sockets, (Socket) { .fd = fd });
+    return s_sockets.size - 1;
 }
 
 void socket_close(socket_t socket)
 {
-    close(s_sockets[socket]->fd);
-    s_sockets[socket]->fd = -1;
+    close(s_sockets.elements[socket].fd);
+    s_sockets.elements[socket].fd = -1;
 }
 
 ErrorOrInt fd_make_nonblocking(int fd)
@@ -146,7 +134,7 @@ ErrorOrSocket tcpip_socket_listen(StringView ip_address, int port)
 
 ErrorOrSocket socket_accept(socket_t socket)
 {
-    int conn_fd = accept(s_sockets[socket]->fd, NULL, NULL);
+    int conn_fd = accept(s_sockets.elements[socket].fd, NULL, NULL);
     if (conn_fd < 0) {
         ERROR(Socket, IOError, 0, "Cannot accept connection on local socket: %s", strerror(errno));
     }
@@ -198,89 +186,152 @@ ErrorOrSocket tcpip_socket_connect(StringView ip_address, int port)
 
 ErrorOrSize read_available_bytes(Socket *s)
 {
-    char    buffer[BUF_SZ];
-    ssize_t bytes_read = read(s->fd, buffer, BUF_SZ - s->num);
-    if (bytes_read < 0) {
-        if (errno != EAGAIN) {
-            ERROR(Size, HttpError, 0, "Failed to read from socket: %d: %s", errno, strerror(errno));
+    char   buffer[BUF_SZ];
+    size_t total = 0;
+    while (true) {
+        ssize_t bytes_read = read(s->fd, buffer, BUF_SZ);
+        if (bytes_read < 0) {
+            if (errno == EAGAIN) {
+                break;
+            }
+            if (errno != EINTR) {
+                ERROR(Size, HttpError, 0, "Failed to read from socket: %s", errorcode_to_string(errno));
+            }
+            continue;
         }
-        RETURN(Size, 0);
+        if (bytes_read == 0) {
+            break;
+        }
+        total += bytes_read;
+        sb_append_chars(&s->buffer, buffer, bytes_read);
+        if (bytes_read < BUF_SZ) {
+            break;
+        }
     }
-    for (size_t ix = 0, buf_ix = (s->start + s->num) % BUF_SZ; ix < bytes_read; ++ix, ++s->num, buf_ix = (buf_ix + 1) % BUF_SZ) {
-        s->buffer[buf_ix] = buffer[ix];
-    }
-    RETURN(Size, bytes_read);
+    RETURN(Size, total);
 }
 
 ErrorOrSize socket_fill_buffer(Socket *s)
 {
     TRY(Size, read_available_bytes(s));
-    if (s->num > 0) {
-        RETURN(Size, s->num);
+    if (s->buffer.length > 0) {
+        RETURN(Size, s->buffer.length);
     }
-    struct pollfd pollfds[] = {
-        { .fd = s->fd, .events = POLLIN, .revents = 0 },
-    };
-    while (poll(pollfds, 1, -1) < 0) { }
-    assert(pollfds[0].revents & POLLIN);
+
+    struct pollfd poll_fd = { 0 };
+    poll_fd.fd = s->fd;
+    poll_fd.events = POLLIN;
+
+    while (true) {
+        if (poll(&poll_fd, 1, -1) == -1) {
+            if (errno == EINTR) {
+                continue;
+            }
+            ERROR(Size, IOError, 0, "Error polling socket connection: %s", errorcode_to_string(errno));
+        }
+        if (poll_fd.revents & POLLIN) {
+            break;
+        }
+        if (poll_fd.revents & POLLHUP) {
+            ERROR(Size, IOError, -1, "Socket connection closed");
+        }
+    }
     TRY(Size, read_available_bytes(s));
-    assert(s->num > 0);
-    RETURN(Size, s->num);
+    assert(s->buffer.length > 0);
+    RETURN(Size, s->buffer.length);
 }
 
 ErrorOrStringView socket_read(socket_t socket, size_t count)
 {
-    Socket       *s = s_sockets[socket];
-    StringBuilder out = sb_create();
+    Socket       *s = s_sockets.elements + socket;
+    StringBuilder out = { 0 };
 
+    trace(IPC, "socket_read(%zu)", count);
     do {
         TRY_TO(Size, StringView, socket_fill_buffer(s));
-        if (!count && (s->num > 0)) {
+        if (!count && (s->buffer.length > 0)) {
+            trace(IPC, "socket_read(%zu) => NULL", count);
             RETURN(StringView, sv_null());
         }
-        for (; s->num > 0 && count > 0; s->start = (s->start + 1) % BUF_SZ, --s->num, --count) {
-            int ch = s->buffer[s->start];
-            sb_append_char(&out, ch);
+        if (s->buffer.length <= count) {
+            count -= s->buffer.length;
+            if (out.length == 0) {
+                out = s->buffer;
+                s->buffer = (StringBuilder) { 0 };
+            } else {
+                sb_append_sv(&out, s->buffer.view);
+                s->buffer.length = 0;
+            }
+        } else {
+            if (out.length == 0) {
+                out = s->buffer;
+                s->buffer = sb_copy_chars(out.ptr + count, out.length - count);
+                out.length = count;
+            } else {
+                sb_append_chars(&out, s->buffer.view.ptr, count);
+                memmove((char *) s->buffer.ptr, s->buffer.ptr + count, count);
+                s->buffer.length -= count;
+            }
+            count = 0;
         }
     } while (count > 0);
+    trace(IPC, "socket_read(%zu) => %zu", count, out.view.length);
     RETURN(StringView, out.view);
 }
 
 ErrorOrStringView socket_readln(socket_t socket)
 {
-    Socket       *s = s_sockets[socket];
+    Socket       *s = s_sockets.elements + socket;
     StringBuilder out = sb_create();
     while (true) {
         TRY_TO(Size, StringView, socket_fill_buffer(s));
-        for (; s->num > 0; s->start = (s->start + 1) % BUF_SZ, --s->num) {
-            int ch = s->buffer[s->start];
+        trace(IPC, "socket_readln: %zu bytes available", s->buffer.length);
+        for (size_t ix = 0; ix < s->buffer.length; ++ix) {
+            char ch = s->buffer.ptr[ix];
             switch (ch) {
             case '\r':
                 break;
             case '\n':
-                s->start = (s->start + 1) % BUF_SZ;
-                --s->num;
-                trace(IPC, "socket_readln: '%.*s'", SB_ARG(out));
+                if (ix < s->buffer.length - 1) {
+                    memmove((char *) s->buffer.ptr, s->buffer.ptr + ix + 1, s->buffer.length - ix + 1);
+                }
+                s->buffer.length -= ix + 1;
+                trace(IPC, "socket_readln: %zu bytes consumed", ix + 1);
                 RETURN(StringView, out.view);
             default:
                 sb_append_char(&out, ch);
                 break;
             }
         }
+        trace(IPC, "socket_readln: buffer depleted");
+        s->buffer.length = 0;
     }
 }
 
 ErrorOrSize socket_write(socket_t socket, char const *buffer, size_t num)
 {
-    Socket *s = s_sockets[socket];
-    ssize_t written = write(s->fd, buffer, num);
-    if (written < 0) {
-        ERROR(Size, IOError, 0, "Error writing to socket: %s", strerror(errno));
+    Socket *s = s_sockets.elements + socket;
+    ssize_t total = 0;
+    trace(IPC, "socket_write(%zu)", num);
+    while (total < num) {
+        ssize_t written = write(s->fd, buffer, num - total);
+        if (written < 0) {
+            if (errno == EAGAIN) {
+                trace(IPC, "socket_write(%zu) - EAGAIN (retrying)", num);
+                continue;
+            }
+            trace(IPC, "socket_write(%zu) - error %s", num, errorcode_to_string(errno));
+            ERROR(Size, IOError, 0, "Error writing to socket: %s", errorcode_to_string(errno));
+        }
+        if (written == 0) {
+            trace(IPC, "socket_write(%zu) - incomplete write", num);
+            ERROR(Size, IOError, 0, "Incomplete write to socket: %d < %d", written, num);
+        }
+        trace(IPC, "socket_write: chunk %zu", written);
+        total += written;
     }
-    if (written < num) {
-        ERROR(Size, IOError, 0, "Incomplete write to socket: %d < %d", written, num);
-    }
-    RETURN(Size, written);
+    trace(IPC, "socket_write: %zu", total);
+    RETURN(Size, total);
 }
 
 ErrorOrSize socket_writeln(socket_t socket, StringView sv)
@@ -293,7 +344,7 @@ ErrorOrSize socket_writeln(socket_t socket, StringView sv)
 
 ErrorOrStringView read_file_by_name(StringView file_name)
 {
-    int  fd = open(sv_cstr(file_name, NULL), O_RDONLY);
+    int fd = open(sv_cstr(file_name, NULL), O_RDONLY);
     if (fd < 0) {
         ERROR(StringView, IOError, errno, "Could not open file");
     }
@@ -352,7 +403,7 @@ ErrorOrSize write_file(int fd, StringView contents)
 {
     size_t total = 0;
     while (total < contents.length) {
-        int ret = write(fd, contents.ptr + total, contents.length - total);
+        ssize_t ret = write(fd, contents.ptr + total, contents.length - total);
         if (ret < 0) {
             ERROR(Size, IOError, errno, "Could not write to file");
         }
