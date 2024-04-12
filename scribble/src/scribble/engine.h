@@ -68,7 +68,12 @@ typedef struct backend_connection {
 } BackendConnection;
 
 typedef bool (*EngineStageExecutor)(BackendConnection *, ExecutionMessage);
+typedef bool (*FrontEndMessageHandler)(socket_t, HttpRequest, JSONValue);
 
+extern int           backend(StringView path);
 extern ErrorOrSocket start_backend_thread();
+extern ErrorOrSocket start_backend_process();
+extern void          scribble_frontend(JSONValue config, FrontEndMessageHandler handler);
+bool                 frontend_message_handler(socket_t conn_fd, HttpRequest request, JSONValue config);
 
 #endif /* SCRIBBLE_ENGINE_H */

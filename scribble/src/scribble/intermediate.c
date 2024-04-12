@@ -25,6 +25,7 @@ typedef struct intermediate {
 
 typedef struct {
     IRObject          *target;
+    bool               debug;
     BackendConnection *conn;
 } IRContext;
 
@@ -52,7 +53,7 @@ unsigned int next_label()
 void add_operation(IRContext *ctx, IROperation op)
 {
     assert(ctx->target->obj_type == OT_FUNCTION);
-    if (ctx->conn && json_get_bool(&ctx->conn->config, "debug_intermediate", false)) {
+    if (ctx->conn && ctx->debug) {
         JSONValue op_json = json_object();
         json_set(&op_json, "operation", json_string(ir_operation_to_string(&op)));
         http_post_message(ctx->conn->fd, sv_from("/intermediate/operation"), op_json);
@@ -796,6 +797,19 @@ IRProgram generate(BackendConnection *conn, BoundNode *program)
     ret.name = program->name;
     da_resize_IRModule(&ret.modules, 8);
     IRContext ctx = { 0 };
+    JSONValue config = conn->config;
+    JSONValue stages = json_get_default(&config, "stages", json_array());
+    JSONValue stage = {0};
+    for (size_t ix = 0; ix < json_len(&stages); ++ix) {
+        stage = MUST_OPTIONAL(JSONValue, json_at(&stages, ix));
+        StringView name = json_get_string(&stage, "name", sv_null());
+        if (sv_eq_cstr(name, "ir")) {
+            break;
+        }
+    }
+    if (stage.type != JSON_TYPE_NULL) {
+        ctx.debug = json_get_bool(&config, "debug", false);
+    }
     ctx.conn = conn;
     ctx.target = (IRObject *) &ret;
     generate_node(program, &ctx);

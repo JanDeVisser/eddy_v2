@@ -1,3 +1,5 @@
+include_directories(.)
+
 add_library(
         scb_model
         STATIC
@@ -15,6 +17,7 @@ add_library(
         binder.c
         datum.c
         execute.c
+        frontend.c
         graph.c
         intermediate.c
         ir.c
@@ -28,10 +31,10 @@ target_link_libraries(scb_impl scb_model)
 add_executable(
         scribble
         engine.h
-        frontend.c
+        frontend_main.c
 )
 
-target_link_libraries(scribble scb_model)
+target_link_libraries(scribble scb_impl scb_arm64 scribblert)
 
 add_executable(
         scribble-backend
@@ -44,7 +47,7 @@ target_link_libraries(scribble-backend scb_impl scb_arm64 scribblert)
 add_executable(
         scribble-threaded
         engine.h
-        frontend.c
+        frontend_main.c
 )
 
 target_link_libraries(scribble-threaded scb_impl scb_arm64 scribblert)

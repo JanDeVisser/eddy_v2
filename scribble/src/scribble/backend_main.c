@@ -10,7 +10,6 @@
 #include <scribble/engine.h>
 #include <scribble/type.h>
 
-extern int backend_main(StringView path);
 
 int main(int argc, char **argv)
 {
@@ -35,5 +34,5 @@ int main(int argc, char **argv)
     }
     log_init();
     type_registry_init();
-    return backend_main(socket_path);
+    return backend(socket_path);
 }

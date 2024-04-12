@@ -21,33 +21,60 @@ ErrorOrSocket start_backend_process()
     return socket_accept(listen_fd);
 }
 
-void handle_parser_message(socket_t socket, HttpRequest request)
+void scribble_frontend(JSONValue config, FrontEndMessageHandler handler)
+{
+    socket_t socket = { 0 };
+    if (json_get_bool(&config, "threaded", false)) {
+        socket = MUST(Socket, start_backend_thread());
+    } else {
+        socket = MUST(Socket, start_backend_process());
+    }
+
+    while (true) {
+        trace(IPC, "[S] Waiting for request");
+        HttpRequest request = MUST(HttpRequest, http_request_receive(socket));
+        if (handler(socket, request, config)) {
+            break;
+        }
+    }
+    socket_close(socket);
+}
+
+bool handle_parser_message(socket_t socket, HttpRequest request)
 {
     if (sv_eq_cstr(request.url, "/parser/start")) {
         printf("[parser] started\n");
         HTTP_RESPONSE_OK(socket);
-        return;
+        return false;
     }
     if (sv_eq_cstr(request.url, "/parser/done")) {
         printf("[parser] done\n");
         HTTP_RESPONSE_OK(socket);
-        return;
+        return false;
     }
     if (sv_eq_cstr(request.url, "/parser/info")) {
         JSONValue msg = MUST(JSONValue, json_decode(request.body));
         printf("[parser] %.*s\n", SV_ARG(msg.string));
         HTTP_RESPONSE_OK(socket);
-        return;
+        return false;
     }
     if (sv_eq_cstr(request.url, "/parser/node")) {
-        JSONValue node = MUST(JSONValue, json_decode(request.body));
+        JSONValue  node = MUST(JSONValue, json_decode(request.body));
         StringView type = json_get_string(&node, "type", sv_null());
         StringView name = json_get_string(&node, "name", sv_null());
         printf("[parser] %.*s %.*s\n", SV_ARG(type), SV_ARG(name));
         HTTP_RESPONSE_OK(socket);
-        return;
+        return false;
+    }
+    if (sv_eq_cstr(request.url, "/parser/errors")) {
+        JSONValue  node = MUST(JSONValue, json_decode(request.body));
+        StringView errors = json_encode(node);
+        printf("[parser] ERRORS:\n%.*s\n", SV_ARG(errors));
+        HTTP_RESPONSE_OK(socket);
+        return true;
     }
     HTTP_RESPONSE(socket, HTTP_STATUS_NOT_FOUND);
+    return false;
 }
 
 void handle_bind_message(socket_t socket, HttpRequest request)
@@ -99,94 +126,56 @@ void handle_bind_message(socket_t socket, HttpRequest request)
     HTTP_RESPONSE(socket, HTTP_STATUS_NOT_FOUND);
 }
 
-int main(int argc, char **argv)
+void handle_intermediate_message(socket_t socket, HttpRequest request)
 {
-    char  *program_dir_or_file = NULL;
-    int    scribble_param_count = 0;
-    char **scribble_params = NULL;
-
-    for (int ix = 1; ix < argc; ++ix) {
-        if (!program_dir_or_file) {
-            if (!strncmp(argv[ix], "--", 2) && (strlen(argv[ix]) > 2)) {
-                StringView  option = sv_from(argv[ix] + 2);
-                StringView  value = sv_from("true");
-                char const *equals = strchr(argv[ix] + 2, '=');
-                if (equals) {
-                    option = (StringView) { argv[ix] + 2, equals - argv[ix] - 2 };
-                    value = sv_from(equals + 1);
-                }
-                set_option(option, value);
-            } else {
-                program_dir_or_file = argv[ix];
-            }
-        } else {
-            scribble_param_count = argc - ix;
-            scribble_params = argv + ix;
-        }
+    if (sv_eq_cstr(request.url, "/intermediate/start")) {
+        printf("[ir] started\n");
+        HTTP_RESPONSE_OK(socket);
+        return;
     }
-    set_option(sv_from("scribble-dir"), sv_from(SCRIBBLE_DIR));
-    log_init();
+    if (sv_eq_cstr(request.url, "/intermediate/done")) {
+        printf("[ir] done\n");
+        HTTP_RESPONSE_OK(socket);
+        return;
+    }
+    HTTP_RESPONSE(socket, HTTP_STATUS_NOT_FOUND);
+}
 
-    JSONValue config = json_object();
-    JSONValue stages = json_array();
-    JSONValue stage = json_object();
-    json_set_cstr(&stage, "name", "parse");
-    json_set_cstr(&stage, "target", program_dir_or_file);
-    json_set(&stage, "debug", json_bool(true));
-    json_append(&stages, stage);
-    stage = json_object();
-    json_set_cstr(&stage, "name", "bind");
-    json_set(&stage, "debug", json_bool(true));
-    json_append(&stages, stage);
-    stage = json_object();
-    json_set_cstr(&stage, "name", "ir");
-    json_set(&stage, "debug", json_bool(true));
-    json_append(&stages, stage);
-    json_set_cstr(&stage, "name", "generate");
-    json_set(&stage, "debug", json_bool(true));
-    json_append(&stages, stage);
-    json_set(&config, "stages", stages);
-
-#ifndef SCRIBBLE_THREADED_BACKEND
-    socket_t conn_fd = MUST(Socket, start_backend_process());
-#else
-    socket_t conn_fd = MUST(Socket, start_backend_thread());
-#endif /* SCRIBBLE_THREADED_BACKEND */
-
-    while (true) {
-        trace(CAT_IPC, "[S] Waiting for request");
-        HttpRequest request = MUST(HttpRequest, http_request_receive(conn_fd));
-        trace(CAT_IPC, "[S] Got %.*s", SV_ARG(request.url));
-        if (sv_eq_cstr(request.url, "/hello")) {
-            HttpResponse response = { 0 };
-            response.status = HTTP_STATUS_HELLO;
-            http_response_send(conn_fd, &response);
-            continue;
-        }
-        if (sv_eq_cstr(request.url, "/bootstrap/config")) {
-            HttpResponse response = { 0 };
-            response.status = HTTP_STATUS_OK;
-            response.body = json_encode(config);
-            http_response_send(conn_fd, &response);
-            continue;
-        }
-        if (sv_startswith(request.url, sv_from("/parser/"))) {
-            handle_parser_message(conn_fd, request);
-            continue;
-        }
-        if (sv_startswith(request.url, sv_from("/bind/"))) {
-            handle_bind_message(conn_fd, request);
-            continue;
-        }
-        if (sv_eq_cstr(request.url, "/goodbye")) {
-            HttpResponse response = { 0 };
-            response.status = HTTP_STATUS_OK;
-            http_response_send(conn_fd, &response);
-            break;
-        }
+bool frontend_message_handler(socket_t conn_fd, HttpRequest request, JSONValue config)
+{
+    trace(IPC, "[S] Got %.*s", SV_ARG(request.url));
+    if (sv_eq_cstr(request.url, "/hello")) {
         HttpResponse response = { 0 };
-        response.status = HTTP_STATUS_NOT_FOUND;
+        response.status = HTTP_STATUS_HELLO;
         http_response_send(conn_fd, &response);
+        return false;
     }
-    socket_close(conn_fd);
+    if (sv_eq_cstr(request.url, "/bootstrap/config")) {
+        HttpResponse response = { 0 };
+        response.status = HTTP_STATUS_OK;
+        response.body = json_encode(config);
+        http_response_send(conn_fd, &response);
+        return false;
+    }
+    if (sv_startswith(request.url, sv_from("/parser/"))) {
+        return handle_parser_message(conn_fd, request);
+    }
+    if (sv_startswith(request.url, sv_from("/bind/"))) {
+        handle_bind_message(conn_fd, request);
+        return false;
+    }
+    if (sv_startswith(request.url, sv_from("/intermediate/"))) {
+        handle_intermediate_message(conn_fd, request);
+        return false;
+    }
+    if (sv_eq_cstr(request.url, "/goodbye")) {
+        HttpResponse response = { 0 };
+        response.status = HTTP_STATUS_OK;
+        http_response_send(conn_fd, &response);
+        return true;
+    }
+    HttpResponse response = { 0 };
+    response.status = HTTP_STATUS_NOT_FOUND;
+    http_response_send(conn_fd, &response);
+    return false;
 }
