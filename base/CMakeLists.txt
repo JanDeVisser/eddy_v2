@@ -83,7 +83,7 @@ target_compile_definitions(xml_format PUBLIC XML_FORMAT)
 add_subdirectory("test")
 
 
-install(TARGETS json_format xml_format
+install(TARGETS base json_format xml_format
         ARCHIVE DESTINATION lib
         RUNTIME DESTINATION bin
         LIBRARY DESTINATION lib)
