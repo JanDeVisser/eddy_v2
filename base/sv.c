@@ -219,7 +219,10 @@ unsigned int sv_hash(StringView *sv)
 
 bool sv_is_cstr(StringView sv)
 {
-    bool ret = sv.ptr && (sv.ptr[sv.length] == 0);
+    if (!sv.ptr) {
+        return false;
+    }
+    bool ret = sv.ptr[sv.length] == 0;
     if (!ret && (buffer_capacity(sv.ptr) > sv.length)) {
         char *ptr = (char *) sv.ptr;
         ptr[sv.length] = '\0';
@@ -230,6 +233,9 @@ bool sv_is_cstr(StringView sv)
 
 char const *sv_cstr(StringView sv, char *buffer)
 {
+    if (sv_is_cstr(sv) && !buffer) {
+        return sv.ptr;
+    }
     static char buf[1024];
     if (buffer == NULL) {
         assert(sv.length < 1024);
