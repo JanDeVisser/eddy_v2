@@ -808,12 +808,12 @@ IRProgram generate(BackendConnection *conn, BoundNode *program)
         }
     }
     if (stage.type != JSON_TYPE_NULL) {
-        ctx.debug = json_get_bool(&config, "debug", false);
+        ctx.debug = json_get_bool(&stage, "debug", false);
     }
     ctx.conn = conn;
     ctx.target = (IRObject *) &ret;
     generate_node(program, &ctx);
-    if (has_option("list-ir")) {
+    if (json_get_bool(&stage, "list-ir", false)) {
         ir_program_list(ret);
     }
     return ret;

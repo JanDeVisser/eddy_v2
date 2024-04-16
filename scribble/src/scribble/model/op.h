@@ -13,8 +13,7 @@
  * Precedences according to https://en.cppreference.com/w/c/language/operator_precedence
  */
 #define BINARY_OPERATORS(S)                                               \
-    S(INVALID, false, -1, TK_UNKNOWN, 0, 0)                         \
-    S(COMMA, false, 0, TK_SYMBOL, ',', 0)                                 \
+    S(INVALID, false, -1, TK_UNKNOWN, 0, 0)                               \
     S(ASSIGN, false, 1, TK_SYMBOL, '=', 0)                                \
     S(ASSIGN_BITWISE_AND, false, 1, TK_KEYWORD, KW_ASSIGN_BITWISE_AND, 0) \
     S(ASSIGN_BITWISE_OR, false, 1, TK_KEYWORD, KW_ASSIGN_BITWISE_OR, 0)   \

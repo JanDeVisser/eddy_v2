@@ -4,16 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-#define STATIC_ALLOCATOR
-#include <base/allocate.h>
 #include <base/http.h>
 #include <base/options.h>
-#include <base/sv.h>
-#include <binder.h>
-#include <execute.h>
-#include <graph.h>
-#include <native.h>
-#include <type.h>
+#include <scribble/binder.h>
+#include <scribble/execute.h>
+#include <scribble/graph.h>
+#include <scribble/native.h>
+#include <scribble/type.h>
 
 static void       vwarning(BindContext *ctx, TokenLocation loc, char const *fmt, va_list args);
 static void       warning(BindContext *ctx, TokenLocation loc, char const *fmt, ...);
@@ -51,12 +48,30 @@ char const *BoundNodeType_name(BoundNodeType type)
     }
 }
 
+void bound_node_chain_to_json(BoundNode *node, JSONValue *array)
+{
+    assert(array->type == JSON_TYPE_ARRAY);
+    if (node != NULL) {
+        json_append(array, bound_node_to_json(node));
+        bound_node_chain_to_json(node->next, array);
+    }
+}
+
 JSONValue bound_node_to_json(BoundNode *node)
 {
     JSONValue ret = json_object();
     json_set(&ret, "nodetype", json_string(sv_from(BoundNodeType_name(node->type))));
     json_set(&ret, "name", json_string(node->name));
     json_set(&ret, "type", json_string(typeid_name(node->typespec.type_id)));
+    switch (node->type) {
+    case BNT_FUNCTION: {
+        JSONValue params = json_array();
+        bound_node_chain_to_json(node->function.parameter, &params);
+        json_set(&ret, "parameters", params);
+    } break;
+    default:
+        break;
+    }
     return ret;
 }
 
@@ -74,10 +89,7 @@ void binder_debug_syntaxnode(BindContext *ctx, SyntaxNode *node)
 {
     if (!ctx || !ctx->debug)
         return;
-    JSONValue n = json_object();
-    json_set_string(&n, "name", node->name);
-    json_set_cstr(&n, "nodetype", SyntaxNodeType_name(node->type));
-    json_set(&n, "location", location_to_json(node->token.location));
+    JSONValue n = syntax_node_to_json(node);
     HTTP_POST_MUST(ctx->frontend, "/bind/syntaxnode", n);
 }
 
@@ -87,13 +99,6 @@ void binder_debug_boundnode(BindContext *ctx, BoundNode *node)
         return;
     JSONValue n = bound_node_to_json(node);
     HTTP_POST_MUST(ctx->frontend, "/bind/boundnode", n);
-}
-
-BindContext *context_make_subcontext(BindContext *ctx)
-{
-    BindContext *ret = allocate(sizeof(BindContext));
-    ret->parent = ctx;
-    return ret;
 }
 
 void context_function_is_main(BindContext *ctx, BoundNode *function)
@@ -187,7 +192,7 @@ BoundNode *error(BoundNode *parent, SyntaxNode *stmt, BindContext *ctx, char con
 
 BoundNode *bound_node_make(BoundNodeType type, BoundNode *parent)
 {
-    BoundNode *node = (BoundNode *) allocate(sizeof(BoundNode));
+    BoundNode *node = MALLOC(BoundNode);
     node->type = type;
     node->parent = parent;
     node->next = NULL;
@@ -503,7 +508,7 @@ ErrorOrTypeID resolve_type(TypeDescr *type_descr)
             "Invalid number of template arguments for template '%.*s': expected %d, got %d",
             type_descr->name, et->num_parameters, type_descr->size);
     }
-    TemplateArgument *arguments = allocate_array(TemplateArgument, type_descr->size);
+    TemplateArgument *arguments = MALLOC_ARR(TemplateArgument, type_descr->size);
     for (size_t ix = 0; ix < type_descr->size; ++ix) {
         assert(et->template_parameters[ix].type == TPT_TYPE);
         type_id arg_type = TRY(TypeID, resolve_type(type_descr->elements[ix]));
@@ -874,9 +879,13 @@ __attribute__((unused)) BoundNode *bind_BINARYEXPRESSION(BoundNode *parent, Synt
 __attribute__((unused)) BoundNode *bind_BLOCK(BoundNode *parent, SyntaxNode *stmt, BindContext *ctx)
 {
     BoundNode   *ret = bound_node_make(BNT_BLOCK, parent);
-    BindContext *block_ctx = context_make_subcontext(ctx);
+    BindContext block_ctx = {0};
+    block_ctx.frontend = ctx->frontend;
+    block_ctx.debug = ctx->debug;
+    block_ctx.program = ctx->program;
+    block_ctx.parent = ctx;
 
-    bind_nodes(ret, stmt->block.statements, &ret->block.statements, block_ctx);
+    bind_nodes(ret, stmt->block.statements, &ret->block.statements, &block_ctx);
     return ret;
 }
 
@@ -1041,8 +1050,13 @@ __attribute__((unused)) BoundNode *bind_FUNCTION(BoundNode *parent, SyntaxNode *
     if (ctx->unbound > unbound_cnt) {
         return bound_node_make_unbound(parent, stmt, NULL);
     }
-    BindContext *func_ctx = context_make_subcontext(ctx);
-    ret->function.function_impl = bind_node(ret, stmt->function.function_impl, func_ctx);
+    BindContext func_ctx = {0};
+    func_ctx.frontend = ctx->frontend;
+    func_ctx.debug = ctx->debug;
+    func_ctx.program = ctx->program;
+    func_ctx.parent = ctx;
+
+    ret->function.function_impl = bind_node(ret, stmt->function.function_impl, &func_ctx);
     context_function_is_main(ctx, ret);
     return ret;
 }
@@ -1051,7 +1065,7 @@ __attribute__((unused)) BoundNode *bind_FUNCTION_CALL(BoundNode *parent, SyntaxN
 {
     BoundNode *fnc = bound_node_find(parent, BNT_FUNCTION, stmt->call.function->name);
     if (!fnc) {
-        fprintf(stderr, "Cannot bind function '%.*s'\n", SV_ARG(stmt->name));
+//        fprintf(stderr, "Cannot bind function '%.*s'\n", SV_ARG(stmt->name));
         return bound_node_make_unbound(parent, stmt, ctx);
     }
 
@@ -1064,7 +1078,7 @@ __attribute__((unused)) BoundNode *bind_FUNCTION_CALL(BoundNode *parent, SyntaxN
     // FIXME Typecheck parameters
 
     if (fnc->function.function_impl->type == BNT_MACRO) {
-        Datum **args = allocate_array(Datum *, 2);
+        Datum **args = MALLOC_ARR(Datum *, 2);
         args[0] = datum_allocate(RAW_POINTER_ID);
         args[0]->raw_pointer = ret;
         args[1] = datum_allocate(RAW_POINTER_ID);
@@ -1148,12 +1162,17 @@ __attribute__((unused)) BoundNode *bind_MACRO(BoundNode *parent, SyntaxNode *stm
 __attribute__((unused)) BoundNode *bind_MODULE(BoundNode *parent, SyntaxNode *stmt, BindContext *ctx)
 {
     BoundNode   *ret = bound_node_make(BNT_MODULE, parent);
-    BindContext *mod_ctx = context_make_subcontext(ctx);
+    BindContext mod_ctx = {0};
+    mod_ctx.frontend = ctx->frontend;
+    mod_ctx.debug = ctx->debug;
+    mod_ctx.program = ctx->program;
+    mod_ctx.parent = ctx;
+
     ret->name = stmt->name;
     if (sv_endswith(ret->name, sv_from(".scribble"))) {
         ret->name.length = ret->name.length - 9;
     }
-    bind_nodes(ret, stmt->block.statements, &ret->block.statements, mod_ctx);
+    bind_nodes(ret, stmt->block.statements, &ret->block.statements, &mod_ctx);
     return ret;
 }
 
@@ -1785,56 +1804,56 @@ BoundNode *rebind_node(BoundNode *node, BindContext *ctx)
 
 BoundNode *bind_program(BackendConnection *conn, JSONValue config, SyntaxNode *program)
 {
-    BindContext *ctx = allocate(sizeof(BindContext));
-    ctx->program = program;
-    ctx->frontend = conn->fd;
-    ctx->debug = json_get_bool(&config, "debug", false);
+    BindContext ctx = {0};
+    ctx.program = program;
+    ctx.frontend = conn->fd;
+    ctx.debug = json_get_bool(&config, "debug", false);
 
     int        current_unbound = INT32_MAX;
     BoundNode *ret = NULL;
     int        total_warnings = 0;
 
-    if (ctx->debug) {
+    if (ctx.debug) {
         HTTP_GET_MUST(conn->fd, "/bind/start", sl_create());
     }
 
     for (int iter = 1; true; ++iter) {
         if (iter == 1) {
-            ret = bind_node(NULL, program, ctx);
+            ret = bind_node(NULL, program, &ctx);
         } else {
-            current_unbound = ctx->unbound;
-            ctx->unbound = 0;
-            ctx->errors = 0;
-            ctx->warnings = 0;
-            rebind_node(ret, ctx);
+            current_unbound = ctx.unbound;
+            ctx.unbound = 0;
+            ctx.errors = 0;
+            ctx.warnings = 0;
+            rebind_node(ret, &ctx);
         }
         if (json_get_bool(&conn->config, "graph", false)) {
             graph_ast(iter, ret);
         }
 
-        total_warnings += ctx->warnings;
+        total_warnings += ctx.warnings;
         JSONValue iter_stats = json_object();
         json_set(&iter_stats, "iteration", json_int(iter));
-        json_set(&iter_stats, "warnings", json_int(ctx->warnings));
+        json_set(&iter_stats, "warnings", json_int(ctx.warnings));
         json_set(&iter_stats, "total_warnings", json_int(total_warnings));
-        json_set(&iter_stats, "errors", json_int(ctx->errors));
-        json_set(&iter_stats, "unbound", json_int(ctx->unbound));
+        json_set(&iter_stats, "errors", json_int(ctx.errors));
+        json_set(&iter_stats, "unbound", json_int(ctx.unbound));
         char const *url = NULL;
-        if (ctx->errors || ctx->unbound >= current_unbound) {
+        if (ctx.errors || ctx.unbound >= current_unbound) {
             url = "/bind/error";
-        } else if (ctx->unbound > 0) {
+        } else if (ctx.unbound > 0) {
             url = "/bind/iteration";
         } else {
             url = "/bind/done";
         }
         HTTP_POST_MUST(conn->fd, url, iter_stats);
-        if (ctx->errors || ctx->unbound >= current_unbound) {
+        if (ctx.errors || ctx.unbound >= current_unbound) {
             return NULL;
         }
         if (json_get_bool(&config, "graph", false)) {
             graph_ast(iter, ret);
         }
-        if (ctx->unbound == 0) {
+        if (ctx.unbound == 0) {
             return ret;
         }
     }

@@ -548,7 +548,7 @@ extern ValueLocation         arm64variable_pointer(ARM64Variable *variable);
 extern ValueLocation         arm64variable_reference(ARM64Variable *variable);
 extern ARM64Variable         arm64variable_component(ARM64Variable *variable, size_t index);
 extern ARM64Function        *arm64context_function_by_name(ARM64Context *ctx, StringView name);
-extern ARM64Context         *generate_arm64(BackendConnection *conn, IRProgram *program);
+extern ARM64Context         *generate_arm64(BackendConnection *conn, IRProgram *program, ARM64Context *ctx);
 extern ErrorOrInt            output_arm64(BackendConnection *conn, IRProgram *program);
 // extern bool                  arm64_inspect(ObserverContext *ctx, ExecutionMessage msg);
 

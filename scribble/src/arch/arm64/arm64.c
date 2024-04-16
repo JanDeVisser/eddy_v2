@@ -109,7 +109,27 @@ ErrorOrInt output_arm64(BackendConnection *conn, IRProgram *program)
     //     register_execution_observer(arm64_inspect);
     // }
 
-    ARM64Context *ctx = generate_arm64(conn, program);
+    JSONValue config = conn->config;
+    JSONValue stages = json_get_default(&config, "stages", json_array());
+    JSONValue stage = {0};
+    for (size_t ix = 0; ix < json_len(&stages); ++ix) {
+        stage = MUST_OPTIONAL(JSONValue, json_at(&stages, ix));
+        StringView name = json_get_string(&stage, "name", sv_null());
+        if (sv_eq_cstr(name, "generate")) {
+            break;
+        }
+    }
+    assert(stage.type == JSON_TYPE_OBJECT);
+
+    ARM64Context ctx = {0};
+    ctx.conn = conn;
+    ctx.program = program;
+    ctx.scope.kind = SK_GLOBAL;
+    ctx.scope.up = NULL;
+    if (stage.type != JSON_TYPE_NULL) {
+        ctx.debug = json_get_bool(&stage, "debug", false);
+    }
+    generate_arm64(conn, program, &ctx);
     Assembly     *main = NULL;
 
 #ifdef IS_APPLE
@@ -121,8 +141,8 @@ ErrorOrInt output_arm64(BackendConnection *conn, IRProgram *program)
     }
 #endif
 
-    for (size_t ix = 0; ix < ctx->assemblies.size; ++ix) {
-        Assembly *assembly = ctx->assemblies.elements + ix;
+    for (size_t ix = 0; ix < ctx.assemblies.size; ++ix) {
+        Assembly *assembly = ctx.assemblies.elements + ix;
         if (assembly_has_main(assembly)) {
             main = assembly;
             break;
@@ -158,13 +178,13 @@ ErrorOrInt output_arm64(BackendConnection *conn, IRProgram *program)
 #endif
 
     StringList modules = sl_create();
-    for (size_t ix = 0; ix < ctx->assemblies.size; ++ix) {
-        Assembly  *assembly = ctx->assemblies.elements + ix;
+    for (size_t ix = 0; ix < ctx.assemblies.size; ++ix) {
+        Assembly  *assembly = ctx.assemblies.elements + ix;
         StringView bare_file_name = fn_barename(assembly->module->name);
         bare_file_name = sv_printf(".scribble/%.*s", SV_ARG(bare_file_name));
         assembly_save_and_assemble(assembly, bare_file_name);
         if (assembly_has_exports(assembly)) {
-            if (!has_option("keep-assembly")) {
+            if (!json_get_bool(&stage, "keep-assembly", false)) {
                 StringView asm_file = sv_printf("%.*s.s", SV_ARG(bare_file_name));
                 char buf[asm_file.length + 1];
                 unlink(sv_cstr(asm_file, buf));

@@ -461,17 +461,10 @@ void generate_code(ARM64Function *arm_function)
     trace(COMPILE, "Generating code for %.*s", SV_ARG(function->name));
 
     ARM64Context *ctx = arm_function->assembly->ctx;
+    JSONValue fnc = {0};
     if (ctx->debug) {
-        JSONValue resp = HTTP_POST_CALLBACK_MUST(
-            ctx->conn->fd,
-            "/arm64/generate/function/entry",
-            ir_function_to_json(function),
-            arm64_on_function_entry,
-            ctx);
-        assert(resp.type == JSON_TYPE_BOOLEAN);
-        if (!resp.boolean) {
-            return;
-        }
+        fnc = ir_function_to_json(function);
+        http_post_message(ctx->conn->fd, SV("/arm64/generate/function/entry"), fnc);
     }
 
     arm_function->scribble.current_scope = &arm_function->scope;
@@ -480,14 +473,8 @@ void generate_code(ARM64Function *arm_function)
         IROperation *op = function->operations.elements + ix;
 
         if (ctx->debug) {
-            JSONValue resp = HTTP_POST_CALLBACK_MUST(ctx->conn->fd,
-                "/arm64/generate/function/on",
-                ir_operation_to_json(*op),
-                arm64_on_operation, ctx);
-            assert(resp.type == JSON_TYPE_BOOLEAN);
-            if (!resp.boolean) {
-                return;
-            }
+            JSONValue op_json = ir_operation_to_json(*op);
+            http_post_message(ctx->conn->fd, SV("/arm64/generate/function/operation"), op_json);
         }
         StringView op_str = ir_operation_to_string(op);
         trace(COMPILE, "%.*s", SV_ARG(op_str));
@@ -503,31 +490,11 @@ void generate_code(ARM64Function *arm_function)
         default:
             UNREACHABLE();
         }
-        if (ctx->debug) {
-            JSONValue resp = HTTP_POST_CALLBACK_MUST(
-                ctx->conn->fd,
-                "/emulation/function/after",
-                ir_operation_to_json(*op),
-                arm64_after_operation,
-                ctx);
-            assert(resp.type == JSON_TYPE_BOOLEAN);
-            if (!resp.boolean) {
-                return;
-            }
-        }
         arm64function_add_text(arm_function, "\n");
     }
     if (ctx->debug) {
-        JSONValue resp = HTTP_POST_CALLBACK_MUST(
-            ctx->conn->fd,
-            "/arm64/generate/function/exit",
-            ir_function_to_json(function),
-            arm64_on_function_exit,
-            ctx);
-        assert(resp.type == JSON_TYPE_BOOLEAN);
-        if (!resp.boolean) {
-            return;
-        }
+        http_post_message(ctx->conn->fd, SV("/arm64/generate/function/exit"), fnc);
+        json_free(fnc);
     }
     arm64function_leave(arm_function);
 }
@@ -683,15 +650,8 @@ void generate_assembly(Assembly *assembly)
     }
 }
 
-ARM64Context *generate_arm64(BackendConnection *conn, IRProgram *program)
+ARM64Context *generate_arm64(BackendConnection *conn, IRProgram *program, ARM64Context *ctx)
 {
-    ARM64Context *ctx = allocate_new(ARM64Context);
-    ctx->conn = conn;
-    ctx->program = program;
-    ctx->scope.kind = SK_GLOBAL;
-    ctx->scope.up = NULL;
-    ctx->debug = (conn != NULL) && json_get_bool(&conn->config, "debug_arm64_generation", false);
-
     if (ctx->debug) {
         HTTP_POST_MUST(ctx->conn->fd, "/arm64/generate/start", ir_program_to_json(*program));
     }
