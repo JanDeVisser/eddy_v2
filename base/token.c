@@ -89,10 +89,10 @@ ErrorOrCommentType CommentType_from_string(StringView type)
 StringView NumberType_name(NumberType type)
 {
     switch (type) {
-#undef NUMBERTYPE_ENUM
+#undef S
 #define S(T)                                    \
     case NT##T:                                 \
-        return (StringView) { #T, strlen(#T) }; \
+        return (StringView) { #T, strlen(#T) };
         NUMBERTYPES(S)
 #undef S
     default:

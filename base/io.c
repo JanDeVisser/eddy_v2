@@ -246,6 +246,7 @@ ErrorOrStringView socket_read(socket_t socket, size_t count)
     Socket       *s = s_sockets.elements + socket;
     StringBuilder out = { 0 };
 
+    size_t total = 0;
     trace(IPC, "socket_read(%zu)", count);
     do {
         TRY_TO(Size, StringView, socket_fill_buffer(s));
@@ -253,28 +254,31 @@ ErrorOrStringView socket_read(socket_t socket, size_t count)
             trace(IPC, "socket_read(%zu) => NULL", count);
             RETURN(StringView, sv_null());
         }
-        if (s->buffer.length <= count) {
-            count -= s->buffer.length;
+        size_t available = s->buffer.length;
+        size_t remaining = count - total;
+        if (available <= remaining) {
             if (out.length == 0) {
                 out = s->buffer;
-                s->buffer = (StringBuilder) { 0 };
+                s->buffer = (StringBuilder) {0};
             } else {
                 sb_append_sv(&out, s->buffer.view);
                 s->buffer.length = 0;
             }
+            total += available;
         } else {
             if (out.length == 0) {
                 out = s->buffer;
-                s->buffer = sb_copy_chars(out.ptr + count, out.length - count);
-                out.length = count;
+                s->buffer = sb_copy_chars(out.ptr + remaining, available - remaining);
+                out.length = available - remaining;
             } else {
-                sb_append_chars(&out, s->buffer.view.ptr, count);
-                memmove((char *) s->buffer.ptr, s->buffer.ptr + count, count);
-                s->buffer.length -= count;
+                sb_append_chars(&out, s->buffer.view.ptr, remaining);
+                memmove((char *) s->buffer.ptr, s->buffer.ptr + remaining, available - remaining);
+                s->buffer.length -= available - remaining;
             }
-            count = 0;
+            total = count;
         }
-    } while (count > 0);
+        trace(IPC, "socket_read(%zu): read chunk of %zu total %zu", count, available, total);
+    } while (total < count);
     trace(IPC, "socket_read(%zu) => %zu", count, out.view.length);
     RETURN(StringView, out.view);
 }
@@ -314,7 +318,7 @@ ErrorOrSize socket_write(socket_t socket, char const *buffer, size_t num)
     ssize_t total = 0;
     trace(IPC, "socket_write(%zu)", num);
     while (total < num) {
-        ssize_t written = write(s->fd, buffer, num - total);
+        ssize_t written = write(s->fd, buffer + total, num - total);
         if (written < 0) {
             if (errno == EAGAIN) {
                 trace(IPC, "socket_write(%zu) - EAGAIN (retrying)", num);

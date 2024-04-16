@@ -330,7 +330,7 @@ Token lexer_peek_next(Lexer *lexer)
     if (lexer->language && lexer->language->keywords && lexer->language->keywords[0].keyword) {
         int        matched = -1;
         StringView matched_keyword = sv_null();
-        for (int kw = 0; lexer->language->keywords[kw].code; ++kw) {
+        for (int kw = 0; lexer->language->keywords[kw].keyword; ++kw) {
             StringView keyword = sv_from(lexer->language->keywords[kw].keyword);
             if (sv_startswith(source, keyword)) {
                 if (matched < 0 || keyword.length > matched_keyword.length) {

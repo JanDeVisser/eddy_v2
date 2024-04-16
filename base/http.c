@@ -79,6 +79,7 @@ ErrorOrHttpRequest http_request_receive(socket_t socket)
     trace(HTTP, "Method: %s", http_method_to_string(ret.method));
 
     ret.url = sv_copy(status_fields.strings[1]);
+    trace(HTTP, "URL: %.*s", SV_ARG(ret.url));
     int qmark_ix;
     if ((qmark_ix = sv_first(ret.url, '?')) > 0) {
         StringView params = (StringView) { ret.url.ptr, ret.url.length - qmark_ix - 1 };
@@ -112,12 +113,10 @@ ErrorOrHttpRequest http_request_receive(socket_t socket)
     }
 
     if (content_length) {
-        size_t     len = sb.view.length;
-        StringView body = TRY_TO(StringView, HttpRequest, socket_read(socket, content_length));
-        sb_append_sv(&sb, body);
-        ret.body = (StringView) { .ptr = sb.view.ptr + len, .length = body.length };
-        trace(HTTP, "Read Request Body:\n%.*s\n", SV_ARG(body));
-        sv_free(body);
+        ret.body = TRY_TO(StringView, HttpRequest, socket_read(socket, content_length));
+        assert(ret.body.length == content_length);
+        sb_append_sv(&sb, ret.body);
+        trace(HTTP, "Read Request Body:\n%.*s\n", SV_ARG(ret.body));
     }
     ret.request = sb.view;
     trace(HTTP, "http_request_receive done");
@@ -238,7 +237,7 @@ HttpResponse http_post_request(socket_t socket, StringView url, JSONValue body)
         request.body = json_encode(body);
     }
     http_request_send(socket, &request);
-    sv_free(request.request);
+    sv_free(request.body);
     return MUST(HttpResponse, http_response_receive(socket));
 }
 
