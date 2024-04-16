@@ -174,8 +174,6 @@ typedef struct syntax_node {
 extern char const    *SyntaxNodeType_name(SyntaxNodeType type);
 extern SyntaxNodeType SyntaxNodeType_from_string(StringView type);
 extern JSONValue      type_descr_to_json(TypeDescr *type);
-extern TypeDescr     *type_descr_from_json(JSONValue json);
 extern JSONValue      syntax_node_to_json(SyntaxNode *node);
-extern SyntaxNode     syntax_node_from_json(JSONValue json);
 
 #endif /* __SYNTAXNODE_H__ */

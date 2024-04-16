@@ -197,6 +197,7 @@ typedef struct bound_node {
 
 extern char const *BoundNodeType_name(BoundNodeType type);
 extern JSONValue   bound_node_to_json(BoundNode *node);
+extern void        bound_node_chain_to_json(BoundNode *node, JSONValue *array);
 extern BoundNode  *bind_program(BackendConnection *conn, JSONValue config, SyntaxNode *program);
 extern BoundNode  *bind_format(BoundNode *node, void *v_ctx);
 

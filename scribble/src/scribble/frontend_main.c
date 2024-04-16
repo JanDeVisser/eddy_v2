@@ -54,9 +54,12 @@ int main(int argc, char **argv)
     stage = json_object();
     json_set_cstr(&stage, "name", "ir");
     json_set(&stage, "debug", json_bool(true));
+    json_set(&stage, "list-ir", json_bool(has_option("list-ir")));
     json_append(&stages, stage);
+    stage = json_object();
     json_set_cstr(&stage, "name", "generate");
     json_set(&stage, "debug", json_bool(true));
+    json_set(&stage, "keep-assembly", json_bool(has_option("keep-assembly")));
     json_append(&stages, stage);
     json_set(&config, "stages", stages);
     scribble_frontend(config, frontend_message_handler);

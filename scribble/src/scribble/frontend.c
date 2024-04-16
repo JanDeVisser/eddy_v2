@@ -68,8 +68,15 @@ bool handle_parser_message(socket_t socket, HttpRequest request)
     }
     if (sv_eq_cstr(request.url, "/parser/errors")) {
         JSONValue  node = MUST(JSONValue, json_decode(request.body));
-        StringView errors = json_encode(node);
-        printf("[parser] ERRORS:\n%.*s\n", SV_ARG(errors));
+        if (node.type == JSON_TYPE_ARRAY) {
+            for (size_t ix = 0; ix < json_len(&node); ++ix) {
+                JSONValue error = MUST_OPTIONAL(JSONValue, json_at(&node, ix));
+                assert(error.type == JSON_TYPE_STRING);
+                printf("ERROR: %.*s\n", SV_ARG(error.string));
+            }
+        } else {
+            printf("[parser] ERRORS:\n%.*s\n", SV_ARG(request.body));
+        }
         HTTP_RESPONSE_OK(socket);
         return true;
     }
@@ -85,7 +92,13 @@ void handle_bind_message(socket_t socket, HttpRequest request)
         return;
     }
     if (sv_eq_cstr(request.url, "/bind/done")) {
-        printf("[bind] done\n");
+        JSONValue iter_stats = MUST(JSONValue, json_decode(request.body));
+        int       iteration = json_get_int(&iter_stats, "iteration", 1);
+        int       warnings = json_get_int(&iter_stats, "warnings", 0);
+        int       total_warnings = json_get_int(&iter_stats, "total_warnings", 0);
+        int       errors = json_get_int(&iter_stats, "errors", 0);
+        int       unbound = json_get_int(&iter_stats, "unbound", 0);
+        printf("[bind] Done! Iteration %d: %d warning(s), %d total warning(s), %d error(s), %d unbound node(s)\n", iteration, warnings, total_warnings, errors, unbound);
         HTTP_RESPONSE_OK(socket);
         return;
     }
@@ -96,10 +109,11 @@ void handle_bind_message(socket_t socket, HttpRequest request)
         return;
     }
     if (sv_eq_cstr(request.url, "/bind/syntaxnode")) {
+        printf("[bind] \n* * *\n%.*s\n* * *\n", SV_ARG(request.body));
         JSONValue  node = MUST(JSONValue, json_decode(request.body));
         StringView type = json_get_string(&node, "nodetype", sv_null());
         StringView name = json_get_string(&node, "name", sv_null());
-        printf("[bind] %.*s %.*s\n", SV_ARG(type), SV_ARG(name));
+        printf("[bind] %.*s %.*s\n%.*s\n", SV_ARG(type), SV_ARG(name), SV_ARG(request.body));
         HTTP_RESPONSE_OK(socket);
         return;
     }
@@ -112,7 +126,7 @@ void handle_bind_message(socket_t socket, HttpRequest request)
         HTTP_RESPONSE_OK(socket);
         return;
     }
-    if (sv_eq_cstr(request.url, "/bind/error")) {
+    if (sv_eq_cstr(request.url, "/bind/iteration")) {
         JSONValue iter_stats = MUST(JSONValue, json_decode(request.body));
         int       iteration = json_get_int(&iter_stats, "iteration", 1);
         int       warnings = json_get_int(&iter_stats, "warnings", 0);
@@ -120,6 +134,17 @@ void handle_bind_message(socket_t socket, HttpRequest request)
         int       errors = json_get_int(&iter_stats, "errors", 0);
         int       unbound = json_get_int(&iter_stats, "unbound", 0);
         printf("[bind] Iteration %d: %d warning(s), %d total warning(s), %d error(s), %d unbound node(s)\n", iteration, warnings, total_warnings, errors, unbound);
+        HTTP_RESPONSE_OK(socket);
+        return;
+    }
+    if (sv_eq_cstr(request.url, "/bind/error")) {
+        JSONValue iter_stats = MUST(JSONValue, json_decode(request.body));
+        int       iteration = json_get_int(&iter_stats, "iteration", 1);
+        int       warnings = json_get_int(&iter_stats, "warnings", 0);
+        int       total_warnings = json_get_int(&iter_stats, "total_warnings", 0);
+        int       errors = json_get_int(&iter_stats, "errors", 0);
+        int       unbound = json_get_int(&iter_stats, "unbound", 0);
+        printf("[bind] ERROR: Iteration %d: %d warning(s), %d total warning(s), %d error(s), %d unbound node(s)\n", iteration, warnings, total_warnings, errors, unbound);
         HTTP_RESPONSE_OK(socket);
         return;
     }
@@ -135,6 +160,48 @@ void handle_intermediate_message(socket_t socket, HttpRequest request)
     }
     if (sv_eq_cstr(request.url, "/intermediate/done")) {
         printf("[ir] done\n");
+        HTTP_RESPONSE_OK(socket);
+        return;
+    }
+    HTTP_RESPONSE(socket, HTTP_STATUS_NOT_FOUND);
+}
+
+void handle_generate_message(socket_t socket, HttpRequest request)
+{
+    if (sv_eq_cstr(request.url, "/generate/start")) {
+        printf("[generate] started\n");
+        HTTP_RESPONSE_OK(socket);
+        return;
+    }
+    if (sv_eq_cstr(request.url, "/generate/done")) {
+        printf("[generate] done\n");
+        HTTP_RESPONSE_OK(socket);
+        return;
+    }
+    HTTP_RESPONSE(socket, HTTP_STATUS_NOT_FOUND);
+}
+
+void handle_arm64_message(socket_t socket, HttpRequest request)
+{
+    if (sv_eq_cstr(request.url, "/arm64/generate/start")) {
+        printf("[arm64] started\n");
+        HTTP_RESPONSE_OK(socket);
+        return;
+    }
+    if (sv_eq_cstr(request.url, "/arm64/generate/done")) {
+        printf("[arm64] done\n");
+        HTTP_RESPONSE_OK(socket);
+        return;
+    }
+    if (sv_eq_cstr(request.url, "/arm64/generate/function/entry")) {
+        JSONValue json = MUST(JSONValue, json_decode(request.body));
+        printf("[arm64] function %.*s\n", SV_ARG(json_get_string(&json, "name", SV("--"))));
+        HTTP_RESPONSE_OK(socket);
+        return;
+    }
+    if (sv_eq_cstr(request.url, "/arm64/generate/function/exit")) {
+        JSONValue json = MUST(JSONValue, json_decode(request.body));
+        printf("[arm64] function %.*s done\n", SV_ARG(json_get_string(&json, "name", SV("--"))));
         HTTP_RESPONSE_OK(socket);
         return;
     }
@@ -166,6 +233,14 @@ bool frontend_message_handler(socket_t conn_fd, HttpRequest request, JSONValue c
     }
     if (sv_startswith(request.url, sv_from("/intermediate/"))) {
         handle_intermediate_message(conn_fd, request);
+        return false;
+    }
+    if (sv_startswith(request.url, sv_from("/generate/"))) {
+        handle_generate_message(conn_fd, request);
+        return false;
+    }
+    if (sv_startswith(request.url, sv_from("/arm64/"))) {
+        handle_arm64_message(conn_fd, request);
         return false;
     }
     if (sv_eq_cstr(request.url, "/goodbye")) {

@@ -131,7 +131,7 @@ JSONValue ir_operation_to_json(IROperation op)
         json_set(&ret, "unary_op", unary_op);
     } break;
     default:
-        UNREACHABLE();
+        break;
     }
     return ret;
 }
@@ -260,7 +260,7 @@ void ir_function_print(IRFunction *function)
 
 JSONValue ir_function_to_json(IRFunction *fnc)
 {
-    JSONValue ret;
+    JSONValue ret = json_object();
     if (fnc->module) {
         json_set_string(&ret, "module", fnc->module->name);
     }
@@ -324,7 +324,7 @@ void ir_module_list(IRModule *module, bool header)
 
 JSONValue ir_module_to_json(IRModule module)
 {
-    JSONValue ret;
+    JSONValue ret = json_object();
     json_set_string(&ret, "name", module.name);
     JSONValue functions = json_array();
     for (size_t ix = 0; ix < module.functions.size; ++ix) {
@@ -356,7 +356,7 @@ void ir_program_list(IRProgram program)
 
 JSONValue ir_program_to_json(IRProgram program)
 {
-    JSONValue ret;
+    JSONValue ret = json_object();
     json_set_string(&ret, "name", program.name);
     JSONValue modules = json_array();
     for (size_t ix = 0; ix < program.modules.size; ++ix) {

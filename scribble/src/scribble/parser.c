@@ -35,7 +35,7 @@ static char const *scribble_directives[ScribbleDirectiveMax + 1] = {
 };
 
 // clang-format off
-#define SCRIBBLE_KEYWORDS(S)             \
+#define SCRIBBLE_KEYWORDS(S)       \
     S(AS, as, 0)                   \
     S(BREAK, break, 1)             \
     S(CONST, const, 2)             \
@@ -363,11 +363,11 @@ bool parser_context_accept_and_discard_quoted_string(ParserContext *ctx, QuoteTy
 
 #define EXPECT_IDENTIFIER(ctx) EXPECT_IDENTIFIER_OR(ctx, NULL)
 
-#define ACCEPT_SYMBOL_OR(ctx, symbol, ret)                    \
-    do {                                                      \
-        if (!parser_context_accept_symbol((ctx), (symbol))) { \
-            return (ret);                                     \
-        }                                                     \
+#define ACCEPT_SYMBOL_OR(ctx, symbol, ret)                                \
+    do {                                                                  \
+        if (!parser_context_accept_and_discard_symbol((ctx), (symbol))) { \
+            return (ret);                                                 \
+        }                                                                 \
     } while (0)
 
 #define EXPECT_QUOTED_STRING_OR(ctx, quote, ret)                                \
@@ -381,23 +381,23 @@ bool parser_context_accept_and_discard_quoted_string(ParserContext *ctx, QuoteTy
 
 #define EXPECT_QUOTED_STRING(ctx, quote) EXPECT_QUOTED_STRING_OR(ctx, quote, NULL)
 
-#define ACCEPT_SYMBOL_AND(ctx, symbol, ret)                  \
-    do {                                                     \
-        if (parser_context_accept_symbol((ctx), (symbol))) { \
-            return (ret);                                    \
-        }                                                    \
+#define ACCEPT_SYMBOL_AND(ctx, symbol, ret)                              \
+    do {                                                                 \
+        if (parser_context_accept_and_discard_symbol((ctx), (symbol))) { \
+            return (ret);                                                \
+        }                                                                \
     } while (0)
-#define ACCEPT_KEYWORD_OR(ctx, kw, ret)                    \
-    do {                                                   \
-        if (!parser_context_accept_keyword((ctx), (kw))) { \
-            return (ret);                                  \
-        }                                                  \
+#define ACCEPT_KEYWORD_OR(ctx, kw, ret)                                \
+    do {                                                               \
+        if (!parser_context_accept_and_discard_keyword((ctx), (kw))) { \
+            return (ret);                                              \
+        }                                                              \
     } while (0)
-#define ACCEPT_KEYWORD_AND(ctx, kw, ret)                  \
-    do {                                                  \
-        if (parser_context_accept_keyword((ctx), (kw))) { \
-            return (ret);                                 \
-        }                                                 \
+#define ACCEPT_KEYWORD_AND(ctx, kw, ret)                              \
+    do {                                                              \
+        if (parser_context_accept_and_discard_keyword((ctx), (kw))) { \
+            return (ret);                                             \
+        }                                                             \
     } while (0)
 
 #define SKIP_SEMICOLON(ctx) EXPECT_SYMBOL(ctx, ';')
@@ -632,12 +632,12 @@ SyntaxNode *parse_identifier(ParserContext *ctx)
     SyntaxNode  *var = syntax_node_make(ctx, SNT_VARIABLE, token.text, token);
     SyntaxNode **name_part = &var->variable.subscript;
     SyntaxNode  *ret = NULL;
-    while (parser_context_accept_symbol(ctx, '.')) {
+    while (parser_context_accept_and_discard_symbol(ctx, '.')) {
         token = EXPECT_IDENTIFIER(ctx);
         *name_part = syntax_node_make(ctx, SNT_VARIABLE, token.text, token);
         name_part = &(*name_part)->variable.subscript;
     }
-    if (parser_context_accept_symbol(ctx, '(')) {
+    if (parser_context_accept_and_discard_symbol(ctx, '(')) {
         ret = syntax_node_make(ctx, SNT_FUNCTION_CALL, var->name, var->token);
         var->type = SNT_FUNCTION;
         ret->call.function = var;
@@ -645,14 +645,14 @@ SyntaxNode *parse_identifier(ParserContext *ctx)
         if (!parse_expression_list(ctx, &ret->call.arguments, ')')) {
             return NULL;
         }
-    } else if (parser_context_accept_symbol(ctx, '=')) {
+    } else if (parser_context_accept_and_discard_symbol(ctx, '=')) {
         ret = syntax_node_make(ctx, SNT_ASSIGNMENT, var->name, var->token);
         ret->assignment.variable = var;
         ret->assignment.expression = parse_expression(ctx);
         if (ret->assignment.expression == NULL) {
             return NULL;
         }
-    } else if (parser_context_accept_symbol(ctx, ':')) {
+    } else if (parser_context_accept_and_discard_symbol(ctx, ':')) {
         ret = syntax_node_make(ctx, SNT_LABEL, var->name, var->token);
         return ret;
     }
@@ -668,11 +668,11 @@ SyntaxNode *parse_variable_declaration(ParserContext *ctx, bool is_const)
     Token       ident = EXPECT_IDENTIFIER(ctx);
     SyntaxNode *ret = syntax_node_make(ctx, SNT_VARIABLE_DECL, ident.text, var);
     ret->variable_decl.variable = syntax_node_make(ctx, SNT_VARIABLE, ident.text, ident);
-    if (parser_context_accept_symbol(ctx, ':')) {
+    if (parser_context_accept_and_discard_symbol(ctx, ':')) {
         type = parse_type(ctx);
     }
     ret->variable_decl.var_type = type;
-    if (parser_context_accept_symbol(ctx, '=')) {
+    if (parser_context_accept_and_discard_symbol(ctx, '=')) {
         ret->variable_decl.init_expr = parse_expression(ctx);
         if (ret->variable_decl.init_expr == NULL) {
             return NULL;
@@ -859,7 +859,7 @@ SyntaxNode *parse_statement(ParserContext *ctx)
 bool parse_type_descr(ParserContext *ctx, Token type_name, TypeDescr *target)
 {
     target->name = type_name.text;
-    if (parser_context_accept_symbol(ctx, '<')) {
+    if (parser_context_accept_and_discard_symbol(ctx, '<')) {
         while (true) {
             Token      token = EXPECT_IDENTIFIER(ctx);
             TypeDescr *component = MALLOC(TypeDescr);
@@ -867,7 +867,7 @@ bool parse_type_descr(ParserContext *ctx, Token type_name, TypeDescr *target)
             if (!parse_type_descr(ctx, token, component)) {
                 return false;
             }
-            if (parser_context_accept_symbol(ctx, '>')) {
+            if (parser_context_accept_and_discard_symbol(ctx, '>')) {
                 return true;
             }
             if (!parser_context_expect_symbol(ctx, ',')) {
@@ -906,7 +906,7 @@ SyntaxNode *parse_parameters(ParserContext *ctx, SyntaxNode *func)
     if (!parser_context_expect_symbol(ctx, '(')) {
         return NULL;
     }
-    if (parser_context_accept_symbol(ctx, ')')) {
+    if (parser_context_accept_and_discard_symbol(ctx, ')')) {
         return func;
     }
     SyntaxNode *last_param = NULL;
@@ -921,7 +921,7 @@ SyntaxNode *parse_parameters(ParserContext *ctx, SyntaxNode *func)
             last_param->next = param;
         }
         last_param = param;
-        if (parser_context_accept_symbol(ctx, ')')) {
+        if (parser_context_accept_and_discard_symbol(ctx, ')')) {
             return func;
         }
         EXPECT_SYMBOL(ctx, ',');
@@ -963,17 +963,17 @@ SyntaxNode *parse_function(ParserContext *ctx)
     if (!func) {
         return NULL;
     }
-    if (parser_context_accept_symbol(ctx, '{')) {
+    if (parser_context_accept_and_discard_symbol(ctx, '{')) {
         SyntaxNode *impl = syntax_node_make(ctx, SNT_FUNCTION_IMPL, func->name, func->token);
         func->function.function_impl = impl;
         SyntaxNode *last_stmt = NULL;
         while (true) {
-            if (parser_context_accept_symbol(ctx, '}')) {
+            if (parser_context_accept_and_discard_symbol(ctx, '}')) {
                 return func;
             }
             SyntaxNode *stmt = parse_statement(ctx);
             if (!stmt) {
-                while (!parser_context_accept_symbol(ctx, ';') && !parser_context_accept_symbol(ctx, '}') && !parser_context_accept_and_discard(ctx, TK_END_OF_FILE)) {
+                while (!parser_context_accept_and_discard_symbol(ctx, ';') && !parser_context_accept_and_discard_symbol(ctx, '}') && !parser_context_accept_and_discard(ctx, TK_END_OF_FILE)) {
                     lexer_lex(ctx->lexer);
                 }
                 continue;
@@ -1013,7 +1013,7 @@ SyntaxNode *parse_enum_def(ParserContext *ctx)
     lexer_lex(ctx->lexer);
     Token       ident = EXPECT_IDENTIFIER(ctx);
     SyntaxNode *underlying_type = NULL;
-    if (parser_context_accept_symbol(ctx, ':')) {
+    if (parser_context_accept_and_discard_symbol(ctx, ':')) {
         if ((underlying_type = parse_type(ctx)) == NULL) {
             return NULL;
         }
@@ -1022,11 +1022,11 @@ SyntaxNode *parse_enum_def(ParserContext *ctx)
     SyntaxNode *enum_node = syntax_node_make(ctx, SNT_ENUMERATION, ident.text, ident);
     enum_node->enumeration.underlying_type = underlying_type;
     SyntaxNode **value = &enum_node->enumeration.values;
-    while (!parser_context_accept_symbol(ctx, '}')) {
+    while (!parser_context_accept_and_discard_symbol(ctx, '}')) {
         Token value_name = EXPECT_IDENTIFIER(ctx);
         *value = syntax_node_make(ctx, SNT_ENUM_VALUE, value_name.text, value_name);
         SyntaxNode *underlying_value = NULL;
-        if (parser_context_accept_symbol(ctx, '=')) {
+        if (parser_context_accept_and_discard_symbol(ctx, '=')) {
             if ((underlying_value = parse_expression(ctx)) == NULL) {
                 return NULL;
             }
@@ -1049,7 +1049,7 @@ SyntaxNode *parse_struct_def(ParserContext *ctx)
     EXPECT_SYMBOL(ctx, '{');
     SyntaxNode  *strukt = syntax_node_make(ctx, SNT_STRUCT, ident.text, ident);
     SyntaxNode **comp = &strukt->struct_def.components;
-    while (!parser_context_accept_symbol(ctx, '}')) {
+    while (!parser_context_accept_and_discard_symbol(ctx, '}')) {
         Token comp_name = EXPECT_IDENTIFIER(ctx);
         EXPECT_SYMBOL(ctx, ':');
         *comp = syntax_node_make(ctx, SNT_TYPE_COMPONENT, comp_name.text, comp_name);
@@ -1071,32 +1071,32 @@ SyntaxNode *parse_variant_def(ParserContext *ctx)
     lexer_lex(ctx->lexer);
     Token       ident = EXPECT_IDENTIFIER(ctx);
     SyntaxNode *underlying_type = NULL;
-    if (parser_context_accept_symbol(ctx, ':')) {
+    if (parser_context_accept_and_discard_symbol(ctx, ':')) {
         underlying_type = parse_type(ctx);
     }
     EXPECT_SYMBOL(ctx, '{');
     SyntaxNode *variant_node = syntax_node_make(ctx, SNT_VARIANT, ident.text, ident);
     variant_node->variant_def.underlying_type = underlying_type;
     SyntaxNode **value = &variant_node->variant_def.options;
-    while (!parser_context_accept_symbol(ctx, '}')) {
+    while (!parser_context_accept_and_discard_symbol(ctx, '}')) {
         Token option_name = EXPECT_IDENTIFIER(ctx);
         *value = syntax_node_make(ctx, SNT_VARIANT_OPTION, option_name.text, option_name);
         SyntaxNode *underlying_value = NULL;
         SyntaxNode *payload_type = NULL;
-        if (parser_context_accept_symbol(ctx, '(')) {
+        if (parser_context_accept_and_discard_symbol(ctx, '(')) {
             if ((payload_type = parse_type(ctx)) == NULL) {
                 return NULL;
             }
             EXPECT_SYMBOL(ctx, ')');
         }
-        if (parser_context_accept_symbol(ctx, '=')) {
+        if (parser_context_accept_and_discard_symbol(ctx, '=')) {
             if ((underlying_value = parse_expression(ctx)) == NULL) {
                 return NULL;
             }
         }
         (*value)->variant_option.underlying_value = underlying_value;
         (*value)->variant_option.payload_type = payload_type;
-        if (parser_context_accept_symbol(ctx, '}')) {
+        if (parser_context_accept_and_discard_symbol(ctx, '}')) {
             break;
         }
         EXPECT_SYMBOL(ctx, ',');
