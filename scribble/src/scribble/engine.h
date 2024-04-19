@@ -64,13 +64,14 @@ typedef struct backend_connection {
     StringView  socket;
     EngineStage stage;
     JSONValue   config;
+    bool        threaded;
     void       *context;
 } BackendConnection;
 
 typedef bool (*EngineStageExecutor)(BackendConnection *, ExecutionMessage);
 typedef bool (*FrontEndMessageHandler)(socket_t, HttpRequest, JSONValue);
 
-extern int           backend(StringView path);
+extern int           scribble_backend(StringView path, bool threaded);
 extern ErrorOrSocket start_backend_thread();
 extern ErrorOrSocket start_backend_process();
 extern void          scribble_frontend(JSONValue config, FrontEndMessageHandler handler);

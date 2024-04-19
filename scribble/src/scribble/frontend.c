@@ -7,7 +7,6 @@
 #include <unistd.h>
 
 #include <base/http.h>
-#include <base/options.h>
 #include <base/process.h>
 #include <scribble/engine.h>
 
@@ -18,6 +17,26 @@ ErrorOrSocket start_backend_process()
     Process       *client = process_create(sv_from("scribble-backend"), sv_cstr(path, NULL));
     MUST(Int, process_start(client));
     trace(IPC, "Started client, pid = %d\n", client->pid);
+    return socket_accept(listen_fd);
+}
+
+void *backend_main_wrapper(void *path)
+{
+    scribble_backend((StringView) { (char const *) path, strlen(path) }, true);
+    return NULL;
+}
+
+ErrorOrSocket start_backend_thread()
+{
+    StringView     path = sv_printf("/tmp/scribble-engine-%d", getpid());
+    socket_t const listen_fd = MUST(Socket, unix_socket_listen(path));
+    pthread_t      thread;
+    int            ret;
+
+    if ((ret = pthread_create(&thread, NULL, backend_main_wrapper, (void *) path.ptr)) != 0) {
+        fatal("Could not start backend thread: %s", strerror(ret));
+    }
+    trace(IPC, "Started client thread");
     return socket_accept(listen_fd);
 }
 
@@ -166,6 +185,21 @@ void handle_intermediate_message(socket_t socket, HttpRequest request)
     HTTP_RESPONSE(socket, HTTP_STATUS_NOT_FOUND);
 }
 
+void handle_execute_message(socket_t socket, HttpRequest request)
+{
+    if (sv_eq_cstr(request.url, "/execute/start")) {
+        printf("[execute] started\n");
+        HTTP_RESPONSE_OK(socket);
+        return;
+    }
+    if (sv_eq_cstr(request.url, "/execute/done")) {
+        printf("[execute] done\n");
+        HTTP_RESPONSE_OK(socket);
+        return;
+    }
+    HTTP_RESPONSE(socket, HTTP_STATUS_NOT_FOUND);
+}
+
 void handle_generate_message(socket_t socket, HttpRequest request)
 {
     if (sv_eq_cstr(request.url, "/generate/start")) {
@@ -233,6 +267,10 @@ bool frontend_message_handler(socket_t conn_fd, HttpRequest request, JSONValue c
     }
     if (sv_startswith(request.url, sv_from("/intermediate/"))) {
         handle_intermediate_message(conn_fd, request);
+        return false;
+    }
+    if (sv_startswith(request.url, sv_from("/execute/"))) {
+        handle_execute_message(conn_fd, request);
         return false;
     }
     if (sv_startswith(request.url, sv_from("/generate/"))) {

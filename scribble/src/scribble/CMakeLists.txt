@@ -26,7 +26,7 @@ add_library(
         type.c
 )
 
-target_link_libraries(scb_impl scb_model)
+target_link_libraries(scb_impl scb_model trampoline)
 
 add_executable(
         scribble
@@ -34,7 +34,7 @@ add_executable(
         frontend_main.c
 )
 
-target_link_libraries(scribble scb_impl scb_arm64 scribblert)
+target_link_libraries(scribble scb_impl scb_arm64)
 
 add_executable(
         scribble-backend
@@ -42,7 +42,7 @@ add_executable(
         engine.h
 )
 
-target_link_libraries(scribble-backend scb_impl scb_arm64 scribblert)
+target_link_libraries(scribble-backend scb_impl scb_arm64)
 
 add_executable(
         scribble-threaded
@@ -50,7 +50,7 @@ add_executable(
         frontend_main.c
 )
 
-target_link_libraries(scribble-threaded scb_impl scb_arm64 scribblert)
+target_link_libraries(scribble-threaded scb_impl scb_arm64)
 target_compile_definitions(scribble-threaded PUBLIC SCRIBBLE_THREADED_BACKEND)
 
 add_library(

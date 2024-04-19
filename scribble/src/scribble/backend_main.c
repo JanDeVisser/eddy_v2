@@ -34,5 +34,5 @@ int main(int argc, char **argv)
     }
     log_init();
     type_registry_init();
-    return backend(socket_path);
+    return scribble_backend(socket_path, false);
 }

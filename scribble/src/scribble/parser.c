@@ -1306,9 +1306,51 @@ void parser_debug_node(ParserContext *ctx, SyntaxNode *node)
     HTTP_POST_MUST(ctx->frontend, "/parser/node", n);
 }
 
+ParserContext parse_text(BackendConnection *conn, JSONValue config)
+{
+    assert(json_has(&config, "text"));
+    StringView text = json_get_string(&config, "text", sv_null());
+    StringView name = json_get_string(&config, "buffer_name", SV("untitled"));
+    ParserContext ret = { 0 };
+    ret.frontend = conn->fd;
+    ret.debug = json_get_bool(&config, "debug", false);
+    ret.source_name = sv_copy(name);
+
+    if (ret.debug) {
+        HTTP_POST_MUST(conn->fd, "/parser/start", json_string(name));
+    }
+
+    Token token = { .kind = TK_PROGRAM, .text = ret.source_name };
+    ret.program = syntax_node_make(&ret, SNT_PROGRAM, ret.source_name, token);
+    if (json_get_bool(&config, "stdlib", true)) {
+        import_package(&ret, token, SV("std"));
+    }
+    OptionalJSONValue libs_maybe = json_get(&config, "libraries");
+    if (libs_maybe.has_value && libs_maybe.value.type == JSON_TYPE_ARRAY) {
+        JSONValue libs = libs_maybe.value;
+        for (size_t ix = 0; ix < json_len(&libs); ++ix) {
+            JSONValue lib = MUST_OPTIONAL(JSONValue, json_at(&libs, ix));
+            if (lib.type == JSON_TYPE_STRING) {
+                import_package(&ret, token, lib.string);
+            }
+        }
+    }
+    SyntaxNode *module = parse_module(&ret, text, ret.source_name);
+    module->next = ret.program->program.modules;
+    ret.program->program.modules = module;
+
+    if (ret.debug) {
+        HTTP_GET_MUST(conn->fd, "/parser/done", sl_create());
+    }
+    return ret;
+}
+
 ParserContext parse(BackendConnection *conn, JSONValue config)
 {
-    StringView dir_or_file = json_get_string(&config, "target", sv_from("."));
+    if (json_has(&config, "text")) {
+        return parse_text(conn, config);
+    }
+    StringView dir_or_file = json_get_string(&config, "target", SV("."));
 
     ParserContext ret = { 0 };
     ret.frontend = conn->fd;
@@ -1316,7 +1358,7 @@ ParserContext parse(BackendConnection *conn, JSONValue config)
     ret.source_name = sv_copy(dir_or_file);
 
     if (ret.debug) {
-        HTTP_POST_MUST(conn->fd, "/parser/start", MUST_OPTIONAL(JSONValue, json_get(&config, "target")));
+        HTTP_POST_MUST(conn->fd, "/parser/start", json_string(dir_or_file));
         char cwd[256];
         getcwd(cwd, 256);
         parser_debug_info(&ret, "CWD: %s dir: %.*s", cwd, SV_ARG(dir_or_file));

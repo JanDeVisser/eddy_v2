@@ -25,7 +25,11 @@ noreturn void shutdown_backend(BackendConnection *conn, int code)
 {
     socket_close(conn->fd);
     fs_unlink(conn->socket);
-    exit(1);
+    if (!conn->threaded) {
+        exit(1);
+    } else {
+        pthread_exit(NULL);
+    }
 }
 
 noreturn void exit_backend(BackendConnection *conn, StringView error)
@@ -45,6 +49,25 @@ bool bootstrap_backend(BackendConnection *conn)
     return true;
 }
 
+OptionalJSONValue get_stage(JSONValue *stages, char const *stage)
+{
+    trace(BACKEND, "Looking for stage '%s'", stage);
+    for (size_t ix = 0; ix < json_len(stages); ++ix) {
+        JSONValue  s = MUST_OPTIONAL(JSONValue, json_at(stages, ix));
+        if (s.type != JSON_TYPE_OBJECT) {
+            continue;
+        }
+        StringView name = json_get_string(&s, "name", sv_null());
+        trace(BACKEND, "--> '%.*s'", SV_ARG(name));
+        if (sv_eq_cstr(name, stage)) {
+            trace(BACKEND, "Found it");
+            RETURN_VALUE(JSONValue, s);
+        }
+    }
+    trace(BACKEND, "Not there");
+    RETURN_EMPTY(JSONValue);
+}
+
 void compile_program(BackendConnection *conn)
 {
     type_registry_init();
@@ -53,71 +76,80 @@ void compile_program(BackendConnection *conn)
     SyntaxNode *program = NULL;
     BoundNode  *ast = NULL;
     IRProgram   ir = { 0 };
-    for (size_t ix = 0; ix < json_len(&stages); ++ix) {
-        JSONValue  stage = MUST_OPTIONAL(JSONValue, json_at(&stages, ix));
-        StringView name = json_get_string(&stage, "name", sv_null());
-        if (sv_eq_cstr(name, "parse")) {
-            ParserContext parse_result = parse(conn, stage);
-            if (parse_result.errors.size > 0) {
-                JSONValue errors = scribble_errors_to_json(&parse_result.errors);
-                HTTP_POST_MUST(conn->fd, "/parser/errors", errors);
-                exit_backend(conn, sv_from("Parse errors found"));
-            }
-            if (json_get_bool(&stage, "graph", false)) {
-                graph_program(parse_result.program);
-            }
-            program = parse_result.program;
-            continue;
+
+    OptionalJSONValue stage = get_stage(&stages, "parse");
+    if (!stage.has_value) {
+        StringList errors = {0};
+        sl_push(&errors, sv_printf("error=%s", "NO_PARSE_STAGE"));
+        http_get_message(conn->fd, sv_from("/panic"), errors);
+        exit_backend(conn, SV("No parse stage"));
+    }
+    ParserContext parse_result = parse(conn, stage.value);
+    if (parse_result.errors.size > 0) {
+        JSONValue errors = scribble_errors_to_json(&parse_result.errors);
+        HTTP_POST_MUST(conn->fd, "/parser/errors", errors);
+        exit_backend(conn, sv_from("Parse errors found"));
+    }
+    if (json_get_bool(&stage.value, "graph", false)) {
+        graph_program(parse_result.program);
+    }
+    program = parse_result.program;
+
+    stage = get_stage(&stages, "bind");
+    if (!stage.has_value) {
+        StringList errors = {0};
+        sl_push(&errors, sv_printf("error=%s", "NO_BIND_STAGE"));
+        http_get_message(conn->fd, sv_from("/panic"), errors);
+        exit_backend(conn, SV("No bind stage"));
+    }
+    assert(program != NULL);
+    bool debug = json_get_bool(&stage.value, "debug", false);
+    ast = bind_program(conn, stage.value, program);
+    if (ast == NULL) {
+        return;
+    }
+
+    stage = get_stage(&stages, "ir");
+    if (!stage.has_value) {
+        StringList errors = {0};
+        sl_push(&errors, sv_printf("error=%s", "NO_IR_STAGE"));
+        http_get_message(conn->fd, sv_from("/panic"), errors);
+        exit_backend(conn, SV("No IR stage"));
+    }
+    debug = json_get_bool(&stage.value, "debug", false);
+    if (debug) {
+        HTTP_GET_MUST(conn->fd, "/intermediate/start", sl_create());
+    }
+    ir = generate(conn, ast);
+    if (debug) {
+        HTTP_GET_MUST(conn->fd, "/intermediate/done", sl_create());
+    }
+    stage = get_stage(&stages, "generate");
+    if (stage.has_value) {
+        debug = json_get_bool(&stage.value, "debug", false);
+        if (debug) {
+            HTTP_GET_MUST(conn->fd, "/generate/start", sl_create());
         }
-        if (sv_eq_cstr(name, "bind")) {
-            assert(program != NULL);
-            bool debug = json_get_bool(&stage, "debug", false);
-            ast = bind_program(conn, stage, program);
-            if (ast == NULL) {
-                break;
-            }
-            continue;
+        output_arm64(conn, &ir);
+        if (debug) {
+            HTTP_GET_MUST(conn->fd, "/generate/done", sl_create());
         }
-        if (sv_eq_cstr(name, "ir")) {
-            assert(ast != NULL);
-            bool debug = json_get_bool(&stage, "debug", false);
-            if (debug) {
-                HTTP_GET_MUST(conn->fd, "/intermediate/start", sl_create());
-            }
-            ir = generate(conn, ast);
-            if (debug) {
-                HTTP_GET_MUST(conn->fd, "/intermediate/done", sl_create());
-            }
-            continue;
+    }
+    stage = get_stage(&stages, "execute");
+    if (stage.has_value) {
+        debug = json_get_bool(&stage.value, "debug", false);
+        if (debug) {
+            HTTP_GET_MUST(conn->fd, "/execute/start", sl_create());
         }
-        if (sv_eq_cstr(name, "generate")) {
-            assert(ir.obj_type == OT_PROGRAM);
-            bool debug = json_get_bool(&stage, "debug", false);
-            if (debug) {
-                HTTP_GET_MUST(conn->fd, "/generate/start", sl_create());
-            }
-            output_arm64(conn, &ir);
-            if (debug) {
-                HTTP_GET_MUST(conn->fd, "/generate/done", sl_create());
-            }
-            continue;
-        }
-        if (sv_eq_cstr(name, "emulate")) {
-            assert(ir.obj_type == OT_PROGRAM);
-            bool debug = json_get_bool(&stage, "debug", false);
-            if (debug) {
-                HTTP_GET_MUST(conn->fd, "/emulate/start", sl_create());
-            }
-            execute(conn, ir);
-            if (debug) {
-                HTTP_GET_MUST(conn->fd, "/emulate/done", sl_create());
-            }
+        execute(conn, ir);
+        if (debug) {
+            HTTP_GET_MUST(conn->fd, "/execute/done", sl_create());
         }
     }
     exit_backend(conn, SV("0"));
 }
 
-int backend(StringView path)
+int scribble_backend(StringView path, bool threaded)
 {
     socket_t          conn_fd = MUST(Socket, unix_socket_connect(path));
     BackendConnection conn = { 0 };
@@ -125,6 +157,7 @@ int backend(StringView path)
     conn.fd = conn_fd;
     conn.context = NULL;
     conn.socket = path;
+    conn.threaded = threaded;
 
     if (http_get_message(conn.fd, sv_from("/hello"), (StringList) { 0 }) != HTTP_STATUS_HELLO) {
         fatal("/hello failed");
@@ -135,24 +168,4 @@ int backend(StringView path)
     compile_program(&conn);
 
     return 0;
-}
-
-void *backend_main_wrapper(void *path)
-{
-    backend((StringView) { (char const *) path, strlen(path) });
-    return NULL;
-}
-
-ErrorOrSocket start_backend_thread()
-{
-    StringView     path = sv_printf("/tmp/scribble-engine-%d", getpid());
-    socket_t const listen_fd = MUST(Socket, unix_socket_listen(path));
-    pthread_t      thread;
-    int            ret;
-
-    if ((ret = pthread_create(&thread, NULL, backend_main_wrapper, (void *) path.ptr)) != 0) {
-        fatal("Could not start backend thread: %s", strerror(ret));
-    }
-    trace(IPC, "Started client thread");
-    return socket_accept(listen_fd);
 }

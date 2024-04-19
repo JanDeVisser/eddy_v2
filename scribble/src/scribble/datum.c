@@ -218,6 +218,50 @@ long datum_signed_integer_value(Datum *d)
     }
 }
 
+size_t datum_binary_image(Datum *d, void *buffer)
+{
+    BuiltinType bit = typeid_builtin_type(d->type);
+    switch (datum_kind(d)) {
+    case TK_PRIMITIVE: {
+        switch (bit) {
+#undef S
+#define S(dt, n, ct, is_signed, format, size) \
+    case BIT_##dt:                            \
+        memcpy(buffer, &d->integer.n, size);  \
+        return size;
+            INTEGERTYPES(S)
+#undef S
+        case BIT_BOOL:
+            memcpy(buffer, &d->bool_value, 1);
+            return 1;
+        case BIT_FLOAT:
+            memcpy(buffer, &d->float_value, 8);
+            return 8;
+        case BIT_RAW_POINTER:
+            memcpy(buffer, &d->raw_pointer, 8);
+            return 8;
+        default:
+            UNREACHABLE();
+        }
+        break;
+    }
+    case TK_AGGREGATE: {
+        if (bit == BIT_STRING) {
+            memcpy(buffer, &d->string.ptr, 8);
+            memcpy(buffer + 8, &d->string.length, 8);
+            return 16;
+        }
+        size_t ret = 0;
+        for (size_t ix = 0; ix < d->aggregate.num_components; ++ix) {
+            ret += datum_binary_image(d->aggregate.components + ix, buffer + ret);
+        }
+        return ret;
+    }
+    default:
+        UNREACHABLE();
+    }
+}
+
 Datum *datum_copy(Datum *dest, Datum *src)
 {
     datum_free_contents(dest);
@@ -965,7 +1009,7 @@ JSONValue datum_to_json(Datum *d)
             json_set(&ret, "string", json_string(d->string));
             break;
         }
-        JSONValue aggregate = json_array();
+        JSONValue       aggregate = json_array();
         ExpressionType *et = type_registry_get_type_by_id(d->type);
         for (size_t ix = 0; ix < d->aggregate.num_components; ++ix) {
             JSONValue component = json_object();
@@ -976,7 +1020,7 @@ JSONValue datum_to_json(Datum *d)
         json_set(&ret, "aggregate", aggregate);
     } break;
     case TK_VARIANT: {
-        JSONValue variant = json_object();
+        JSONValue       variant = json_object();
         ExpressionType *et = type_registry_get_type_by_id(d->variant.tag->type);
         ExpressionType *enumeration = type_registry_get_type_by_id(et->variant.enumeration);
         for (size_t ix = 0; ix < enumeration->enumeration.size; ++ix) {

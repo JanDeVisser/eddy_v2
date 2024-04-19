@@ -55,6 +55,7 @@ Datum               *datum_clone_into(Datum *into, Datum *from);
 extern Datum        *datum_make_integer(Integer value);
 extern unsigned long datum_unsigned_integer_value(Datum *d);
 extern long          datum_signed_integer_value(Datum *d);
+extern size_t        datum_binary_image(Datum *d, void *buffer);
 extern Datum        *datum_copy(Datum *dest, Datum *src);
 extern Datum        *datum_apply(Datum *d1, Operator op, Datum *d2);
 extern void          datum_print(Datum *d);

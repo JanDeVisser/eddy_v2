@@ -48,6 +48,7 @@ void native_call(StringView name, size_t argc, Datum **values, Datum *ret)
 
     for (size_t ix = 0; ix < argc; ++ix) {
         ExpressionType *et = type_registry_get_type_by_id(values[ix]->type);
+        BuiltinType builtin_type = typeid_builtin_type(et->type_id);
 
         // Stage B – Pre-padding and extension of arguments
         // For each argument in the list the first matching rule from the
@@ -158,7 +159,6 @@ void native_call(StringView name, size_t argc, Datum **values, Datum *ret)
         // 8, the argument is copied to the least significant bits in x[NGRN].
         // The NGRN is incremented by one. The argument has now been allocated.
         if ((type_kind(et) == TK_PRIMITIVE) && (ngrn < 8)) {
-            BuiltinType builtin_type = typeid_builtin_type(et->type_id);
             if (BuiltinType_is_integer(builtin_type) || builtin_type == BIT_RAW_POINTER) {
                 t.x[ngrn] = datum_unsigned_integer_value(values[ix]);
                 ++ngrn;
@@ -184,6 +184,19 @@ void native_call(StringView name, size_t argc, Datum **values, Datum *ret)
         // memory (the contents of any unused parts of the registers are
         // unspecified by this standard). The NGRN is incremented by the number
         // of registers used. The argument has now been allocated.
+        if (type_kind(et) == TK_AGGREGATE) {
+            size_t size_in_double_words = align_at(typeid_sizeof(et->type_id), 8) / 8;
+            if (size_in_double_words <= (8 - ngrn)) {
+                uint64_t buffer[size_in_double_words];
+                size_t sz = datum_binary_image(values[ix], buffer);
+                assert(sz <= size_in_double_words * 8);
+                for (size_t ix2 = 0; ix2 < size_in_double_words; ++ix2) {
+                    t.x[ngrn] = buffer[ix2];
+                    ++ngrn;
+                }
+                continue;
+            }
+        }
 
         // C.13 The NGRN is set to 8.
 

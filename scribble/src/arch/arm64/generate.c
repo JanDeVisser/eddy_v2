@@ -624,9 +624,7 @@ void initialize_assembly(Assembly *assembly)
                 .scope.kind = SK_FUNCTION,
                 .scope.up = &assembly->scope,
             });
-        if (function->kind == FK_SCRIBBLE) {
-            arm_function->scribble.code = code_create(arm_function);
-        }
+        arm_function->scribble.code = code_create(arm_function);
         function->data = arm_function;
         arm_function->scope.function = arm_function;
         generate_function_declaration(arm_function, function);
