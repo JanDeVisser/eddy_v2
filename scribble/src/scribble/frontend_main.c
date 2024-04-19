@@ -41,25 +41,33 @@ int main(int argc, char **argv)
 
     JSONValue config = json_object();
     JSONValue stages = json_array();
+
     JSONValue stage = json_object();
     json_set(&config, "threaded", json_bool(has_option("threaded")));
     json_set_cstr(&stage, "name", "parse");
     json_set_cstr(&stage, "target", program_dir_or_file);
     json_set(&stage, "debug", json_bool(true));
     json_append(&stages, stage);
+
     stage = json_object();
     json_set_cstr(&stage, "name", "bind");
     json_set(&stage, "debug", json_bool(true));
     json_append(&stages, stage);
+
     stage = json_object();
     json_set_cstr(&stage, "name", "ir");
     json_set(&stage, "debug", json_bool(true));
     json_set(&stage, "list-ir", json_bool(has_option("list-ir")));
     json_append(&stages, stage);
+
     stage = json_object();
-    json_set_cstr(&stage, "name", "generate");
     json_set(&stage, "debug", json_bool(true));
-    json_set(&stage, "keep-assembly", json_bool(has_option("keep-assembly")));
+    if (has_option("execute")) {
+        json_set_cstr(&stage, "name", "execute");
+    } else {
+        json_set_cstr(&stage, "name", "generate");
+        json_set(&stage, "keep-assembly", json_bool(has_option("keep-assembly")));
+    }
     json_append(&stages, stage);
     json_set(&config, "stages", stages);
     scribble_frontend(config, frontend_message_handler);

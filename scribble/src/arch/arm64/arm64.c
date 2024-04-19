@@ -212,15 +212,16 @@ ErrorOrInt output_arm64(BackendConnection *conn, IRProgram *program)
         StringList ld_args = sl_create();
         sl_push(&ld_args, sv_from("-o"));
         sl_push(&ld_args, bin_name);
-        sl_push(&ld_args, sv_from("-lbase"));
-        sl_push(&ld_args, sv_from("-lscribblert"));
-        sl_push(&ld_args, sv_from("-lSystem"));
-        sl_push(&ld_args, sv_from("-syslibroot"));
+        sl_push(&ld_args, SV("-lbase"));
+        sl_push(&ld_args, SV("-lscribblert"));
+        sl_push(&ld_args, SV("-lscribblestart"));
+        sl_push(&ld_args, SV("-lSystem"));
+        sl_push(&ld_args, SV("-syslibroot"));
         sl_push(&ld_args, sdk_path);
-        sl_push(&ld_args, sv_from("-e"));
-        sl_push(&ld_args, sv_from("_start"));
-        sl_push(&ld_args, sv_from("-arch"));
-        sl_push(&ld_args, sv_from("arm64"));
+        sl_push(&ld_args, SV("-e"));
+        sl_push(&ld_args, SV("_start"));
+        sl_push(&ld_args, SV("-arch"));
+        sl_push(&ld_args, SV("arm64"));
         sl_push(&ld_args, sv_printf("-L%.*s/lib", SV_ARG(scribble_dir)));
         sl_extend(&ld_args, &modules);
 
@@ -230,7 +231,7 @@ ErrorOrInt output_arm64(BackendConnection *conn, IRProgram *program)
         //        for (auto& m : modules)
         //            ld_args.push_back(m);
 
-        int ld_result = MUST(Int, execute_sl(sv_from("ld"), &ld_args));
+        int ld_result = MUST(Int, execute_sl(SV("ld"), &ld_args));
         if (ld_result) {
             fatal("ld failed with exit code %d", ld_result);
         }
