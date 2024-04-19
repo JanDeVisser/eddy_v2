@@ -128,11 +128,10 @@ void handle_bind_message(socket_t socket, HttpRequest request)
         return;
     }
     if (sv_eq_cstr(request.url, "/bind/syntaxnode")) {
-        printf("[bind] \n* * *\n%.*s\n* * *\n", SV_ARG(request.body));
         JSONValue  node = MUST(JSONValue, json_decode(request.body));
         StringView type = json_get_string(&node, "nodetype", sv_null());
         StringView name = json_get_string(&node, "name", sv_null());
-        printf("[bind] %.*s %.*s\n%.*s\n", SV_ARG(type), SV_ARG(name), SV_ARG(request.body));
+        printf("[bind] %.*s %.*s\n", SV_ARG(type), SV_ARG(name));
         HTTP_RESPONSE_OK(socket);
         return;
     }
