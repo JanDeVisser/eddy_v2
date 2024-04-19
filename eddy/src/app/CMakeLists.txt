@@ -17,7 +17,7 @@ add_executable(
 )
 
 target_include_directories(eddy PRIVATE ${raylib_INCLUDE_DIRS} ${FREETYPE_INCLUDE_DIRS})
-target_link_libraries(eddy PRIVATE lsp ${raylib_LIBRARIES} ${FREETYPE_LIBRARIES})
+target_link_libraries(eddy PRIVATE lsp scb_impl scb_arm64 scribblert ${raylib_LIBRARIES} ${FREETYPE_LIBRARIES})
 
 install(TARGETS eddy
         ARCHIVE DESTINATION lib
