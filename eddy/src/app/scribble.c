@@ -9,10 +9,70 @@
 #include <app/editor.h>
 #include <app/scribble.h>
 #include <app/widget.h>
+#include <scribble/engine.h>
 
 // -- Scribble Mode ---------------------------------------------------------
 
 MODE_CLASS_DEF(ScribbleMode, scribble_mode);
+
+bool message_handler(socket_t conn_fd, HttpRequest request, JSONValue config)
+{
+    trace(IPC, "[S] Got %.*s", SV_ARG(request.url));
+    if (sv_eq_cstr(request.url, "/hello")) {
+        HttpResponse response = { 0 };
+        response.status = HTTP_STATUS_HELLO;
+        http_response_send(conn_fd, &response);
+        return false;
+    }
+    if (sv_eq_cstr(request.url, "/bootstrap/config")) {
+        HttpResponse response = { 0 };
+        response.status = HTTP_STATUS_OK;
+        response.body = json_encode(config);
+        http_response_send(conn_fd, &response);
+        return false;
+    }
+    if (sv_eq_cstr(request.url, "/goodbye")) {
+        HttpResponse response = { 0 };
+        response.status = HTTP_STATUS_OK;
+        http_response_send(conn_fd, &response);
+        return true;
+    }
+    HttpResponse response = { 0 };
+    response.status = HTTP_STATUS_OK;
+    http_response_send(conn_fd, &response);
+    return false;
+}
+
+void scribble_cmd_execute(ScribbleMode *mode, JSONValue unused)
+{
+    Editor     *editor = (Editor *) mode->parent->parent;
+    BufferView *view = editor->buffers.elements + editor->current_buffer;
+    Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
+
+    JSONValue config = json_object();
+    json_set(&config, "threaded", json_bool(true));
+    JSONValue stages = json_array();
+    JSONValue stage = json_object();
+    json_set_cstr(&stage, "name", "parse");
+    json_set_string(&stage, "buffer_name", buffer->name);
+    json_set_string(&stage, "text", buffer->text.view);
+    json_set(&stage, "debug", json_bool(true));
+    json_append(&stages, stage);
+    stage = json_object();
+    json_set_cstr(&stage, "name", "bind");
+    json_set(&stage, "debug", json_bool(true));
+    json_append(&stages, stage);
+    stage = json_object();
+    json_set_cstr(&stage, "name", "ir");
+    json_set(&stage, "debug", json_bool(true));
+    json_append(&stages, stage);
+    stage = json_object();
+    json_set_cstr(&stage, "name", "execute");
+    json_set(&stage, "debug", json_bool(true));
+    json_append(&stages, stage);
+    json_set(&config, "stages", stages);
+    scribble_frontend(config, message_handler);
+}
 
 void scribble_mode_on_draw(ScribbleMode *mode)
 {
@@ -95,8 +155,8 @@ void scribble_mode_cmd_split_line(ScribbleMode *mode, JSONValue unused)
         }
     } else {
         text_length = last_non_space - first_non_space + 1;
-        bool   last_is_close_curly = buffer->text.ptr[last_non_space] == '}';
-        bool   last_is_open_curly = buffer->text.ptr[last_non_space] == '{';
+        bool last_is_close_curly = buffer->text.ptr[last_non_space] == '}';
+        bool last_is_open_curly = buffer->text.ptr[last_non_space] == '{';
         // Remove trailing whitespace:
         if (view->new_cursor > last_non_space) {
             // Actually strip the trailing whitespace:
@@ -200,6 +260,7 @@ void scribble_mode_init(ScribbleMode *mode)
         (KeyCombo) { KEY_ENTER, KMOD_NONE }, (KeyCombo) { KEY_KP_ENTER, KMOD_NONE });
     widget_add_command(mode, "scribble-unindent", (WidgetCommandHandler) scribble_mode_cmd_unindent,
         (KeyCombo) { KEY_TAB, KMOD_SHIFT });
+    widget_register(mode, "execute-buffer", (WidgetCommandHandler) scribble_cmd_execute);
     // mode->handlers.on_draw = (WidgetOnDraw) scribble_mode_on_draw;
     BufferView *view = (BufferView *) mode->parent;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
