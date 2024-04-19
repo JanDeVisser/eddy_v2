@@ -59,12 +59,17 @@ void vemit_log_message(LogLevel level, char const *file_name, int line, TraceCat
     }
     if (linelen == 0) {
         StringView cat = category;
+        char lvl = 'T';
         if (level >= LL_INFO) {
-            cat = sv_from(log_level_to_string(level));
+            char const *level_name = log_level_to_string(level);
+            cat = sv_from(level_name);
+            lvl = *level_name;
         }
         char buf[32];
         snprintf(buf, 32, "%s:%d", file_name, line);
-        fprintf(stderr, "%-*.*s:[%05d:%08llx]:%c:%7.7s:", 15, 15, buf, getpid(), (uint64_t) pthread_self(), *cat.ptr, cat.ptr);
+        uint64_t tid = 0;
+        pthread_threadid_np(pthread_self(), &tid);
+        fprintf(stderr, "%-*.*s:[%05d:%08llx]:%c:%7.7s:", 15, 15, buf, getpid(), tid, lvl, cat.ptr);
     }
     linelen += vfprintf(stderr, msg, args);
 }
