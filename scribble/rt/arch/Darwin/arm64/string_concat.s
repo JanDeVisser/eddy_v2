@@ -34,14 +34,14 @@ string_concat:
 
     stp     x0, x1, [sp,32]  ; lhs
     stp     x2, x3, [sp,16]  ; rhs
-    bl      sb_create
+    bl      _sb_create
     stp     x0, x1, [sp]     ; Store new stringbuilder on stack
     mov     x0, sp           ; Get pointer to new stringbuilder
     ldp     x1, x2, [sp, 32] ; Get lhs
-    bl      sb_append        ; Copy lhs into stringbuilder
+    bl      _sb_append_sv    ; Copy lhs into stringbuilder
     mov     x0, sp           ; Get pointer to new stringbuilder
     ldp     x1, x2, [sp, 16] ; Get rhs
-    bl      sb_append        ; Copy rhs into stringbuilder
+    bl      _sb_append_sv    ; Copy rhs into stringbuilder
     ldp     x0, x1, [sp]     ; Return stringbuilder
 
     mov     sp,fp
