@@ -116,7 +116,7 @@ ErrorOrHttpRequest http_request_receive(socket_t socket)
         ret.body = TRY_TO(StringView, HttpRequest, socket_read(socket, content_length));
         assert(ret.body.length == content_length);
         sb_append_sv(&sb, ret.body);
-        trace(HTTP, "Read Request Body:\n%.*s\n", SV_ARG(ret.body));
+        trace(HTTP, "Read Request Body");
     }
     ret.request = sb.view;
     trace(HTTP, "http_request_receive done");
@@ -146,7 +146,7 @@ ErrorOrInt http_response_send(socket_t socket, HttpResponse *response)
     if (!sv_empty(response->body)) {
         sb_append_sv(&sb, response->body);
     }
-    trace(HTTP, "Sending response\n%.*s", SV_ARG(sb.view));
+    trace(HTTP, "Sending response of %zu bytes", sb.view.length);
     TRY_TO(Size, Int, socket_write(socket, sb.view.ptr, sb.view.length));
     RETURN(Int, 0);
 }
@@ -205,7 +205,7 @@ ErrorOrHttpResponse http_response_receive(socket_t socket)
     if (content_length) {
         size_t     len = sb.view.length;
         StringView body = TRY_TO(StringView, HttpResponse, socket_read(socket, content_length));
-        trace(HTTP, "Read Response Body:\n%.*s\n", SV_ARG(body));
+        trace(HTTP, "Read Response Body");
         sb_append_sv(&sb, body);
         sv_free(body);
         ret.body = (StringView) { .ptr = sb.view.ptr + len, .length = content_length };
