@@ -142,6 +142,8 @@ HttpResponse        http_post_request(socket_t socket, StringView url, JSONValue
 HttpStatus          http_get_message(socket_t socket, StringView url, StringList params);
 HttpStatus          http_post_message(socket_t socket, StringView url, JSONValue body);
 
+typedef HttpResponse (*HttpCallback)(void *ctx, HttpResponse response);
+
 #define HTTP_POST_REQUEST_MUST(fd, url, req_body)                               \
     ({                                                                          \
         HttpResponse _resp = http_post_request((fd), sv_from(url), (req_body)); \
@@ -160,20 +162,9 @@ HttpStatus          http_post_message(socket_t socket, StringView url, JSONValue
         MUST(JSONValue, json_decode(_resp.body));                            \
     })
 
-#define HTTP_POST_CALLBACK_MUST(fd, url, req_body, callback, ctx)               \
-    ({                                                                          \
-        HttpResponse _resp = http_post_request((fd), sv_from(url), (req_body)); \
-        switch (_resp.status) {                                                 \
-        case HTTP_STATUS_NOW_CLIENT:                                            \
-            _resp = callback(ctx, _resp);                                       \
-            break;                                                              \
-        case HTTP_STATUS_OK:                                                    \
-            break;                                                              \
-        default:                                                                \
-            fatal("%s failed", (url));                                          \
-        }                                                                       \
-        MUST(JSONValue, json_decode(_resp.body));                               \
-    })
+JSONValue http_post_callback(socket_t fd, char const* url, JSONValue req_body, HttpCallback callback, void *ctx);
+
+#define HTTP_POST_CALLBACK_MUST(fd, url, req_body, (HttpCallback) callback, ctx) http_post_callback(fd, url, req_body, callback, ctx)
 
 #define HTTP_POST_MUST(fd, url, body)                                          \
     do {                                                                       \

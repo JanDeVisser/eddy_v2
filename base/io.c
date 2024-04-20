@@ -21,12 +21,6 @@
 #define BUF_SZ 65536
 #define NO_SOCKET ((socket_t) - 1)
 
-typedef struct {
-    int           fd;
-    StringBuilder buffer;
-} Socket;
-
-DA_WITH_NAME(Socket, Sockets);
 DA_IMPL(Socket);
 
 Sockets s_sockets = { 0 };
@@ -37,6 +31,14 @@ ErrorOrInt socket_fd(socket_t socket)
         RETURN(Int, s_sockets.elements[socket].fd);
     }
     ERROR(Int, IOError, 0, "socket cannot be mapped to file descriptor");
+}
+
+Socket * socket_get(socket_t socket)
+{
+    if (socket >= s_sockets.size) {
+        return NULL;
+    }
+    return s_sockets.elements + socket;
 }
 
 socket_t socket_allocate(int fd)
@@ -237,7 +239,7 @@ ErrorOrSize socket_fill_buffer(Socket *s)
         }
     }
     TRY(Size, read_available_bytes(s));
-//    assert(s->buffer.length > 0);
+    assert(s->buffer.length > 0);
     RETURN(Size, s->buffer.length);
 }
 
@@ -269,7 +271,7 @@ ErrorOrStringView socket_read(socket_t socket, size_t count)
             if (out.length == 0) {
                 out = s->buffer;
                 s->buffer = sb_copy_chars(out.ptr + remaining, available - remaining);
-                out.length = available - remaining;
+                out.length = remaining;
             } else {
                 sb_append_chars(&out, s->buffer.view.ptr, remaining);
                 memmove((char *) s->buffer.ptr, s->buffer.ptr + remaining, available - remaining);

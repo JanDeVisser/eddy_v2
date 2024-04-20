@@ -17,6 +17,14 @@ ERROR_OR_ALIAS(Socket, socket_t);
 
 ERROR_OR_ALIAS(SockAddrIn, struct sockaddr_in);
 
+typedef struct {
+    int           fd;
+    StringBuilder buffer;
+} Socket;
+
+DA_WITH_NAME(Socket, Sockets);
+
+Socket *          socket_get(socket_t socket);
 ErrorOrSockAddrIn tcpip_address_resolve(StringView ip_address);
 ErrorOrInt        fd_make_nonblocking(int fd);
 ErrorOrInt        socket_fd(socket_t socket);
