@@ -34,8 +34,7 @@ noreturn void shutdown_backend(BackendConnection *conn, int code)
 
 noreturn void exit_backend(BackendConnection *conn, StringView error)
 {
-    HttpRequest request = { 0 };
-    HTTP_POST_MUST(conn->fd, "/goodbye", json_string(sv_printf("Error: %.*s", SV_ARG(error))));
+    HTTP_POST_MUST(conn->fd, "/panic", json_string(sv_printf("Error: %.*s", SV_ARG(error))));
     shutdown_backend(conn, 1);
 }
 
@@ -97,9 +96,6 @@ void compile_program(BackendConnection *conn)
 
     stage = get_stage(&stages, "bind");
     if (!stage.has_value) {
-        StringList errors = {0};
-        sl_push(&errors, sv_printf("error=%s", "NO_BIND_STAGE"));
-        http_get_message(conn->fd, sv_from("/panic"), errors);
         exit_backend(conn, SV("No bind stage"));
     }
     assert(program != NULL);
@@ -111,9 +107,6 @@ void compile_program(BackendConnection *conn)
 
     stage = get_stage(&stages, "ir");
     if (!stage.has_value) {
-        StringList errors = {0};
-        sl_push(&errors, sv_printf("error=%s", "NO_IR_STAGE"));
-        http_get_message(conn->fd, sv_from("/panic"), errors);
         exit_backend(conn, SV("No IR stage"));
     }
     debug = json_get_bool(&stage.value, "debug", false);
@@ -137,16 +130,13 @@ void compile_program(BackendConnection *conn)
     }
     stage = get_stage(&stages, "execute");
     if (stage.has_value) {
-        debug = json_get_bool(&stage.value, "debug", false);
-        if (debug) {
-            HTTP_GET_MUST(conn->fd, "/execute/start", sl_create());
+        ErrorOrInt exit_code = execute(conn, ir);
+        if (ErrorOrInt_has_value(exit_code)) {
+            HTTP_GET_MUST(conn->fd, "/goodbye", sl_create());
+            return;
         }
-        execute(conn, ir);
-        if (debug) {
-            HTTP_GET_MUST(conn->fd, "/execute/done", sl_create());
-        }
+        HTTP_POST_MUST(conn->fd, "/error", json_string(sv_from(Error_to_string(exit_code.error))));
     }
-    exit_backend(conn, SV("0"));
 }
 
 int scribble_backend(StringView path, bool threaded)
@@ -163,9 +153,12 @@ int scribble_backend(StringView path, bool threaded)
         fatal("/hello failed");
     }
     conn.config = HTTP_GET_REQUEST_MUST(conn.fd, "/bootstrap/config", (StringList) { 0 });
-    printf("[C] Got config\n");
+    trace(IPC, "[C] Got config");
 
     compile_program(&conn);
+
+    trace(IPC, "[C] Closing socket");
+    socket_close(conn_fd);
 
     return 0;
 }

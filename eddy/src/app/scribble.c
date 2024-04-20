@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <base/options.h>
 #include <app/buffer.h>
 #include <app/eddy.h>
 #include <app/editor.h>
@@ -31,6 +32,38 @@ bool message_handler(socket_t conn_fd, HttpRequest request, JSONValue config)
         http_response_send(conn_fd, &response);
         return false;
     }
+    if (sv_eq_cstr(request.url, "/execute/function/entry")) {
+        JSONValue func = MUST(JSONValue, json_decode(request.body));
+        trace(IPC, "[function/entry] %.*s", SV_ARG(json_get_string(&func, "name", sv_null())));
+        HttpResponse response = { 0 };
+        response.status = HTTP_STATUS_OK;
+        response.body = json_encode(json_bool(true));
+        http_response_send(conn_fd, &response);
+        return false;
+    }
+    if (sv_eq_cstr(request.url, "/execute/function/exit")) {
+        JSONValue func = MUST(JSONValue, json_decode(request.body));
+        trace(IPC, "[function/exit] %.*s", SV_ARG(json_get_string(&func, "name", sv_null())));
+        HttpResponse response = { 0 };
+        response.status = HTTP_STATUS_OK;
+        response.body = json_encode(json_bool(true));
+        http_response_send(conn_fd, &response);
+        return false;
+    }
+    if (sv_eq_cstr(request.url, "/execute/function/on")) {
+        HttpResponse response = { 0 };
+        response.status = HTTP_STATUS_OK;
+        response.body = json_encode(json_bool(true));
+        http_response_send(conn_fd, &response);
+        return false;
+    }
+    if (sv_eq_cstr(request.url, "/execute/function/after")) {
+        HttpResponse response = { 0 };
+        response.status = HTTP_STATUS_OK;
+        response.body = json_encode(json_bool(true));
+        http_response_send(conn_fd, &response);
+        return false;
+    }
     if (sv_eq_cstr(request.url, "/goodbye")) {
         HttpResponse response = { 0 };
         response.status = HTTP_STATUS_OK;
@@ -50,7 +83,7 @@ void scribble_cmd_execute(ScribbleMode *mode, JSONValue unused)
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
 
     JSONValue config = json_object();
-    json_set(&config, "threaded", json_bool(true));
+    json_set(&config, "threaded", json_bool(has_option("threaded")));
     JSONValue stages = json_array();
     JSONValue stage = json_object();
     json_set_cstr(&stage, "name", "parse");
@@ -262,6 +295,7 @@ void scribble_mode_init(ScribbleMode *mode)
         (KeyCombo) { KEY_TAB, KMOD_SHIFT });
     widget_register(mode, "execute-buffer", (WidgetCommandHandler) scribble_cmd_execute);
     // mode->handlers.on_draw = (WidgetOnDraw) scribble_mode_on_draw;
+    mode->language = &scribble_language;
     BufferView *view = (BufferView *) mode->parent;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
     buffer_add_listener(buffer, scribble_mode_buffer_event_listener);

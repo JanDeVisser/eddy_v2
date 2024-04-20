@@ -815,52 +815,27 @@ FunctionReturn execute_function(ExecutionContext *ctx, IRFunction *function)
         scope_declare_variable(ctx->scope, var_decl->name, var_decl->type.type_id);
     }
     if (ctx->debug) {
-        JSONValue resp = HTTP_POST_CALLBACK_MUST(
+        HttpResponse resp = http_post_request(
             ctx->conn->fd,
-            "/emulation/function/entry",
-            ir_function_to_json(function),
-            on_function_entry,
-            ctx);
-        assert(resp.type == JSON_TYPE_BOOLEAN);
-        if (!resp.boolean) {
-            FunctionReturn ret = { .type = FRT_EXIT, .exit_code = 0 };
-            ctx->scope = current;
-            ctx->function_scope = current_function_scope;
-            return ret;
-        }
+            SV("/execute/function/entry"),
+            ir_function_to_json(function));
     }
     while (ix < function->operations.size) {
         ctx->index = function->operations.elements[ix].index;
         if (ctx->debug) {
-            JSONValue resp = HTTP_POST_CALLBACK_MUST(ctx->conn->fd,
-                "/emulation/function/on",
-                ir_operation_to_json(function->operations.elements[ix]),
-                on_operation, ctx);
-            assert(resp.type == JSON_TYPE_BOOLEAN);
-            if (!resp.boolean) {
-                FunctionReturn ret = { .type = FRT_EXIT, .exit_code = 0 };
-                ctx->scope = current;
-                ctx->function_scope = current_function_scope;
-                return ret;
-            }
+            HttpResponse resp = http_post_request(
+                ctx->conn->fd,
+                SV("/execute/function/on"),
+                ir_operation_to_json(function->operations.elements[ix]));
         }
 
         NextInstructionPointer pointer = execute_operation(ctx, function->operations.elements + ix);
 
         if (ctx->debug) {
-            JSONValue resp = HTTP_POST_CALLBACK_MUST(
+            HttpResponse resp = http_post_request(
                 ctx->conn->fd,
-                "/emulation/function/after",
-                ir_operation_to_json(function->operations.elements[ix]),
-                after_operation,
-                ctx);
-            assert(resp.type == JSON_TYPE_BOOLEAN);
-            if (!resp.boolean) {
-                FunctionReturn ret = { .type = FRT_EXIT, .exit_code = 0 };
-                ctx->scope = current;
-                ctx->function_scope = current_function_scope;
-                return ret;
-            }
+                SV("/execute/function/after"),
+                ir_operation_to_json(function->operations.elements[ix]));
         }
 
         switch (pointer.type) {
@@ -897,19 +872,10 @@ FunctionReturn execute_function(ExecutionContext *ctx, IRFunction *function)
     }
 
     if (ctx->debug) {
-        JSONValue resp = HTTP_POST_CALLBACK_MUST(
+        HttpResponse resp = http_post_request(
             ctx->conn->fd,
-            "/emulation/function/exit",
-            ir_function_to_json(function),
-            on_function_exit,
-            ctx);
-        assert(resp.type == JSON_TYPE_BOOLEAN);
-        if (!resp.boolean) {
-            FunctionReturn ret = { .type = FRT_EXIT, .exit_code = 0 };
-            ctx->scope = current;
-            ctx->function_scope = current_function_scope;
-            return ret;
-        }
+            SV("/execute/function/exit"),
+            ir_function_to_json(function));
     }
 
     ctx->scope = current;
@@ -928,10 +894,22 @@ ErrorOrInt execute(BackendConnection *conn, IRProgram program /*, int argc, char
     ctx.program = &program;
     ctx.root_scope = &root_scope;
 
-    ctx.debug = (conn != NULL) && json_get_bool(&conn->config, "debug_emulation", false);
+    JSONValue config = conn->config;
+    JSONValue stages = json_get_default(&config, "stages", json_array());
+    JSONValue stage = {0};
+    for (size_t ix = 0; ix < json_len(&stages); ++ix) {
+        stage = MUST_OPTIONAL(JSONValue, json_at(&stages, ix));
+        StringView name = json_get_string(&stage, "name", sv_null());
+        if (sv_eq_cstr(name, "execute")) {
+            break;
+        }
+    }
+    if (stage.type != JSON_TYPE_NULL) {
+        ctx.debug = json_get_bool(&stage, "debug", false);
+    }
 
     if (ctx.debug) {
-        HTTP_GET_MUST(conn->fd, "/emulation/start", (StringList) { 0 });
+        HTTP_GET_MUST(conn->fd, "/execute/start", (StringList) { 0 });
     }
 
     for (size_t ix = 0; ix < program.modules.size; ++ix) {
@@ -951,7 +929,7 @@ ErrorOrInt execute(BackendConnection *conn, IRProgram program /*, int argc, char
         }
         json_set(&exception, "callstack", call_stack_to_json(&ctx.call_stack));
         json_set(&exception, "datastack", datum_stack_to_json(&ctx.stack));
-        HTTP_POST_MUST(conn->fd, "/emulation/exception", exception);
+        HTTP_POST_MUST(conn->fd, "/execute/exception", exception);
         ERROR(Int, RuntimeError, 0, "Exception: %s", ret.exception->error.exception);
     }
     int    exit_code = 0;
@@ -962,7 +940,7 @@ ErrorOrInt execute(BackendConnection *conn, IRProgram program /*, int argc, char
     if (ctx.debug) {
         StringList params = sl_create();
         sl_push(&params, sv_printf("exit_code=%d", exit_code));
-        HTTP_GET_MUST(conn->fd, "/emulation/done", params);
+        HTTP_GET_MUST(conn->fd, "/execute/done", params);
     }
     RETURN(Int, exit_code);
 }

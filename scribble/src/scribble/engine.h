@@ -72,8 +72,8 @@ typedef bool (*EngineStageExecutor)(BackendConnection *, ExecutionMessage);
 typedef bool (*FrontEndMessageHandler)(socket_t, HttpRequest, JSONValue);
 
 extern int           scribble_backend(StringView path, bool threaded);
-extern ErrorOrSocket start_backend_thread();
-extern ErrorOrSocket start_backend_process();
+extern ErrorOrSocket start_backend_thread(StringView path);
+extern ErrorOrSocket start_backend_process(StringView path);
 extern void          scribble_frontend(JSONValue config, FrontEndMessageHandler handler);
 bool                 frontend_message_handler(socket_t conn_fd, HttpRequest request, JSONValue config);
 

@@ -40,6 +40,7 @@ static char const *scribble_directives[ScribbleDirectiveMax + 1] = {
     S(false)                 \
     S(float)                 \
     S(for)                   \
+    S(func)                  \
     S(if)                    \
     S(int)                   \
     S(optional)              \
