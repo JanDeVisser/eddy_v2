@@ -8,9 +8,9 @@
 #include <stdarg.h>
 #include <unistd.h>
 
-#include <log.h>
-#include <options.h>
-#include <sv.h>
+#include <base/log.h>
+#include <base/mutex.h>
+#include <base/options.h>
 
 typedef enum log_level {
     LL_TRACE,
@@ -18,6 +18,7 @@ typedef enum log_level {
     LL_PANIC,
 } LogLevel;
 
+static Mutex s_mutex;
 static StringList s_categories = {0};
 
 static void vemit_log_message(LogLevel level, char const *file_name, int line, TraceCategory category, char const *msg, va_list args);
@@ -47,8 +48,6 @@ void emit_log_message(LogLevel level, char const *file_name, int line, TraceCate
     va_end(args);
 }
 
-static size_t linelen = 0;
-
 void vemit_log_message(LogLevel level, char const *file_name, int line, TraceCategory category, char const *msg, va_list args)
 {
     if (level < log_level) {
@@ -57,42 +56,22 @@ void vemit_log_message(LogLevel level, char const *file_name, int line, TraceCat
     if (!_log_category_on(category)) {
         return;
     }
-    if (linelen == 0) {
-        StringView cat = category;
-        char lvl = 'T';
-        if (level >= LL_INFO) {
-            char const *level_name = log_level_to_string(level);
-            cat = sv_from(level_name);
-            lvl = *level_name;
-        }
-        char buf[32];
-        snprintf(buf, 32, "%s:%d", file_name, line);
-        uint64_t tid = 0;
-        pthread_threadid_np(pthread_self(), &tid);
-        fprintf(stderr, "%-*.*s:[%05d:%08llx]:%c:%7.7s:", 15, 15, buf, getpid(), tid, lvl, cat.ptr);
+    mutex_lock(s_mutex);
+    StringView cat = category;
+    char lvl = 'T';
+    if (level >= LL_INFO) {
+        char const *level_name = log_level_to_string(level);
+        cat = sv_from(level_name);
+        lvl = *level_name;
     }
-    linelen += vfprintf(stderr, msg, args);
-}
-
-void log_nl(LogLevel level, TraceCategory category)
-{
-    if (level < log_level) {
-        return;
-    }
-    if (!_log_category_on(category)) {
-        return;
-    }
+    char buf[32];
+    snprintf(buf, 32, "%s:%d", file_name, line);
+    char thread_name[32];
+    pthread_getname_np(pthread_self(), thread_name, 32);
+    fprintf(stderr, "%-*.*s:[%05d:%8.8s]:%c:%7.7s:", 15, 15, buf, getpid(), thread_name, lvl, cat.ptr);
+    vfprintf(stderr, msg, args);
     fprintf(stderr, "\n");
-    linelen = 0;
-}
-
-void _trace_nl(TraceCategory category)
-{
-    if (!_log_category_on(category)) {
-        return;
-    }
-    log_nl(LL_TRACE, category);
-    linelen = 0;
+    mutex_unlock(s_mutex);
 }
 
 void _trace(char const *file_name, int line, TraceCategory category, char const *msg, ...)
@@ -112,7 +91,6 @@ void vtrace(char const *file_name, int line, TraceCategory category, char const 
         return;
     }
     vemit_log_message(LL_TRACE, file_name, line, category, msg, args);
-    _trace_nl(category);
 }
 
 void _panic(char const *file_name, int line, char const *msg, ...)
@@ -126,7 +104,6 @@ void _panic(char const *file_name, int line, char const *msg, ...)
 void vpanic(char const *file_name, int line, char const *msg, va_list args)
 {
     vemit_log_message(LL_PANIC, file_name, line, sv_null(), msg, args);
-    log_nl(LL_PANIC, sv_null());
 }
 
 void _info(char const *file_name, int line, char const *msg, ...)
@@ -137,42 +114,9 @@ void _info(char const *file_name, int line, char const *msg, ...)
     va_end(args);
 }
 
-void _info_nonl(char const *file_name, int line, char const *msg, ...)
-{
-    va_list args;
-    va_start(args, msg);
-    vinfo_nonl(file_name, line, msg, args);
-    va_end(args);
-}
-
 void vinfo(char const *file_name, int line, char const *msg, va_list args)
 {
-    vinfo_nonl(file_name, line, msg, args);
-    log_nl(LL_INFO, sv_null());
-}
-
-void vinfo_nonl(char const *file_name, int line, char const *msg, va_list args)
-{
     vemit_log_message(LL_INFO, file_name, line, sv_null(), msg, args);
-}
-
-void _trace_nonl(char const *file_name, int line, TraceCategory category, char const *msg, ...)
-{
-    if (!_log_category_on(category)) {
-        return;
-    }
-    va_list args;
-    va_start(args, msg);
-    vtrace_nonl(file_name, line, category, msg, args);
-    va_end(args);
-}
-
-void vtrace_nonl(char const *file_name, int line, TraceCategory category, char const *msg, va_list args)
-{
-    if (!_log_category_on(category)) {
-        return;
-    }
-    vemit_log_message(LL_TRACE, file_name, line, category, msg, args);
 }
 
 bool _log_category_on(TraceCategory category)
@@ -224,6 +168,8 @@ void vfatal(char const *file_name, int line, char const *msg, va_list args)
 
 void log_init()
 {
+    pthread_setname_np("main");
+    s_mutex = mutex_create();
     StringList categories = get_option_values(sv_from("trace"));
     if (sl_empty(&categories)) {
         char const *cats = getenv("TRACE");
@@ -237,7 +183,6 @@ void log_init()
     for (size_t ix = 0; ix < sl_size(&categories); ++ix) {
         sl_push(&s_categories, sv_copy(categories.strings[ix]));
     }
-    linelen = 0;
     StringView cats = sl_join(&s_categories, SV(", ", 2));
     info("Tracing initialized. Enabled categories: %.*s", SV_ARG(cats));
 }

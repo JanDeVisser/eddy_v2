@@ -85,7 +85,8 @@ void buffer_build_indices(Buffer *buffer)
     Index *current = da_append_Index(&buffer->lines, (Index) { 0, buffer->text.view });
     size_t lineno = 0;
     trace(EDIT, "Buffer size: %zu", buffer->text.view.length);
-    trace_nonl(EDIT, "%5zu: ", lineno);
+    StringBuilder trc = {0};
+    sb_printf(&trc, "%5zu: ", lineno);
     int dix = 0;
     current->first_diagnostic = 0;
     current->num_diagnostics = 0;
@@ -101,8 +102,10 @@ void buffer_build_indices(Buffer *buffer)
         if (token_matches_kind(t, TK_END_OF_LINE) || token_matches_kind(t, TK_END_OF_FILE)) {
             if (current->num_tokens == 0) {
                 trace(EDIT, "[EOL]");
+                trc.length = 0;
             } else {
-                trace(EDIT, "[EOL] %zu..%zu", current->first_token, current->first_token + current->num_tokens - 1);
+                trace(EDIT, "%.*s [EOL] %zu..%zu", SV_ARG(trc.view), current->first_token, current->first_token + current->num_tokens - 1);
+                trc.length = 0;
             }
             current->line.length = t.location.index - current->index_of;
             if (t.kind == TK_END_OF_FILE) {
@@ -119,16 +122,16 @@ void buffer_build_indices(Buffer *buffer)
                     ++dix;
                 }
             }
-            trace_nonl(EDIT, "%5zu: ", lineno);
+            sb_printf(&trc, "%5zu: ", lineno);
             continue;
         }
         OptionalColours colours = theme_token_colours(&eddy.theme, t);
         Colour          colour = colours.has_value ? colours.value.fg : eddy.theme.editor.fg;
         if (token_matches_kind(t, TK_WHITESPACE)) {
-            trace_nonl(EDIT, "%*.s", (int) t.text.length, "");
+            sb_printf(&trc, "%*.s", (int) t.text.length, "");
         } else {
             StringView s = colour_to_rgb(colour);
-            trace_nonl(EDIT, "[%.*s %.*s %.*s]", SV_ARG(t.text), SV_ARG(TokenKind_name(t.kind)), SV_ARG(s));
+            sb_printf(&trc, "[%.*s %.*s %.*s]", SV_ARG(t.text), SV_ARG(TokenKind_name(t.kind)), SV_ARG(s));
             sv_free(s);
         }
         if (current->num_tokens == 0) {
@@ -144,7 +147,7 @@ void buffer_build_indices(Buffer *buffer)
                 colour_to_color(colour),
             });
     }
-    trace_nl(EDIT);
+    trace(EDIT, "%.*s", SV_ARG(trc.view));
     trace(EDIT, "[EOF]");
     trace(EDIT, "=====================");
     buffer->indexed_version = buffer->version;

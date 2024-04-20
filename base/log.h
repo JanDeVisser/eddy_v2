@@ -18,15 +18,10 @@ typedef struct string_view TraceCategory;
 
 // clang-format off
 extern                            void log_init();
-extern                            void _trace_nl(TraceCategory category);
-extern format_args(4, 5)          void _trace_nonl(char const *file_name, int line, TraceCategory category, char const *msg, ...);
-extern                            void vtrace_nonl(char const *file_name, int line, TraceCategory category, char const *msg, va_list args);
 extern format_args(4, 5)          void _trace(char const* file_name, int line, TraceCategory category, char const *msg, ...);
 extern                            void vtrace(char const *file_name, int line, TraceCategory category, char const *msg, va_list args);
 extern format_args(3, 4)          void _info(char const *file_name, int line, char const *msg, ...);
-extern format_args(3, 4)          void _info_nonl(char const *file_name, int line, char const *msg, ...);
 extern                            void vinfo(char const *file_name, int line, char const *msg, va_list args);
-extern                            void vinfo_nonl(char const *file_name, int line, char const *msg, va_list args);
 extern format_args(3, 4)          void _panic(char const *file_name, int line, char const *msg, ...);
 extern                            void vpanic(char const *file_name, int line, char const *msg, va_list args);
 extern                            bool _log_category_on(TraceCategory category);
@@ -40,11 +35,8 @@ noreturn extern                   void vfatal(char const *file_name, int line, c
 #define NYI(msg, ...)             fatal("Not yet implemented in %s: " msg, __func__ __VA_OPT__(, ) __VA_ARGS__)
 #define OUT_OF_MEMORY(msg, ...)   fatal("Out of memory in %s: " msg, __func__ __VA_OPT(, ) __VA_ARGS__)
 
-#define trace_nl(Cat)             _trace_nl((TraceCategory) { #Cat, strlen(#Cat) })
 #define trace(Cat, Msg, ...)      _trace(__FILE_NAME__, __LINE__, (TraceCategory) { #Cat, strlen(#Cat) }, Msg __VA_OPT__(, ) __VA_ARGS__)
-#define trace_nonl(Cat, Msg, ...) _trace_nonl(__FILE_NAME__, __LINE__, (TraceCategory) { #Cat, strlen(#Cat) }, Msg __VA_OPT__(, ) __VA_ARGS__)
 #define info(Msg, ...)            _info(__FILE_NAME__, __LINE__, Msg __VA_OPT__(, ) __VA_ARGS__)
-#define info_nonl(Msg, ...)       _info_nonl(__FILE_NAME__, __LINE__, Msg __VA_OPT__(, ) __VA_ARGS__)
 #define panic(Msg, ...)           _panic(__FILE_NAME__, __LINE__, Msg __VA_OPT__(, ) __VA_ARGS__)
 #define log_turn_on(Cat)          log_turn_on_sv((TraceCategory) { #Cat, strlen(#Cat) })
 #define log_turn_off(Cat)         log_turn_off_sv(TraceCategory { #Cat, strlen(#Cat) })
