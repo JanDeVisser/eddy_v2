@@ -164,7 +164,7 @@ typedef HttpResponse (*HttpCallback)(void *ctx, HttpResponse response);
 
 JSONValue http_post_callback(socket_t fd, char const* url, JSONValue req_body, HttpCallback callback, void *ctx);
 
-#define HTTP_POST_CALLBACK_MUST(fd, url, req_body, (HttpCallback) callback, ctx) http_post_callback(fd, url, req_body, callback, ctx)
+#define HTTP_POST_CALLBACK_MUST(fd, url, req_body, callback, ctx) http_post_callback(fd, url, req_body, (HttpCallback) callback, ctx)
 
 #define HTTP_POST_MUST(fd, url, body)                                          \
     do {                                                                       \
