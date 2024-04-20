@@ -11,6 +11,7 @@ add_executable(
         listbox.c
         main.c
         minibuffer.c
+        mode.c
         scribble.c
         theme.c
         widget.c

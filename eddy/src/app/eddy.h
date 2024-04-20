@@ -65,6 +65,4 @@ extern Eddy         *eddy_create();
 extern AppState app_state;
 extern Eddy     eddy;
 
-#include <widget.h>
-
 #endif /* __APP_EDDY_H__ */

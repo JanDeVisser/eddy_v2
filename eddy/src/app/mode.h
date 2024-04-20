@@ -36,4 +36,10 @@ WIDGET_CLASS(Mode, mode);
         .init = (WidgetInit) prefix##_init, \
     }
 
+extern void mode_cmd_split_line(Mode *mode, JSONValue unused);
+extern void mode_cmd_indent(Mode *mode, JSONValue unused);
+extern void mode_cmd_unindent(Mode *mode, JSONValue unused);
+extern bool mode_character(Mode *mode, int ch);
+
+
 #endif /* APP_MODE_H */
