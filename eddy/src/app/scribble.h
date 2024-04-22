@@ -10,7 +10,7 @@
 #include <app/mode.h>
 
 typedef struct {
-    _M;
+    MODE;
 } ScribbleMode;
 
 MODE_CLASS(ScribbleMode, scribble_mode);

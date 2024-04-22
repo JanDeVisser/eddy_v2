@@ -4,12 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 
-#ifndef __APP_BUFFER_H__
-#define __APP_BUFFER_H__
+#ifndef APP_BUFFER_H
+#define APP_BUFFER_H
 
+#include <app/mode.h>
 #include <app/widget.h>
 #include <base/sv.h>
 #include <base/token.h>
+#include <lsp/lsp.h>
 #include <lsp/schema/Diagnostic.h>
 
 typedef enum {
@@ -92,6 +94,7 @@ typedef struct buffer {
     size_t                   version;
     size_t                   undo_pointer;
     Diagnostics              diagnostics;
+    Mode                    *mode;
     BufferEventListenerList *listeners;
 } Buffer;
 
@@ -126,4 +129,4 @@ extern void          lsp_did_close(Buffer *buffer);
 extern void          lsp_did_change(Buffer *buffer, IntVector2 start, IntVector2 end, StringView text);
 extern void          lsp_semantic_tokens(Buffer *buffer);
 
-#endif /* __APP_BUFFER_H__ */
+#endif /* APP_BUFFER_H */

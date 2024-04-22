@@ -4,17 +4,22 @@
  * SPDX-License-Identifier: MIT
  */
 
-#ifndef __APP_C_H__
-#define __APP_C_H__
+#ifndef APP_C_H
+#define APP_C_H
 
 #include <app/mode.h>
+#include <lsp/lsp.h>
 #include <lsp/schema/CompletionItem.h>
 
-typedef struct {
-    _M;
-    OptionalCompletionItems completions;
-} CMode;
+typedef Mode CMode;
 
 MODE_CLASS(CMode, c_mode);
 
-#endif /* __APP_C_H__ */
+typedef struct {
+    MODE_DATA;
+    OptionalCompletionItems completions;
+} CModeData;
+
+MODE_DATA_CLASS(CModeData, c_mode_data);
+
+#endif /* APP_C_H */

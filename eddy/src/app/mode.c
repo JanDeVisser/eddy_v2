@@ -170,3 +170,11 @@ bool mode_character(Mode *mode, int ch)
 {
     return false;
 }
+
+ModeData * mode_make_data(Mode *mode)
+{
+    ModeData *data = (ModeData *) mode->data_widget_factory((Widget *) mode);
+    data->mode = mode;
+    data->delegate = (Widget *) mode;
+    return data;
+}

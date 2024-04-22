@@ -22,7 +22,7 @@ typedef struct {
     int        cursor_flash;
     StringView find_text;
     StringView replacement;
-    Widget    *mode;
+    Widget    *mode_data;
 } BufferView;
 
 DA_WITH_NAME(BufferView, BufferViews);

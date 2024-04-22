@@ -13,10 +13,10 @@
 #include <base/fs.h>
 #include <base/http.h>
 #include <base/lexer.h>
-#include <engine.h>
-#include <model/error.h>
-#include <parser.h>
-#include <type.h>
+#include <scribble/engine.h>
+#include <scribble/model/error.h>
+#include <scribble/parser.h>
+#include <scribble/type.h>
 
 typedef enum {
     ScribbleDirectiveInclude,

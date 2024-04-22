@@ -14,6 +14,7 @@
 #include <ft2build.h>
 #include FT_FREETYPE_H
 
+#include <app/c.h>
 #include <app/cmake.h>
 #include <app/eddy.h>
 #include <app/listbox.h>
@@ -219,12 +220,18 @@ void run_command_submit(ListBox *, ListBoxEntry selection)
 void eddy_cmd_run_command(Eddy *e, JSONValue unused)
 {
     ListBox *listbox = widget_new(ListBox);
-    listbox->prompt = sv_from("Select commmand");
+    listbox->prompt = sv_from("Select command");
     listbox->submit = run_command_submit;
     for (Widget *w = e->focus; w; w = w->parent) {
         for (size_t cix = 0; cix < w->commands.size; ++cix) {
             WidgetCommand *command = w->commands.elements + cix;
             da_append_ListBoxEntry(&listbox->entries, (ListBoxEntry) { .text = command->command, .payload = command });
+        }
+        if (w->delegate) {
+            for (size_t cix = 0; cix < w->delegate->commands.size; ++cix) {
+                WidgetCommand *command = w->delegate->commands.elements + cix;
+                da_append_ListBoxEntry(&listbox->entries, (ListBoxEntry) { .text = command->command, .payload = command });
+            }
         }
     }
     listbox_show(listbox);
@@ -588,6 +595,9 @@ void eddy_init(Eddy *eddy)
     layout_add_widget((Layout *) eddy, (Widget *) main_area);
     eddy->editor = (Editor *) layout_find_by_draw_function((Layout *) eddy, (WidgetDraw) editor_draw);
 
+    Mode *c_mode = (Mode *) widget_new_with_parent(CMode, eddy);
+    da_append_Widget(&eddy->modes, (Widget *) c_mode);
+
     eddy_open_dir(eddy, sv_from(project_dir));
     for (; ix < eddy->argc; ++ix) {
         eddy_open_buffer(eddy, sv_from(eddy->argv[ix]));
@@ -661,8 +671,8 @@ void eddy_on_draw(Eddy *eddy)
             buffer_build_indices(buffer);
             for (size_t view_ix = 0; view_ix < eddy->editor->buffers.size; ++view_ix) {
                 BufferView *view = eddy->editor->buffers.elements + view_ix;
-                if (view->buffer_num == ix && view->mode && view->mode->handlers.on_draw) {
-                    view->mode->handlers.on_draw(view->mode);
+                if (view->buffer_num == ix && buffer->mode && buffer->mode->handlers.on_draw) {
+                    buffer->mode->handlers.on_draw((Widget *) buffer->mode);
                 }
             }
         }
@@ -745,10 +755,9 @@ void eddy_load_theme(Eddy *e, StringView theme_name)
         return;
     }
     e->theme = theme_maybe.value;
-    lsp_initialize_theme();
     for (size_t ix = 0; ix < e->buffers.size; ++ix) {
         Buffer *buffer = e->buffers.elements + ix;
-        bool is_saved = buffer->version == buffer->saved_version;
+        bool    is_saved = buffer->version == buffer->saved_version;
         ++buffer->version;
         buffer_build_indices(buffer);
         if (is_saved) {
@@ -852,4 +861,17 @@ void eddy_set_message(Eddy *e, char const *fmt, ...)
     JSONValue msg = json_string(sv_vprintf(fmt, args));
     va_end(args);
     app_submit((App *) e, (Widget *) app, SV("display-message", 15), msg);
+}
+
+Mode *eddy_get_mode_for_buffer(Eddy *e, StringView buffer_name)
+{
+    for (size_t mode_ix = 0; mode_ix < e->modes.size; ++mode_ix) {
+        Mode *mode = (Mode *) e->modes.elements + mode_ix;
+        for (size_t ext_ix = 0; ext_ix < mode->filetypes.size; ++ext_ix) {
+            if (sv_endswith(buffer_name, mode->filetypes.strings[ext_ix])) {
+                return mode;
+            }
+        }
+    }
+    return NULL;
 }

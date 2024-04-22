@@ -10,15 +10,12 @@
 #include <app/editor.h>
 #include <app/listbox.h>
 #include <app/widget.h>
-#include <lsp/lsp.h>
-#include <lsp/schema/CompletionItem.h>
 #include <lsp/schema/CompletionList.h>
 #include <lsp/schema/CompletionParams.h>
 #include <lsp/schema/DocumentFormattingParams.h>
 #include <lsp/schema/DocumentRangeFormattingParams.h>
-#include <lsp/schema/TextEdit.h>
 
-#define C_KEYWORDS(S)   \
+#define C_KEYWORDS(S) \
     S(alignas)        \
     S(alignof)        \
     S(auto)           \
@@ -79,7 +76,23 @@
     S(_Static_assert) \
     S(_Thread_local)
 
+static Process *clangd_start(LSP *lsp);
+
+LSPHandlers c_lsp_handlers = {
+    .start = clangd_start,
+};
+
+MODE_CLASS_DEF(CMode, c_mode);
+MODE_DATA_CLASS_DEF(CModeData, c_mode_data);
+
 // -- C Mode ----------------------------------------------------------------
+
+Process *clangd_start(LSP *lsp)
+{
+    Process *ret = process_create(SV("clangd"), "--use-dirty-headers", "--background-index");
+    ret->stderr_file = SV("/tmp/clangd.log");
+    return ret;
+}
 
 int handle_c_directive(Lexer *lexer, int directive);
 
@@ -128,8 +141,6 @@ static Language c_language = {
     .keywords = c_keywords,
     .directive_handler = handle_c_directive,
 };
-
-MODE_CLASS_DEF(CMode, c_mode);
 
 void c_mode_on_draw(CMode *mode)
 {
@@ -241,7 +252,7 @@ void c_mode_cmd_completion(CMode *mode, JSONValue unused)
     BufferView *view = (BufferView *) mode->parent;
     Editor     *editor = (Editor *) view->parent;
 
-    lsp_initialize();
+    lsp_initialize(&mode->lsp);
     Buffer *buffer = eddy.buffers.elements + view->buffer_num;
 
     if (sv_empty(buffer->name)) {
@@ -274,7 +285,7 @@ void c_mode_cmd_completion(CMode *mode, JSONValue unused)
     };
 
     OptionalJSONValue params_json = CompletionParams_encode(completion_params);
-    MUST(Int, lsp_message(listbox, "textDocument/completion", params_json));
+    MUST(Int, lsp_message(&mode->lsp, listbox, "textDocument/completion", params_json));
 }
 
 void c_mode_formatting_response(CMode *mode, JSONValue resp)
@@ -315,7 +326,7 @@ void c_mode_cmd_format_source(CMode *mode, JSONValue unused)
 {
     BufferView *view = (BufferView *) mode->parent;
     Buffer     *buffer = (Buffer *) eddy.buffers.elements + view->buffer_num;
-    lsp_initialize();
+    lsp_initialize(&mode->lsp);
 
     if (sv_empty(buffer->name)) {
         return;
@@ -330,7 +341,7 @@ void c_mode_cmd_format_source(CMode *mode, JSONValue unused)
     params.options.trimFinalNewlines = (OptionalBool) { .has_value = true, .value = true };
 
     OptionalJSONValue params_json = DocumentFormattingParams_encode(params);
-    MUST(Int, lsp_message(mode, "textDocument/formatting", params_json));
+    MUST(Int, lsp_message(&mode->lsp, mode, "textDocument/formatting", params_json));
 }
 
 void c_mode_cmd_format_selection(CMode *mode, JSONValue unused)
@@ -338,13 +349,13 @@ void c_mode_cmd_format_selection(CMode *mode, JSONValue unused)
     Editor     *editor = (Editor *) mode->parent->parent;
     BufferView *view = (BufferView *) mode->parent;
     Buffer     *buffer = (Buffer *) eddy.buffers.elements + view->buffer_num;
-    lsp_initialize();
+    lsp_initialize(&mode->lsp);
 
     if (sv_empty(buffer->name)) {
         return;
     }
 
-    Range r = {0};
+    Range r = { 0 };
     if (view->selection == -1) {
         r.start.line = buffer_line_for_index(buffer, (int) view->new_cursor);
         r.end.line = r.start.line + 1;
@@ -368,11 +379,21 @@ void c_mode_cmd_format_selection(CMode *mode, JSONValue unused)
     params.options.trimFinalNewlines = (OptionalBool) { .has_value = true, .value = true };
 
     OptionalJSONValue params_json = DocumentRangeFormattingParams_encode(params);
-    MUST(Int, lsp_message(mode, "textDocument/rangeFormatting", params_json));
+    MUST(Int, lsp_message(&mode->lsp, mode, "textDocument/rangeFormatting", params_json));
+}
+
+Widget * cmode_make_cmode_data(CMode *mode)
+{
+    return (Widget *) widget_new(CModeData);
 }
 
 void c_mode_init(CMode *mode)
 {
+    mode->data_widget_factory = (WidgetFactory) cmode_make_cmode_data;
+    mode->filetypes = sv_split(SV(".c;.cpp;.h;.hpp;.c++"), SV(";")),
+    mode->lsp = (LSP) {
+        .handlers = c_lsp_handlers,
+    };
     widget_add_command(mode, "c-format-source", (WidgetCommandHandler) c_mode_cmd_format_source,
         (KeyCombo) { KEY_L, KMOD_SHIFT | KMOD_CONTROL });
     widget_add_command(mode, "c-show-completions", (WidgetCommandHandler) c_mode_cmd_completion,
@@ -390,9 +411,13 @@ void c_mode_init(CMode *mode)
     BufferView *view = (BufferView *) mode->parent;
     Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
     buffer_add_listener(buffer, c_mode_buffer_event_listener);
-    lsp_on_open(buffer);
-    lsp_semantic_tokens(buffer);
 }
+
+void c_mode_data_init(CModeData *mode)
+{
+    //
+}
+
 
 typedef enum {
     CDirectiveStateInit = 0,

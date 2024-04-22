@@ -12,7 +12,6 @@
 #include <app/listbox.h>
 #include <app/theme.h>
 #include <base/io.h>
-#include <lsp/lsp.h>
 #include <lsp/schema/DidChangeTextDocumentParams.h>
 #include <lsp/schema/DidCloseTextDocumentParams.h>
 #include <lsp/schema/DidOpenTextDocumentParams.h>
@@ -46,6 +45,7 @@ ErrorOrBuffer buffer_open(Buffer *buffer, StringView name)
     buffer->text.view = TRY_TO(StringView, Buffer, read_file_by_name(name));
     buffer->lines.size = 0;
     buffer_build_indices(buffer);
+    buffer->mode = eddy_get_mode_for_buffer(&eddy, name);
     RETURN(Buffer, buffer);
 }
 
@@ -69,14 +69,10 @@ void buffer_build_indices(Buffer *buffer)
     buffer->tokens.size = 0;
     Editor *editor = eddy.editor;
     Lexer lexer = {0};
-    for (size_t ix = 0; ix < editor->buffers.size; ++ix) {
-        BufferView *view = editor->buffers.elements + ix;
-        if (view->buffer_num == buffer->buffer_ix && view->mode != NULL) {
-            lexer = lexer_for_language(((Mode *) view->mode)->language);
-        }
-    }
-    if (lexer.language == NULL) {
-        trace(EDIT, "buffer_build_indices('%.*s'): no view found", SV_ARG(buffer->name));
+    if (buffer->mode != NULL && buffer->mode->language != NULL) {
+        lexer = lexer_for_language(buffer->mode->language);
+    } else {
+        trace(EDIT, "buffer_build_indices('%.*s'): no language found", SV_ARG(buffer->name));
         lexer = lexer_create();
     }
     lexer.whitespace_significant = true;
@@ -479,9 +475,20 @@ StringView buffer_uri(Buffer *buffer)
     return buffer->uri;
 }
 
+bool lsp_init(Buffer *buffer)
+{
+    if (!buffer->mode || !buffer->mode->lsp.handlers.start) {
+        return false;
+    }
+    lsp_initialize(&buffer->mode->lsp);
+    return true;
+}
+
 void lsp_semantic_tokens(Buffer *buffer)
 {
-    lsp_initialize();
+    if (!lsp_init(buffer)) {
+        return;
+    }
 
     if (sv_empty(buffer->name)) {
         return;
@@ -491,7 +498,7 @@ void lsp_semantic_tokens(Buffer *buffer)
         .uri = buffer_uri(buffer),
     };
     OptionalJSONValue semantic_tokens_params_json = SemanticTokensParams_encode(semantic_tokens_params);
-    MUST(Int, lsp_message(buffer, "textDocument/semanticTokens/full", semantic_tokens_params_json));
+    MUST(Int, lsp_message(&buffer->mode->lsp, buffer, "textDocument/semanticTokens/full", semantic_tokens_params_json));
 }
 
 void buffer_semantic_tokens_response(Buffer *buffer, JSONValue resp)
@@ -558,7 +565,9 @@ void buffer_semantic_tokens_response(Buffer *buffer, JSONValue resp)
 
 void lsp_on_open(Buffer *buffer)
 {
-    lsp_initialize();
+    if (!lsp_init(buffer)) {
+        return;
+    }
     if (sv_empty(buffer->name)) {
         return;
     }
@@ -570,13 +579,14 @@ void lsp_on_open(Buffer *buffer)
         .text = buffer->text.view
     };
     OptionalJSONValue did_open_json = DidOpenTextDocumentParams_encode(did_open);
-    lsp_notification("textDocument/didOpen", did_open_json);
+    lsp_notification(&buffer->mode->lsp, "textDocument/didOpen", did_open_json);
 }
 
 void lsp_did_save(Buffer *buffer)
 {
-    lsp_initialize();
-
+    if (!lsp_init(buffer)) {
+        return;
+    }
     if (sv_empty(buffer->name)) {
         return;
     }
@@ -586,13 +596,14 @@ void lsp_did_save(Buffer *buffer)
     };
     did_save.text = OptionalStringView_create(buffer->text.view);
     OptionalJSONValue did_save_json = DidSaveTextDocumentParams_encode(did_save);
-    lsp_notification("textDocument/didSave", did_save_json);
+    lsp_notification(&buffer->mode->lsp, "textDocument/didSave", did_save_json);
 }
 
 void lsp_did_close(Buffer *buffer)
 {
-    lsp_initialize();
-
+    if (!lsp_init(buffer)) {
+        return;
+    }
     if (sv_empty(buffer->name)) {
         return;
     }
@@ -601,13 +612,14 @@ void lsp_did_close(Buffer *buffer)
         .uri = buffer_uri(buffer),
     };
     OptionalJSONValue did_close_json = DidCloseTextDocumentParams_encode(did_close);
-    lsp_notification("textDocument/didClose", did_close_json);
+    lsp_notification(&buffer->mode->lsp, "textDocument/didClose", did_close_json);
 }
 
 void lsp_did_change(Buffer *buffer, IntVector2 start, IntVector2 end, StringView text)
 {
-    lsp_initialize();
-
+    if (!lsp_init(buffer)) {
+        return;
+    }
     if (sv_empty(buffer->name)) {
         return;
     }
@@ -622,5 +634,5 @@ void lsp_did_change(Buffer *buffer, IntVector2 start, IntVector2 end, StringView
     contentChange._0.text = text;
     da_append_TextDocumentContentChangeEvent(&did_change.contentChanges, contentChange);
     OptionalJSONValue did_change_json = DidChangeTextDocumentParams_encode(did_change);
-    lsp_notification("textDocument/didChange", did_change_json);
+    lsp_notification(&buffer->mode->lsp, "textDocument/didChange", did_change_json);
 }
