@@ -171,6 +171,11 @@ bool find_and_run_shortcut(Widget *w, KeyboardModifier modifier)
                 return true;
             }
         }
+        if (w->delegate) {
+            if (find_and_run_shortcut(w->delegate, modifier)) {
+                return true;
+            }
+        }
     }
     return false;
 }

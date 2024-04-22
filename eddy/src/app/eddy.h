@@ -4,13 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 
-#ifndef __APP_EDDY_H__
-#define __APP_EDDY_H__
+#ifndef APP_EDDY_H
+#define APP_EDDY_H
 
 #include <app/buffer.h>
 #include <app/editor.h>
+#include <app/mode.h>
 #include <app/theme.h>
 #include <app/widget.h>
+#include <lsp/lsp.h>
 
 typedef enum {
     AS_MONITOR = 0,
@@ -41,6 +43,7 @@ typedef struct {
     CMake      cmake;
     JSONValue  settings;
     Theme      theme;
+    Widgets    modes;
 } Eddy;
 
 APP_CLASS(Eddy, eddy);
@@ -61,10 +64,9 @@ extern void          eddy_clear_message(Eddy *eddy);
 extern void          eddy_load_font(Eddy *eddy);
 void                 eddy_inc_font_size(Eddy *e, int increment);
 extern Eddy         *eddy_create();
+extern Mode         *eddy_get_mode_for_buffer(Eddy *e, StringView buffer_name);
 
 extern AppState app_state;
 extern Eddy     eddy;
 
-#include <widget.h>
-
-#endif /* __APP_EDDY_H__ */
+#endif /* APP_EDDY_H */

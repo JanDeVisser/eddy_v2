@@ -85,5 +85,6 @@ configure_file(
 include_directories("${PROJECT_BINARY_DIR}" . base eddy/src scribble/src)
 
 add_subdirectory(base)
+add_subdirectory(lsp)
 add_subdirectory(eddy)
 add_subdirectory(scribble)

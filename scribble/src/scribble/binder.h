@@ -94,6 +94,8 @@ typedef struct bound_node {
     size_t               index;
     struct bound_node   *parent;
     TypeSpec             typespec;
+    TokenLocation        location;
+    size_t               token_length;
     struct intermediate *intermediate;
     union {
         struct {

@@ -6,29 +6,45 @@
 
 #include <unistd.h>
 
+#include <base/fs.h>
 #include <base/http.h>
 #include <base/process.h>
 #include <scribble/engine.h>
 
-ErrorOrSocket start_backend_process()
+void redirect_stdout(ReadPipe *pipe)
 {
-    StringView     path = sv_printf("/tmp/scribble-engine-%d", getpid());
+    StringView txt = read_pipe_current(pipe);
+    printf("%.*s", SV_ARG(txt));
+}
+
+void redirect_stderr(ReadPipe *pipe)
+{
+    StringView txt = read_pipe_current(pipe);
+    fprintf(stderr, "%.*s", SV_ARG(txt));
+}
+
+ErrorOrSocket start_backend_process(StringView path)
+{
     socket_t const listen_fd = MUST(Socket, unix_socket_listen(path));
     Process       *client = process_create(sv_from("scribble-backend"), sv_cstr(path, NULL));
+    client->out.on_read = redirect_stdout;
+    client->err.on_read = redirect_stderr;
     MUST(Int, process_start(client));
-    trace(IPC, "Started client, pid = %d\n", client->pid);
+    trace(IPC, "Started backend process, pid = %d\n", client->pid);
     return socket_accept(listen_fd);
 }
 
 void *backend_main_wrapper(void *path)
 {
+    pthread_setname_np("Backend");
+    trace(IPC, "Threaded backend started");
     scribble_backend((StringView) { (char const *) path, strlen(path) }, true);
+    trace(IPC, "Threaded backend finished");
     return NULL;
 }
 
-ErrorOrSocket start_backend_thread()
+ErrorOrSocket start_backend_thread(StringView path)
 {
-    StringView     path = sv_printf("/tmp/scribble-engine-%d", getpid());
     socket_t const listen_fd = MUST(Socket, unix_socket_listen(path));
     pthread_t      thread;
     int            ret;
@@ -42,11 +58,12 @@ ErrorOrSocket start_backend_thread()
 
 void scribble_frontend(JSONValue config, FrontEndMessageHandler handler)
 {
-    socket_t socket = { 0 };
+    StringView path = sv_printf("/tmp/scribble-engine-%d", getpid());
+    socket_t   socket = { 0 };
     if (json_get_bool(&config, "threaded", false)) {
-        socket = MUST(Socket, start_backend_thread());
+        socket = MUST(Socket, start_backend_thread(path));
     } else {
-        socket = MUST(Socket, start_backend_process());
+        socket = MUST(Socket, start_backend_process(path));
     }
 
     while (true) {
@@ -56,7 +73,10 @@ void scribble_frontend(JSONValue config, FrontEndMessageHandler handler)
             break;
         }
     }
+    trace(IPC, "[S] Closing socket");
     socket_close(socket);
+    fs_unlink(path);
+    sv_free(path);
 }
 
 bool handle_parser_message(socket_t socket, HttpRequest request)
@@ -81,12 +101,17 @@ bool handle_parser_message(socket_t socket, HttpRequest request)
         JSONValue  node = MUST(JSONValue, json_decode(request.body));
         StringView type = json_get_string(&node, "type", sv_null());
         StringView name = json_get_string(&node, "name", sv_null());
-        printf("[parser] %.*s %.*s\n", SV_ARG(type), SV_ARG(name));
+        JSONValue  location = json_get_default(&node, "location", json_object());
+        assert(location.type == JSON_TYPE_OBJECT);
+        StringView file = json_get_string(&location, "file", sv_null());
+        int        line = json_get_int(&location, "line", 0) + 1;
+        int        column = json_get_int(&location, "column", 0) + 1;
+        printf("[parser] %.*s:%d:%d %.*s %.*s\n", SV_ARG(file), line, column, SV_ARG(type), SV_ARG(name));
         HTTP_RESPONSE_OK(socket);
         return false;
     }
     if (sv_eq_cstr(request.url, "/parser/errors")) {
-        JSONValue  node = MUST(JSONValue, json_decode(request.body));
+        JSONValue node = MUST(JSONValue, json_decode(request.body));
         if (node.type == JSON_TYPE_ARRAY) {
             for (size_t ix = 0; ix < json_len(&node); ++ix) {
                 JSONValue error = MUST_OPTIONAL(JSONValue, json_at(&node, ix));

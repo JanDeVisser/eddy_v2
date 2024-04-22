@@ -4,14 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
-#ifndef __LSP_LSP_H__
-#define __LSP_LSP_H__
+#ifndef LSP_LSP_H
+#define LSP_LSP_H
 
-#include <app/buffer.h>
-#include <app/editor.h>
-#include <app/widget.h>
+#include <base/process.h>
 #include <base/sv.h>
 #include <lsp/schema/CompletionItem.h>
+#include <lsp/schema/ServerCapabilities.h>
 
 typedef struct {
     StringView        method;
@@ -25,6 +24,8 @@ typedef struct {
     OptionalJSONValue params;
 } Request;
 
+DA_WITH_NAME(Request, Requests);
+
 typedef struct {
     int               id;
     OptionalJSONValue result;
@@ -32,6 +33,27 @@ typedef struct {
 } Response;
 
 ERROR_OR(Response);
+
+typedef struct lsp LSP;
+
+typedef Process *(*LSPStart)(LSP *);
+typedef struct mode *(*LSPInitMode)(LSP *);
+
+typedef struct {
+    LSPStart start;
+} LSPHandlers;
+
+typedef struct lsp {
+    LSPHandlers        handlers;
+    Condition          init_condition;
+    Process           *lsp;
+    bool               lsp_ready;
+    ServerCapabilities server_capabilities;
+    Requests           request_queue;
+    StringScanner      lsp_scanner;
+} LSP;
+
+DA_WITH_NAME(LSP, LSPs);
 
 extern JSONValue    notification_encode(Notification *notification);
 extern Notification notification_decode(JSONValue *json);
@@ -42,9 +64,9 @@ extern bool         response_success(Response *response);
 extern bool         response_error(Response *response);
 extern Response     response_decode(JSONValue *json);
 extern void         response_free(Response *response);
-extern void         lsp_initialize();
-extern void         lsp_initialize_theme();
-extern ErrorOrInt   lsp_message(void *sender, char const *method, OptionalJSONValue params);
-extern ErrorOrInt   lsp_notification(char const *method, OptionalJSONValue params);
+extern void         lsp_initialize(LSP *lsp);
+extern void         lsp_initialize_theme(LSP *lsp);
+extern ErrorOrInt   lsp_message(LSP *lsp, void *sender, char const *method, OptionalJSONValue params);
+extern ErrorOrInt   lsp_notification(LSP *lsp, char const *method, OptionalJSONValue params);
 
-#endif /* __LSP_LSP_H__ */
+#endif /* LSP_LSP_H */

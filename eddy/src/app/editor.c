@@ -147,8 +147,8 @@ void editor_select_view(Editor *editor, int view_ix)
     editor->current_buffer = view_ix;
     view->cursor_flash = app->time;
     app->focus = (Widget *) editor;
-    if (view->mode) {
-        app->focus = view->mode;
+    if (view->mode_data) {
+        app->focus = view->mode_data;
     }
     SetWindowTitle(sv_cstr(buffer->name, NULL));
 }
@@ -178,13 +178,20 @@ void editor_select_buffer(Editor *editor, int buffer_num)
         view = da_append_BufferView(&editor->buffers, (BufferView) { .buffer_num = buffer_num, .selection = -1 });
     }
     in_place_widget(BufferView, view, editor);
-    if (sv_endswith(buffer->name, sv_from(".c")) || sv_endswith(buffer->name, sv_from(".h"))) {
-        view->mode = (Widget *) widget_new_with_parent(CMode, view);
-        ++buffer->version;
-    } else if (sv_endswith(buffer->name, sv_from(".scribble"))) {
-        view->mode = (Widget *) widget_new_with_parent(ScribbleMode, view);
-        ++buffer->version;
+    if (buffer->mode) {
+        view->mode_data = (Widget *) mode_make_data(buffer->mode);
+        view->mode_data->parent = (Widget *) view;
     }
+    ++buffer->version;
+    lsp_on_open(buffer);
+    lsp_semantic_tokens(buffer);
+    //    if (sv_endswith(buffer->name, sv_from(".c")) || sv_endswith(buffer->name, sv_from(".h"))) {
+    //        view->mode = (Widget *) widget_new_with_parent(CMode, view);
+    //        ++buffer->version;
+    //    } else if (sv_endswith(buffer->name, sv_from(".scribble"))) {
+    //        view->mode = (Widget *) widget_new_with_parent(ScribbleMode, view);
+    //        ++buffer->version;
+    //    }
     editor_select_view(editor, view_ix);
 }
 
@@ -234,9 +241,9 @@ void editor_select_next(Editor *editor)
 void editor_close_view(Editor *editor)
 {
     BufferView *view = editor->buffers.elements + editor->current_buffer;
-    Widget     *mode = view->mode;
+    Widget     *mode = (view->mode_data) ? (Widget *) ((ModeData *) view->mode_data)->mode : NULL;
     if (mode && mode->handlers.on_terminate) {
-        mode->handlers.on_terminate(mode);
+        mode->handlers.on_terminate(view->mode_data);
     }
     memset(view, 0, sizeof(BufferView));
     if (editor->current_buffer == editor->buffers.size - 1) {
@@ -480,7 +487,7 @@ int get_closing_brace_code(int brace)
 bool editor_character(Editor *editor, int ch)
 {
     BufferView *view = editor->buffers.elements + editor->current_buffer;
-    size_t         at = view->new_cursor;
+    size_t      at = view->new_cursor;
     if (view->selection != -1) {
         switch (ch) {
         case '(':
@@ -1202,9 +1209,9 @@ void editor_draw(Editor *editor)
             }
             continue;
         }
-        if (frame == 0) {
-            trace_nonl(EDIT, "%5d:%5zu:[%4zu..%4zu]", row, lineno, line.first_token, line.first_token + line.num_tokens - 1);
-        }
+        //        if (frame == 0) {
+        //            trace_nonl(EDIT, "%5d:%5zu:[%4zu..%4zu]", row, lineno, line.first_token, line.first_token + line.num_tokens - 1);
+        //        }
         for (size_t ix = line.first_token; ix < line.first_token + line.num_tokens; ++ix) {
             DisplayToken *token = buffer->tokens.elements + ix;
             int           start_col = (int) token->index - (int) line.index_of;
@@ -1232,19 +1239,20 @@ void editor_draw(Editor *editor)
             }
 
             StringView text = (StringView) { line.line.ptr + start_col, length };
-            if (frame == 0) {
-                trace_nonl(EDIT, "[%zu %.*s]", ix, SV_ARG(text));
-            }
+            //            if (frame == 0) {
+            //                trace_nonl(EDIT, "[%zu %.*s]", ix, SV_ARG(text));
+            //            }
             widget_render_text(editor, eddy.cell.x * (start_col - view->left_column), eddy.cell.y * row,
                 text, eddy.font, token->color);
         }
-        if (frame == 0) {
-            trace_nl(EDIT);
-        }
+        //        if (frame == 0) {
+        //            trace_nl(EDIT);
+        //        }
     }
 
-    if (view->mode != NULL && view->mode->handlers.draw != NULL) {
-        view->mode->handlers.draw(view->mode);
+    Widget *mode = (view->mode_data) ? (Widget *) ((ModeData *) view->mode_data)->mode : NULL;
+    if (mode != NULL && mode->handlers.draw != NULL) {
+        mode->handlers.draw(view->mode_data);
     }
 
     double time = app->time - view->cursor_flash;

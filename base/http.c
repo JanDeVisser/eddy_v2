@@ -120,6 +120,10 @@ ErrorOrHttpRequest http_request_receive(socket_t socket)
     }
     ret.request = sb.view;
     trace(HTTP, "http_request_receive done");
+    Socket *s = socket_get(socket);
+    if (s->buffer.length > 0) {
+        fatal("There are %zu bytes still available in the socket buffer after reception of GET %.*s", s->buffer.length, SV_ARG(ret.url));
+    }
     RETURN(HttpRequest, ret);
 }
 
@@ -244,6 +248,10 @@ HttpResponse http_post_request(socket_t socket, StringView url, JSONValue body)
 HttpStatus http_get_message(socket_t socket, StringView url, StringList params)
 {
     HttpResponse response = http_get_request(socket, url, params);
+    Socket *s = socket_get(socket);
+    if (s->buffer.length > 0) {
+        fatal("There are %zu bytes still available in the socket buffer after GET %.*s", s->buffer.length, SV_ARG(url));
+    }
     return response.status;
 }
 
@@ -251,6 +259,26 @@ HttpStatus http_post_message(socket_t socket, StringView url, JSONValue body)
 {
     HttpResponse response = http_post_request(socket, url, body);
     return response.status;
+}
+
+
+JSONValue http_post_callback(socket_t fd, char const* url, JSONValue req_body, HttpCallback callback, void *ctx)
+{
+    HttpResponse resp = http_post_request((fd), sv_from(url), req_body);
+    switch (resp.status) {
+    case HTTP_STATUS_NOW_CLIENT:
+        resp = callback(ctx, resp);
+        break;
+    case HTTP_STATUS_OK:
+        break;
+    default:
+        fatal("%s failed", url);
+    }
+    ErrorOrJSONValue resp_maybe = json_decode(resp.body);
+    if (ErrorOrJSONValue_is_error(resp_maybe)) {
+        return json_string(resp.body);
+    }
+    return resp_maybe.value;
 }
 
 #ifdef HTTP_TEST

@@ -120,11 +120,12 @@ typedef struct {
     int h;
 } IntRectangle;
 
-typedef struct _widget Widget;
-typedef struct _app    App;
+typedef struct widget Widget;
+typedef struct app    App;
 
 DA_STRUCT_WITH_NAME(Widget, Widget *, Widgets);
 
+typedef Widget *(*WidgetFactory)(Widget *);
 typedef void (*WidgetInit)(Widget *);
 typedef void (*WidgetOnStart)(Widget *);
 typedef void (*WidgetOnDraw)(Widget *);
@@ -188,9 +189,10 @@ DA_WITH_NAME(CommandBinding, CommandBindings);
     Color           background;  \
     WidgetCommands  commands;    \
     CommandBindings bindings;    \
+    struct widget  *delegate;    \
     void           *memo;
 
-typedef struct _widget {
+typedef struct widget {
     _WIDGET_FIELDS
 } Widget;
 
@@ -378,7 +380,7 @@ DA_WITH_NAME(DrawFloating, DrawFloatings);
     PendingCommands pending_commands; \
     size_t          frame_count
 
-typedef struct _app {
+typedef struct app {
     _APP_FIELDS;
 } App;
 

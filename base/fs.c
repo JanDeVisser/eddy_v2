@@ -8,10 +8,11 @@
 #include <errno.h>
 #include <pwd.h>
 #include <sys/stat.h>
+#include <sys/syslimits.h>
 #include <unistd.h>
 
-#include <fs.h>
-#include <sys/syslimits.h>
+#include <base/errorcode.h>
+#include <base/fs.h>
 
 DA_IMPL(DirEntry);
 
@@ -74,11 +75,13 @@ ErrorOrInt fs_assert_dir(StringView dir)
         if (fs_is_directory(dir)) {
             RETURN(Int, 0);
         }
-        ERROR(Int, IOError, 0, "'fs_assert_dir('%.*s'): Exists and is not a directory", SV_ARG(dir));
+        info("fs_assert_dir('%.*s'): Exists and is not a directory", SV_ARG(dir));
+        ERROR(Int, IOError, 0, "fs_assert_dir('%.*s'): Exists and is not a directory", SV_ARG(dir));
     }
     char buf[dir.length + 1];
     if (mkdir(sv_cstr(dir, buf), 0700) != 0) {
-        ERROR(Int, IOError, errno, "fs_assert_dir('%.*s'): Cannot create: %s", SV_ARG(dir), strerror(errno));
+        info("fs_assert_dir('%.*s'): Cannot create: %s", SV_ARG(dir), errorcode_to_string(errno));
+        ERROR(Int, IOError, errno, "fs_assert_dir('%.*s'): Cannot create: %s", SV_ARG(dir), errorcode_to_string(errno));
     }
     RETURN(Int, 0);
 }
@@ -86,17 +89,19 @@ ErrorOrInt fs_assert_dir(StringView dir)
 ErrorOrStringView fs_follow(StringView file_name)
 {
     if (!fs_file_exists(file_name)) {
-        ERROR(StringView, IOError, 0, "fs_follow('%.*s'): Does not exist", SV_ARG(file_name));
+        info("fs_follow('%.*s'): Does not exist", SV_ARG(file_name));
     }
     if (!fs_is_symlink(file_name)) {
+        info("fs_follow('%.*s'): Not a symlink", SV_ARG(file_name));
         ERROR(StringView, IOError, 0, "fs_follow('%.*s'): Not a symlink", SV_ARG(file_name));
     }
     char followed[PATH_MAX + 1];
     memset(followed, '\0', PATH_MAX + 1);
     char buf[file_name.length + 1];
-    int  len = readlink(sv_cstr(file_name, buf), followed, PATH_MAX);
+    ssize_t  len = readlink(sv_cstr(file_name, buf), followed, PATH_MAX);
     if (len < 0) {
-        ERROR(StringView, IOError, 0, "fs_follow('%.*s'): Error reading symlink: %s", SV_ARG(file_name), strerror(errno));
+        info("fs_follow('%.*s'): Error reading symlink: %s", SV_ARG(file_name), errorcode_to_string(errno));
+        ERROR(StringView, IOError, 0, "fs_follow('%.*s'): Error reading symlink: %s", SV_ARG(file_name), errorcode_to_string(errno));
     }
     assert(len <= PATH_MAX);
     followed[len] = '\0';
@@ -107,7 +112,8 @@ ErrorOrInt fs_unlink(StringView file_name)
 {
     char buf[file_name.length + 1];
     if (unlink(sv_cstr(file_name, buf)) < 0) {
-        ERROR(Int, IOError, 0, "Error unlinking '%.*s': %s", SV_ARG(file_name), strerror(errno));
+        info("Error unlinking '%.*s': %s", SV_ARG(file_name), errorcode_to_string(errno));
+        ERROR(Int, IOError, 0, "Error unlinking '%.*s': %s", SV_ARG(file_name), errorcode_to_string(errno));
     }
     RETURN(Int, 0);
 }
@@ -213,7 +219,8 @@ ErrorOrDirListing fs_directory(StringView name, uint8_t options)
     DIR *dir = opendir(ret.directory.ptr);
     if (dir == NULL) {
         sv_free(ret.directory);
-        ERROR(DirListing, IOError, errno, "Could not open directory '%.*s': %s", SV_ARG(name), strerror(errno));
+        info("Could not open directory '%.*s': %s", SV_ARG(name), errorcode_to_string(errno));
+        ERROR(DirListing, IOError, errno, "Could not open directory '%.*s': %s", SV_ARG(name), errorcode_to_string(errno));
     }
 
     struct dirent *dp;

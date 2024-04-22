@@ -5,30 +5,20 @@
  */
 
 #include <stdarg.h>
-#include <sys/syslimits.h>
 #include <unistd.h>
 
 #include <app/eddy.h>
 #include <app/theme.h>
-#include <base/json.h>
-#include <base/process.h>
-#include <base/threadonce.h>
 #include <lsp/lsp.h>
 #include <lsp/schema/InitializeParams.h>
 #include <lsp/schema/InitializeResult.h>
-#include <lsp/schema/SemanticTokenTypes.h>
-#include <lsp/schema/ServerCapabilities.h>
 
-DA_WITH_NAME(Request, Requests);
+DA_IMPL(LSP);
 DA_IMPL(Request);
 
-THREAD_ONCE(lsp_init);
-static Condition          init_condition;
-static Process           *lsp = NULL;
-static bool               lsp_ready = false;
-static ServerCapabilities server_capabilities = { 0 };
-static Requests           request_queue = { 0 };
-static StringScanner      lsp_scanner = { 0 };
+static void lsp_initialize_theme_internal(LSP *lsp);
+
+LSP the_lsp = {0};
 
 JSONValue notification_encode(Notification *notification)
 {
@@ -134,7 +124,7 @@ void trace_json(OptionalJSONValue json, char const *msg, ...)
     sv_free(s);
 }
 
-ErrorOrInt lsp_message(void *sender, char const *method, OptionalJSONValue params)
+ErrorOrInt lsp_message(LSP *lsp, void *sender, char const *method, OptionalJSONValue params)
 {
     static int id = 1;
     Request    req = {
@@ -145,58 +135,78 @@ ErrorOrInt lsp_message(void *sender, char const *method, OptionalJSONValue param
     };
     req.params = params;
     int req_ix = -1;
-    for (int ix = 0; ix < request_queue.size; ++ix) {
-        Request *r = request_queue.elements + ix;
+    for (int ix = 0; ix < lsp->request_queue.size; ++ix) {
         if (sv_empty(req.method)) {
             req_ix = ix;
-            request_queue.elements[ix] = req;
+            lsp->request_queue.elements[ix] = req;
             break;
         }
     }
     if (req_ix < 0) {
-        da_append_Request(&request_queue, req);
+        da_append_Request(&lsp->request_queue, req);
     }
-    assert(lsp);
+    assert(lsp->lsp);
     JSONValue json = request_encode(&req);
     trace(LSP, "==> %s (%d)", method, req.id);
     StringView request_json = json_encode(json);
     StringView req_content_length = sv_printf("Content-Length: %zu\r\n\r\n", request_json.length + 2);
-    TRY_TO(Size, Int, write_pipe_write(&lsp->in, req_content_length));
+    TRY_TO(Size, Int, write_pipe_write(&lsp->lsp->in, req_content_length));
     sv_free(req_content_length);
-    TRY_TO(Size, Int, write_pipe_write(&lsp->in, request_json));
-    TRY_TO(Size, Int, write_pipe_write(&lsp->in, sv_from("\r\n")));
+    TRY_TO(Size, Int, write_pipe_write(&lsp->lsp->in, request_json));
+    TRY_TO(Size, Int, write_pipe_write(&lsp->lsp->in, sv_from("\r\n")));
     sv_free(request_json);
     RETURN(Int, 0);
 }
 
-void handle_initialize_response(Widget *app, JSONValue response_json);
+void handle_initialize_response(LSP *lsp, Widget *, JSONValue response_json)
+{
+    condition_acquire(lsp->init_condition);
+    Response response = response_decode(&response_json);
+    if (response_success(&response)) {
+        InitializeResult result = MUST_OPTIONAL(InitializeResult, InitializeResult_decode(response.result));
+        if (result.serverInfo.has_value) {
+            trace(LSP, "LSP server name: %.*s", SV_ARG(result.serverInfo.name));
+            if (result.serverInfo.version.has_value) {
+                trace(LSP, "LSP server version: %.*s", SV_ARG(result.serverInfo.version.value));
+            }
+        }
+        lsp->server_capabilities = result.capabilities;
+        assert(lsp->server_capabilities.semanticTokensProvider.has_value);
+        // trace(LSP, "#Token types: %zu", server_capabilities.semanticTokensProvider.value.legend.tokenTypes.size);
+        lsp_initialize_theme_internal(lsp);
+    }
+    MUST(Int, lsp_notification(lsp, "initialized", OptionalJSONValue_create(json_object())));
+    lsp->lsp_ready = true;
+    condition_broadcast(lsp->init_condition);
+}
 
 void lsp_read(ReadPipe *pipe)
 {
+    LSP *lsp = (LSP *) pipe->context;
     trace(LSP, "lsp_read");
     do {
-        sb_append_sv((StringBuilder *) &lsp_scanner.string, read_pipe_current(pipe));
+        sb_append_sv((StringBuilder *) &lsp->lsp_scanner.string, read_pipe_current(pipe));
         do {
-            if (!ss_expect_sv(&lsp_scanner, SV("Content-Length:", 15))) {
+            if (!ss_expect_sv(&lsp->lsp_scanner, SV("Content-Length:", 15))) {
                 trace(LSP, "No content-length header");
                 return;
             }
-            ss_skip_whitespace(&lsp_scanner);
-            size_t resp_content_length = ss_read_number(&lsp_scanner);
+            ss_skip_whitespace(&lsp->lsp_scanner);
+            size_t resp_content_length = ss_read_number(&lsp->lsp_scanner);
             if (!resp_content_length) {
                 trace(LSP, "No content-length value");
-                ss_rewind(&lsp_scanner);
+                ss_rewind(&lsp->lsp_scanner);
                 return;
             }
-            if (!ss_expect_sv(&lsp_scanner, SV("\r\n\r\n", 4))) {
+            if (!ss_expect_sv(&lsp->lsp_scanner, SV("\r\n\r\n", 4))) {
                 trace(LSP, "No header-content separator");
-                ss_rewind(&lsp_scanner);
+                ss_rewind(&lsp->lsp_scanner);
                 return;
             }
-            StringView response_json = ss_read(&lsp_scanner, resp_content_length);
+            StringView response_json = ss_read(&lsp->lsp_scanner, resp_content_length);
             if (response_json.length < resp_content_length) {
                 trace(LSP, "Short content");
-                ss_rewind(&lsp_scanner);
+                ss_rewind(&lsp->lsp_scanner);
                 return;
             }
             ErrorOrJSONValue ret_maybe = json_decode(response_json);
@@ -211,12 +221,12 @@ void lsp_read(ReadPipe *pipe)
             if (json_has(&ret, "id")) {
                 Response response = response_decode(&ret);
                 trace(LSP, "<== %d", response.id);
-                for (size_t ix = 0; ix < request_queue.size; ++ix) {
-                    Request *req = request_queue.elements + ix;
+                for (size_t ix = 0; ix < lsp->request_queue.size; ++ix) {
+                    Request *req = lsp->request_queue.elements + ix;
                     if (req->id == response.id) {
                         if (sv_eq_cstr(req->method, "initialize")) {
                             trace(LSP, "<== ** initialize **");
-                            handle_initialize_response(req->sender, ret);
+                            handle_initialize_response(lsp, req->sender, ret);
                             goto defer_0;
                         }
                         trace(LSP, "<== %.*s", SV_ARG(req->method));
@@ -237,32 +247,32 @@ void lsp_read(ReadPipe *pipe)
             sv_free(cmd);
             notification_free(&notification);
         defer_0:
-            ss_reset(&lsp_scanner);
-        } while (lsp_scanner.point.index < lsp_scanner.string.length);
-        lsp_scanner.point = (TextPosition) { 0 };
-        lsp_scanner.string.length = 0;
-        ss_reset(&lsp_scanner);
+            ss_reset(&lsp->lsp_scanner);
+        } while (lsp->lsp_scanner.point.index < lsp->lsp_scanner.string.length);
+        lsp->lsp_scanner.point = (TextPosition) { 0 };
+        lsp->lsp_scanner.string.length = 0;
+        ss_reset(&lsp->lsp_scanner);
     } while (pipe->current.length > 0);
 }
 
-ErrorOrInt lsp_notification(char const *method, OptionalJSONValue params)
+ErrorOrInt lsp_notification(LSP *lsp, char const *method, OptionalJSONValue params)
 {
     Notification notification = { sv_from(method), OptionalJSONValue_empty() };
     notification.params = params;
-    assert(lsp);
+    assert(lsp->lsp);
     StringView  json = json_encode(notification_encode(&notification));
     char const *content_length = TextFormat("Content-Length: %zu\r\n\r\n", json.length + 2);
-    TRY_TO(Size, Int, write_pipe_write(&lsp->in, sv_from(content_length)));
-    TRY_TO(Size, Int, write_pipe_write(&lsp->in, json));
-    TRY_TO(Size, Int, write_pipe_write(&lsp->in, sv_from("\r\n")));
+    TRY_TO(Size, Int, write_pipe_write(&lsp->lsp->in, sv_from(content_length)));
+    TRY_TO(Size, Int, write_pipe_write(&lsp->lsp->in, json));
+    TRY_TO(Size, Int, write_pipe_write(&lsp->lsp->in, sv_from("\r\n")));
     trace(LSP, "==| %s", method);
     RETURN(Int, 0);
 }
 
-void lsp_initialize_theme_internal()
+void lsp_initialize_theme_internal(LSP *lsp)
 {
-    for (int i = 0; i < server_capabilities.semanticTokensProvider.value.legend.tokenTypes.size; ++i) {
-        StringView                 tokenType = server_capabilities.semanticTokensProvider.value.legend.tokenTypes.strings[i];
+    for (int i = 0; i < lsp->server_capabilities.semanticTokensProvider.value.legend.tokenTypes.size; ++i) {
+        StringView                 tokenType = lsp->server_capabilities.semanticTokensProvider.value.legend.tokenTypes.strings[i];
         OptionalSemanticTokenTypes semantic_token_type_maybe = SemanticTokenTypes_parse(tokenType);
         if (!semantic_token_type_maybe.has_value) {
             trace(LSP, "SemanticTokenType %d = '%.*s' not recognized", i, SV_ARG(tokenType));
@@ -273,78 +283,47 @@ void lsp_initialize_theme_internal()
     }
 }
 
-void lsp_initialize_theme()
+void lsp_initialize_theme(LSP *lsp)
 {
-    if (!lsp_ready) {
+    if (!lsp->lsp_ready) {
         return;
     }
-    lsp_initialize_theme_internal();
+    lsp_initialize_theme_internal(lsp);
 }
 
-void lsp_initializer_fnc()
+void lsp_initialize(LSP *lsp)
 {
-    init_condition = condition_create();
-}
-
-void handle_initialize_response(Widget *app, JSONValue response_json)
-{
-    condition_acquire(init_condition);
-    Response response = response_decode(&response_json);
-    if (response_success(&response)) {
-        InitializeResult result = MUST_OPTIONAL(InitializeResult, InitializeResult_decode(response.result));
-        if (result.serverInfo.has_value) {
-            trace(LSP, "LSP server name: %.*s", SV_ARG(result.serverInfo.name));
-            if (result.serverInfo.version.has_value) {
-                trace(LSP, "LSP server version: %.*s", SV_ARG(result.serverInfo.version.value));
-            }
-        }
-        server_capabilities = result.capabilities;
-        assert(server_capabilities.semanticTokensProvider.has_value);
-        // trace(LSP, "#Token types: %zu", server_capabilties.semanticTokensProvider.value.legend.tokenTypes.size);
-        lsp_initialize_theme_internal();
-    }
-    MUST(Int, lsp_notification("initialized", OptionalJSONValue_create(json_object())));
-    lsp_ready = true;
-    condition_broadcast(init_condition);
-}
-
-void lsp_initialize()
-{
-    ONCE(lsp_init, lsp_initializer_fnc);
-    if (lsp_ready) {
+    lsp->init_condition = condition_create();
+    if (lsp->lsp_ready) {
         return;
     }
-    condition_acquire(init_condition);
-    if (lsp_ready) {
-        condition_release(init_condition);
-        assert(lsp_ready);
+    condition_acquire(lsp->init_condition);
+    if (lsp->lsp_ready) {
+        condition_release(lsp->init_condition);
+        assert(lsp->lsp_ready);
         return;
     }
-    if (lsp != NULL) {
-        condition_sleep(init_condition);
-        assert(lsp_ready);
+    if (lsp->lsp != NULL) {
+        condition_sleep(lsp->init_condition);
+        assert(lsp->lsp_ready);
         return;
     }
     trace(LSP, "Initializing LSP");
-    widget_register(app, "lsp-initialize", handle_initialize_response);
-    lsp = process_create(SV("clangd", 6), "--use-dirty-headers", "--background-index");
-    lsp->stderr_file = SV("/tmp/clangd.log", 15);
-    lsp->out.on_read = lsp_read;
-    process_background(lsp);
+    lsp->lsp = lsp->handlers.start(lsp);
+    lsp->lsp->out.on_read = lsp_read;
+    lsp->lsp->out.context = &lsp;
+    process_background(lsp->lsp);
 
     InitializeParams params = { 0 };
     params.processId.has_value = true;
     params.processId.tag = 0;
     params.processId._0 = getpid();
     params.clientInfo.has_value = true;
-    params.clientInfo.name = sv_from(EDDY_NAME);
-    params.clientInfo.version = (OptionalStringView) { .has_value = true, .value = sv_from(EDDY_VERSION) };
-    char prj[PATH_MAX + 8];
-    memset(prj, '\0', PATH_MAX + 8);
-    snprintf(prj, PATH_MAX + 7, "file://%.*s", SV_ARG(eddy.project_dir));
+    params.clientInfo.name = SV(EDDY_NAME);
+    params.clientInfo.version = (OptionalStringView) { .has_value = true, .value = SV(EDDY_VERSION) };
     params.rootUri.has_value = true;
     params.rootUri.tag = 0;
-    params.rootUri._0 = sv_from(prj);
+    params.rootUri._0 = sv_printf("file://%.*s", SV_ARG(eddy.project_dir));
     params.capabilities.textDocument.has_value = true;
 
     StringList tokenTypes = { 0 };
@@ -368,6 +347,6 @@ void lsp_initialize()
     params.capabilities.textDocument.value.semanticTokens.value.tokenTypes = tokenTypes;
 
     OptionalJSONValue params_json = InitializeParams_encode(params);
-    MUST(Int, lsp_message(&eddy, "initialize", params_json));
-    condition_sleep(init_condition);
+    MUST(Int, lsp_message(lsp, &eddy, "initialize", params_json));
+    condition_sleep(lsp->init_condition);
 }

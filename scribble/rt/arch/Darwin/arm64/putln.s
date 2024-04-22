@@ -1,6 +1,7 @@
 .align 4
 
 .global scribble$putln
+.global _scribble$putln
 
 //
 // putln - Print string followed by a newline character
@@ -17,6 +18,7 @@ len     .req w1     // Length of the string
 //   x16 - syscall
 
 scribble$putln:
+_scribble$putln:
     stp     fp,lr,[sp,#-16]!
     mov     fp,sp
 
