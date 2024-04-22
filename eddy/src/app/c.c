@@ -85,6 +85,67 @@ LSPHandlers c_lsp_handlers = {
 MODE_CLASS_DEF(CMode, c_mode);
 MODE_DATA_CLASS_DEF(CModeData, c_mode_data);
 
+#define C_KEYWORDS(S)   \
+    S(alignas)        \
+    S(alignof)        \
+    S(auto)           \
+    S(bool)           \
+    S(break)          \
+    S(case)           \
+    S(char)           \
+    S(const)          \
+    S(constexpr)      \
+    S(continue)       \
+    S(default)        \
+    S(do)             \
+    S(double)         \
+    S(else)           \
+    S(enum)           \
+    S(extern)         \
+    S(false)          \
+    S(float)          \
+    S(for)            \
+    S(goto)           \
+    S(if)             \
+    S(inline)         \
+    S(int)            \
+    S(long)           \
+    S(nullptr)        \
+    S(register)       \
+    S(restrict)       \
+    S(return)         \
+    S(short)          \
+    S(signed)         \
+    S(sizeof)         \
+    S(static)         \
+    S(static_assert)  \
+    S(struct)         \
+    S(switch)         \
+    S(thread_local)   \
+    S(true)           \
+    S(typedef)        \
+    S(typeof)         \
+    S(typeof_unqual)  \
+    S(union)          \
+    S(unsigned)       \
+    S(void)           \
+    S(volatile)       \
+    S(while)          \
+    S(_Alignas)       \
+    S(_Alignof)       \
+    S(_Atomic)        \
+    S(_BitInt)        \
+    S(_Bool)          \
+    S(_Complex)       \
+    S(_Decimal128)    \
+    S(_Decimal32)     \
+    S(_Decimal64)     \
+    S(_Generic)       \
+    S(_Imaginary)     \
+    S(_Noreturn)      \
+    S(_Static_assert) \
+    S(_Thread_local)
+
 // -- C Mode ----------------------------------------------------------------
 
 Process *clangd_start(LSP *lsp)

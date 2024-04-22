@@ -137,6 +137,18 @@ void compile_program(BackendConnection *conn)
         }
         HTTP_POST_MUST(conn->fd, "/error", json_string(sv_from(Error_to_string(exit_code.error))));
     }
+    stage = get_stage(&stages, "execute");
+    if (stage.has_value) {
+        debug = json_get_bool(&stage.value, "debug", false);
+        if (debug) {
+            HTTP_GET_MUST(conn->fd, "/execute/start", sl_create());
+        }
+        execute(conn, ir);
+        if (debug) {
+            HTTP_GET_MUST(conn->fd, "/execute/done", sl_create());
+        }
+    }
+    exit_backend(conn, SV("0"));
 }
 
 int scribble_backend(StringView path, bool threaded)

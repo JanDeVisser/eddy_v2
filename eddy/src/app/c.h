@@ -23,3 +23,4 @@ typedef struct {
 MODE_DATA_CLASS(CModeData, c_mode_data);
 
 #endif /* APP_C_H */
+
