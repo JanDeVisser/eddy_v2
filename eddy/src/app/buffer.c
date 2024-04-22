@@ -46,6 +46,9 @@ ErrorOrBuffer buffer_open(Buffer *buffer, StringView name)
     buffer->lines.size = 0;
     buffer_build_indices(buffer);
     buffer->mode = eddy_get_mode_for_buffer(&eddy, name);
+    if (buffer->mode) {
+        buffer_add_listener(buffer, buffer->mode->event_listener);
+    }
     RETURN(Buffer, buffer);
 }
 

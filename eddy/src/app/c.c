@@ -451,7 +451,8 @@ Widget * cmode_make_cmode_data(CMode *mode)
 void c_mode_init(CMode *mode)
 {
     mode->data_widget_factory = (WidgetFactory) cmode_make_cmode_data;
-    mode->filetypes = sv_split(SV(".c;.cpp;.h;.hpp;.c++"), SV(";")),
+    mode->event_listener = c_mode_buffer_event_listener;
+    mode->filetypes = sv_split(SV(".c;.cpp;.h;.hpp;.c++"), SV(";"));
     mode->lsp = (LSP) {
         .handlers = c_lsp_handlers,
     };
@@ -469,9 +470,6 @@ void c_mode_init(CMode *mode)
     widget_register(mode, "lsp-textDocument/rangeFormatting", (WidgetCommandHandler) c_mode_formatting_response);
     mode->language = &c_language;
     // mode->handlers.on_draw = (WidgetOnDraw) c_mode_on_draw;
-    BufferView *view = (BufferView *) mode->parent;
-    Buffer     *buffer = eddy.buffers.elements + view->buffer_num;
-    buffer_add_listener(buffer, c_mode_buffer_event_listener);
 }
 
 void c_mode_data_init(CModeData *mode)
