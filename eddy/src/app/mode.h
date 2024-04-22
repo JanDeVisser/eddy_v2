@@ -7,16 +7,17 @@
 #ifndef APP_MODE_H
 #define APP_MODE_H
 
-#include <app/widget.h>
+#include <app/event.h>
 #include <base/lexer.h>
 #include <lsp/lsp.h>
 
-#define MODE_FIELDS                    \
-    _WIDGET_FIELDS;                    \
-    StringList    filetypes;           \
-    WidgetFactory data_widget_factory; \
-    Language     *language;            \
-    LSP           lsp;
+#define MODE_FIELDS                          \
+    _WIDGET_FIELDS;                          \
+    StringList          filetypes;           \
+    WidgetFactory       data_widget_factory; \
+    BufferEventListener event_listener;      \
+    Language           *language;            \
+    LSP                 lsp;
 
 typedef struct mode {
     MODE_FIELDS;

@@ -7,49 +7,13 @@
 #ifndef APP_BUFFER_H
 #define APP_BUFFER_H
 
+#include <app/event.h>
 #include <app/mode.h>
 #include <app/widget.h>
 #include <base/sv.h>
 #include <base/token.h>
 #include <lsp/lsp.h>
 #include <lsp/schema/Diagnostic.h>
-
-typedef enum {
-    ETCursorMove,
-    ETInsert,
-    ETDelete,
-    ETReplace,
-    ETIndexed,
-    ETSave,
-    ETClose,
-} BufferEventType;
-
-typedef struct {
-    IntVector2 start;
-    IntVector2 end;
-} EventRange;
-
-typedef struct {
-    BufferEventType type;
-    int             position;
-    EventRange      range;
-    struct {
-        StringRef text;
-    } insert;
-    struct {
-        size_t    count;
-        StringRef deleted;
-    } delete;
-    struct {
-        StringRef overwritten;
-        StringRef replacement;
-    } replace;
-    struct {
-        StringRef file_name;
-    } save;
-} BufferEvent;
-
-DA_WITH_NAME(BufferEvent, BufferEvents);
 
 typedef struct {
     size_t index;
@@ -70,14 +34,6 @@ typedef struct {
 } Index;
 
 DA_WITH_NAME(Index, Indices);
-
-typedef struct buffer Buffer;
-typedef void (*BufferEventListener)(Buffer *, BufferEvent);
-
-typedef struct _buffer_event_listener_list {
-    BufferEventListener                 listener;
-    struct _buffer_event_listener_list *next;
-} BufferEventListenerList;
 
 typedef struct buffer {
     _W;
